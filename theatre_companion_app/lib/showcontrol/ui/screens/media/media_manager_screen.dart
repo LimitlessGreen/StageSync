@@ -79,26 +79,22 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
                   : _AssetTable(
                       assets: assets,
                       isUploading: state.isUploading,
+                      isAudioConnected: ref.watch(audioNodeProvider).state ==
+                          AudioNodeState.connected,
                       onDelete: (name) =>
                           ref.read(mediaProvider.notifier).delete(name),
                       onAudition: (asset) {
-                        final audioNotifier =
-                            ref.read(audioNodeProvider.notifier);
-                        final isConnected = ref.read(audioNodeProvider).state ==
-                            AudioNodeState.connected;
-                        if (isConnected && asset.id.isNotEmpty) {
-                          // Vorhören auf EBU R128 −23 LUFS normiert,
-                          // damit der Vergleich zwischen Assets einheitlich ist.
-                          final lufs = asset.audio?.loudnessLufs;
-                          final volumeDb = lufs != null
-                              ? (-23.0 - lufs).clamp(-40.0, 20.0)
-                              : 0.0;
-                          audioNotifier.auditionPlay(
-                            assetId: asset.id,
-                            volumeDb: volumeDb,
-                          );
-                        }
+                        final lufs = asset.audio?.loudnessLufs;
+                        final volumeDb = lufs != null
+                            ? (-23.0 - lufs).clamp(-40.0, 20.0)
+                            : 0.0;
+                        ref.read(audioNodeProvider.notifier).auditionPlay(
+                          assetId: asset.id,
+                          volumeDb: volumeDb,
+                        );
                       },
+                      onAuditionStop: () =>
+                          ref.read(audioNodeProvider.notifier).auditionStop(),
                     ),
         ),
       ],
@@ -168,14 +164,18 @@ class _Toolbar extends StatelessWidget {
 class _AssetTable extends StatelessWidget {
   final List<Asset> assets;
   final bool isUploading;
+  final bool isAudioConnected;
   final ValueChanged<String> onDelete;
   final ValueChanged<Asset> onAudition;
+  final VoidCallback onAuditionStop;
 
   const _AssetTable({
     required this.assets,
     required this.isUploading,
+    required this.isAudioConnected,
     required this.onDelete,
     required this.onAudition,
+    required this.onAuditionStop,
   });
 
   @override
@@ -208,20 +208,45 @@ class _AssetTable extends StatelessWidget {
                 const Divider(height: 1, color: ScColors.divider),
             itemBuilder: (context, i) => _AssetRow(
               asset: assets[i],
+              isAudioConnected: isAudioConnected,
               onDelete: () => onDelete(assets[i].name),
               onAudition: () => onAudition(assets[i]),
+              onAuditionStop: onAuditionStop,
             ),
           ),
         ),
-        // Footer: asset count
+        // Footer: asset count + audition stop
         Container(
           height: 28,
           color: ScColors.surface,
           padding: const EdgeInsets.symmetric(horizontal: ScSpacing.panelPad),
-          alignment: Alignment.centerLeft,
-          child: Text(
-            '${assets.length} Asset${assets.length == 1 ? "" : "s"}',
-            style: ScText.statusSmall,
+          child: Row(
+            children: [
+              Text(
+                '${assets.length} Asset${assets.length == 1 ? "" : "s"}',
+                style: ScText.statusSmall,
+              ),
+              const Spacer(),
+              if (isAudioConnected)
+                Tooltip(
+                  message: 'Vorhören stoppen',
+                  child: InkWell(
+                    onTap: onAuditionStop,
+                    borderRadius: BorderRadius.circular(4),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.stop, size: 12, color: ScColors.textDim),
+                          const SizedBox(width: 4),
+                          Text('Stop Vorhören', style: ScText.statusSmall),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
       ],
@@ -245,13 +270,17 @@ class _HeaderCell extends StatelessWidget {
 
 class _AssetRow extends StatefulWidget {
   final Asset asset;
+  final bool isAudioConnected;
   final VoidCallback onDelete;
   final VoidCallback onAudition;
+  final VoidCallback onAuditionStop;
 
   const _AssetRow({
     required this.asset,
+    required this.isAudioConnected,
     required this.onDelete,
     required this.onAudition,
+    required this.onAuditionStop,
   });
 
   @override
@@ -342,38 +371,55 @@ class _AssetRowState extends State<_AssetRow> {
                 style: ScText.label,
               ),
             ),
-            // Action buttons (visible on hover)
+            // Action buttons — audition always visible, delete on hover
             SizedBox(
-              width: 80,
-              child: _hovered
-                  ? Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        if (isAudio)
-                          _IconBtn(
-                            icon: Icons.headphones,
-                            tooltip: 'Vorhören',
-                            onTap: widget.onAudition,
+              width: 72,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  if (isAudio) ...[
+                    Tooltip(
+                      message: widget.isAudioConnected
+                          ? 'Vorhören'
+                          : 'Audio-Node nicht verbunden',
+                      child: InkWell(
+                        onTap: widget.isAudioConnected
+                            ? widget.onAudition
+                            : null,
+                        borderRadius: BorderRadius.circular(4),
+                        child: Padding(
+                          padding: const EdgeInsets.all(4),
+                          child: Icon(
+                            Icons.headphones,
+                            size: 15,
+                            color: widget.isAudioConnected
+                                ? ScColors.textSecondary
+                                : ScColors.textDim,
                           ),
-                        const SizedBox(width: 4),
-                        if (!_confirmDelete)
-                          _IconBtn(
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                  ],
+                  if (_hovered)
+                    _confirmDelete
+                        ? _IconBtn(
+                            icon: Icons.check,
+                            tooltip: 'Löschen bestätigen',
+                            color: ScColors.error,
+                            onTap: widget.onDelete,
+                          )
+                        : _IconBtn(
                             icon: Icons.delete_outline,
                             tooltip: 'Löschen',
                             color: ScColors.error,
                             onTap: () =>
                                 setState(() => _confirmDelete = true),
                           )
-                        else
-                          _IconBtn(
-                            icon: Icons.check,
-                            tooltip: 'Löschen bestätigen',
-                            color: ScColors.error,
-                            onTap: widget.onDelete,
-                          ),
-                      ],
-                    )
-                  : const SizedBox.shrink(),
+                  else
+                    const SizedBox(width: 20),
+                ],
+              ),
             ),
           ],
         ),

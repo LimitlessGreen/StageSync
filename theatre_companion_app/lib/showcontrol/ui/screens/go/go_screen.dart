@@ -5,6 +5,7 @@ import '../../../domain/show.dart';
 import '../../../domain/playhead.dart';
 import '../../../providers/show_control_provider.dart';
 import '../../../providers/show_control_domain_provider.dart';
+import '../../../providers/session_provider.dart';
 import '../../design_system/sc_colors.dart';
 import '../../design_system/sc_spacing.dart';
 import '../../design_system/sc_typography.dart';
@@ -17,11 +18,26 @@ import '../../design_system/domain_components/node_status_badge.dart';
 /// Works as a full-screen view for mobile/tablet, or as the primary
 /// panel in the desktop shell's live-view mode.
 /// No editing: no CueList editor, no Inspector, no Patch, no Media.
-class GoScreen extends ConsumerWidget {
+class GoScreen extends ConsumerStatefulWidget {
   const GoScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<GoScreen> createState() => _GoScreenState();
+}
+
+class _GoScreenState extends ConsumerState<GoScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (!ref.read(sessionProvider).isInSession) return;
+      ref.read(showControlProvider.notifier).initialize();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final domain   = ref.watch(showControlDomainProvider);
     final notifier = ref.read(showControlProvider.notifier);
 

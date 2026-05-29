@@ -78,7 +78,7 @@ class _ScButtonState extends State<ScButton> {
               if (widget.size == ScButtonSize.large)
                 _buildLargeContent(effectiveColor, onColor, enabled)
               else
-                _buildNormalContent(effectiveColor, onColor, enabled),
+                _buildNormalContent(effectiveColor, onColor, enabled, isFilled),
               if (widget.shortcutHint != null)
                 Text(widget.shortcutHint!, style: ScText.shortcutHint),
             ],
@@ -142,8 +142,10 @@ class _ScButtonState extends State<ScButton> {
     );
   }
 
-  Widget _buildNormalContent(Color color, Color onColor, bool enabled) {
-    final textColor = enabled ? color : ScColors.textDim;
+  Widget _buildNormalContent(Color color, Color onColor, bool enabled, bool isFilled) {
+    // Filled buttons (primary): use onColor so text is readable on the fill.
+    // Outlined/ghost buttons: use color (the accent) as text color.
+    final textColor = enabled ? (isFilled ? onColor : color) : ScColors.textDim;
     if (widget.icon != null) {
       return Row(
         mainAxisSize: MainAxisSize.min,
