@@ -16,6 +16,7 @@ package audionode
 import (
 	"context"
 	"log"
+	"math"
 	"time"
 
 	"github.com/google/uuid"
@@ -156,6 +157,8 @@ func (n *InternalAudioNode) handleCommand(cmd *pb.NodeCommandRequest) {
 		n.handleResume(c.AudioResume)
 	case *pb.NodeCommandRequest_NodeConfig:
 		n.handleNodeConfig(c.NodeConfig)
+	case *pb.NodeCommandRequest_AudioTest:
+		n.handleTestSignal(c.AudioTest)
 	default:
 		log.Printf("[audionode] unhandled command type: %T", cmd.Command)
 	}
@@ -252,6 +255,71 @@ func (n *InternalAudioNode) reportCapabilities(sessID, nodeID string, info *pb.N
 	}
 	sess.SetNodeCapabilities(nodeID, caps)
 	n.sessionMgr.NotifyNodeUpdated(sessID, info)
+}
+
+// handleTestSignal synthesises a tone or sweep and plays it immediately.
+func (n *InternalAudioNode) handleTestSignal(cmd *pb.AudioTestSignalCommand) {
+	const sr = uint32(48000)
+	const ch = uint32(2)
+
+	durationMs := cmd.GetDurationMs()
+	if durationMs <= 0 {
+		durationMs = 1000
+	}
+	amplitude := cmd.GetAmplitude()
+	if amplitude <= 0 {
+		amplitude = 0.5
+	}
+	frames := int(float64(sr) * float64(durationMs) / 1000)
+	pcm := make([]float32, frames*int(ch))
+
+	switch cmd.GetKind() {
+	case pb.AudioTestSignalCommand_KIND_SWEEP:
+		startHz := cmd.GetStartHz()
+		endHz := cmd.GetEndHz()
+		if startHz <= 0 {
+			startHz = 20
+		}
+		if endHz <= 0 {
+			endHz = 20000
+		}
+		T := float64(frames) / float64(sr)
+		for i := 0; i < frames; i++ {
+			t := float64(i) / float64(sr)
+			// Exponential sweep: instantaneous frequency grows from startHz to endHz.
+			phase := 2 * math.Pi * startHz * T / math.Log(endHz/startHz) *
+				(math.Pow(endHz/startHz, t/T) - 1)
+			s := float32(amplitude * math.Sin(phase))
+			pcm[i*int(ch)] = s
+			pcm[i*int(ch)+1] = s
+		}
+	default: // KIND_TONE — simple sine
+		freq := cmd.GetFrequencyHz()
+		if freq <= 0 {
+			freq = 1000
+		}
+		for i := 0; i < frames; i++ {
+			t := float64(i) / float64(sr)
+			s := float32(amplitude * math.Sin(2*math.Pi*float64(freq)*t))
+			pcm[i*int(ch)] = s
+			pcm[i*int(ch)+1] = s
+		}
+	}
+
+	cueID := cmd.GetCueId()
+	if cueID == "" {
+		cueID = "test_signal"
+	}
+	if err := n.engine.PreloadPCM(cueID, pcm, sr, ch); err != nil {
+		log.Printf("[audionode] test signal preload error: %v", err)
+		return
+	}
+	if err := n.engine.Play(cueID, 0, 0, 100, 100, false); err != nil {
+		log.Printf("[audionode] test signal play error: %v", err)
+		return
+	}
+	log.Printf("[audionode] test signal: kind=%s cueId=%s dur=%.0fms freq=%.0fHz",
+		cmd.GetKind(), cueID, durationMs, cmd.GetFrequencyHz())
 }
 
 // handleNodeConfig handles remote device configuration sent by the master.
