@@ -1449,12 +1449,14 @@ class NodeConfigCommand extends $pb.GeneratedMessage {
     $core.int? audioDeviceIndex,
     $core.String? audioDeviceName,
     $core.String? networkInterfaceAddress,
+    $core.Iterable<NodeTask>? tasks,
   }) {
     final result = create();
     if (audioDeviceIndex != null) result.audioDeviceIndex = audioDeviceIndex;
     if (audioDeviceName != null) result.audioDeviceName = audioDeviceName;
     if (networkInterfaceAddress != null)
       result.networkInterfaceAddress = networkInterfaceAddress;
+    if (tasks != null) result.tasks.addAll(tasks);
     return result;
   }
 
@@ -1474,6 +1476,7 @@ class NodeConfigCommand extends $pb.GeneratedMessage {
     ..aI(1, _omitFieldNames ? '' : 'audioDeviceIndex')
     ..aOS(2, _omitFieldNames ? '' : 'audioDeviceName')
     ..aOS(3, _omitFieldNames ? '' : 'networkInterfaceAddress')
+    ..pc<NodeTask>(4, _omitFieldNames ? '' : 'tasks', $pb.PbFieldType.KE, valueOf: NodeTask.valueOf, enumValues: NodeTask.values, defaultEnumValue: NodeTask.NODE_TASK_UNSPECIFIED)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1524,6 +1527,10 @@ class NodeConfigCommand extends $pb.GeneratedMessage {
   $core.bool hasNetworkInterfaceAddress() => $_has(2);
   @$pb.TagNumber(3)
   void clearNetworkInterfaceAddress() => $_clearField(3);
+
+  /// Tasks (Rollen) des Nodes neu setzen. Leer = keine Änderung.
+  @$pb.TagNumber(4)
+  $core.List<NodeTask> get tasks => $_getList(3);
 }
 
 /// SendNodeCommandRequest: Master/Client sendet Command an einen Node

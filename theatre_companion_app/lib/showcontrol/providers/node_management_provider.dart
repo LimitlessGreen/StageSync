@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 
 import '../grpc/stage_sync_client.dart';
 import '../grpc/generated/stagesync/v1/node.pb.dart';
+import '../grpc/generated/stagesync/v1/common.pb.dart' show NodeTask;
 import 'session_provider.dart';
 
 const _uuid = Uuid();
@@ -70,6 +71,16 @@ class NodeManagementNotifier extends StateNotifier<NodeManagementState> {
         targetNodeId: targetNodeId,
         config: NodeConfigCommand()..networkInterfaceAddress = interfaceAddress,
         actionLabel: 'Interface $interfaceAddress auf ${_shortId(targetNodeId)} gesetzt',
+      );
+
+  /// Setzt die Tasks (Rollen) eines Nodes. Server aktualisiert Session-State und broadcastet ein NodeEvent.
+  Future<void> setNodeTasks({
+    required String targetNodeId,
+    required List<NodeTask> tasks,
+  }) => _sendConfig(
+        targetNodeId: targetNodeId,
+        config: NodeConfigCommand()..tasks.addAll(tasks),
+        actionLabel: 'Rollen auf ${_shortId(targetNodeId)} gesetzt',
       );
 
   /// Setzt das Gerät auf System-Default zurück.

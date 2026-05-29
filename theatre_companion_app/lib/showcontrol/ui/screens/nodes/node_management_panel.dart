@@ -13,6 +13,7 @@ import '../../design_system/sc_typography.dart';
 import '../../design_system/primitives/sc_button.dart';
 import '../../design_system/primitives/sc_chip.dart';
 import '../../../domain/node_status.dart';
+import '../../../grpc/generated/stagesync/v1/common.pb.dart' show NodeTask;
 
 class NodeManagementPanel extends ConsumerStatefulWidget {
   const NodeManagementPanel({super.key});
@@ -350,6 +351,28 @@ class _NodeDetailColumnState extends ConsumerState<_NodeDetailColumn> {
               '${node.clockDeltaMs} ms',
               valueColor: _clockColor(node.clockDeltaMs!),
             ),
+          // ── Task-Management (nur Master) ──────────────────────────────
+          if (widget.isMaster) ...[
+            const Divider(height: 1, color: ScColors.divider),
+            _SectionHeader('ROLLEN'),
+            _TaskEditor(
+              node: node,
+              onSave: (tasks) => ref.read(nodeManagementProvider.notifier)
+                  .setNodeTasks(targetNodeId: node.nodeId, tasks: tasks),
+            ),
+          ] else ...[
+            const Divider(height: 1, color: ScColors.divider),
+            _SectionHeader('ROLLEN'),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: ScSpacing.panelPad, vertical: 6),
+              child: Wrap(
+                spacing: 4,
+                runSpacing: 4,
+                children: node.tasks.map((t) => _TaskBadge(task: t)).toList(),
+              ),
+            ),
+          ],
           if (node.isAudio) ...[
             // ── Audio device section ──────────────────────────────────────
             const Divider(height: 1, color: ScColors.divider),
@@ -654,6 +677,139 @@ class _TestSignalRowState extends ConsumerState<_TestSignalRow> {
           Text('Nur Master', style: ScText.label.copyWith(color: ScColors.textDim)),
         ],
       ],
+    );
+  }
+}
+
+// ── Task Editor ────────────────────────────────────────────────────────────────
+
+/// Kompakter Task-Editor: Toggle-Chips für alle Rollen, Speichern-Button.
+class _TaskEditor extends StatefulWidget {
+  final NodeStatus node;
+  final ValueChanged<List<NodeTask>> onSave;
+
+  const _TaskEditor({required this.node, required this.onSave});
+
+  @override
+  State<_TaskEditor> createState() => _TaskEditorState();
+}
+
+class _TaskEditorState extends State<_TaskEditor> {
+  late Set<NodeTask> _selected;
+  bool _dirty = false;
+
+  static const _assignable = [
+    (task: NodeTask.NODE_TASK_MASTER,       label: 'Master',  color: ScColors.active),
+    (task: NodeTask.NODE_TASK_AUDIO_OUTPUT, label: 'Audio',   color: Color(0xFF4FC3F7)),
+    (task: NodeTask.NODE_TASK_EDITOR,       label: 'Editor',  color: ScColors.warn),
+    (task: NodeTask.NODE_TASK_MA_OSC,       label: 'MA OSC',  color: Color(0xFFCE93D8)),
+    (task: NodeTask.NODE_TASK_VIEWER,       label: 'Viewer',  color: ScColors.textDim),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = _tasksFromNode();
+  }
+
+  @override
+  void didUpdateWidget(_TaskEditor old) {
+    super.didUpdateWidget(old);
+    if (old.node.nodeId != widget.node.nodeId) {
+      setState(() {
+        _selected = _tasksFromNode();
+        _dirty = false;
+      });
+    }
+  }
+
+  Set<NodeTask> _tasksFromNode() {
+    return widget.node.tasks
+        .map((label) => _assignable
+            .map((e) => e.task)
+            .firstWhere((t) => t.name.toLowerCase().contains(label.toLowerCase()),
+                orElse: () => NodeTask.NODE_TASK_UNSPECIFIED))
+        .where((t) => t != NodeTask.NODE_TASK_UNSPECIFIED)
+        .toSet();
+  }
+
+  void _toggle(NodeTask task) {
+    setState(() {
+      if (_selected.contains(task)) {
+        _selected.remove(task);
+      } else {
+        _selected.add(task);
+      }
+      _dirty = true;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+          horizontal: ScSpacing.panelPad, vertical: 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 4,
+            runSpacing: 4,
+            children: _assignable.map((e) {
+              final isOn = _selected.contains(e.task);
+              return GestureDetector(
+                onTap: () => _toggle(e.task),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 100),
+                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: isOn ? e.color.withValues(alpha: 0.15) : Colors.transparent,
+                    border: Border.all(
+                      color: isOn ? e.color : e.color.withValues(alpha: 0.35),
+                    ),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    e.label,
+                    style: ScText.statusSmall.copyWith(
+                      color: isOn ? e.color : e.color.withValues(alpha: 0.6),
+                      fontWeight: isOn ? FontWeight.w700 : FontWeight.normal,
+                      fontSize: 9,
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          if (_dirty) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                ScButton(
+                  label: 'Übernehmen',
+                  icon: Icons.check,
+                  variant: ScButtonVariant.secondary,
+                  size: ScButtonSize.compact,
+                  onPressed: () {
+                    widget.onSave(_selected.toList());
+                    setState(() => _dirty = false);
+                  },
+                ),
+                const SizedBox(width: 6),
+                ScButton(
+                  label: 'Zurücksetzen',
+                  variant: ScButtonVariant.ghost,
+                  size: ScButtonSize.compact,
+                  onPressed: () => setState(() {
+                    _selected = _tasksFromNode();
+                    _dirty = false;
+                  }),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
