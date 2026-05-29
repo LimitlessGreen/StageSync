@@ -529,13 +529,14 @@ const AudioPreloadCommand$json = {
   '2': [
     {'1': 'cue_id', '3': 1, '4': 1, '5': 9, '10': 'cueId'},
     {'1': 'file_path', '3': 2, '4': 1, '5': 9, '10': 'filePath'},
+    {'1': 'asset_id', '3': 3, '4': 1, '5': 9, '10': 'assetId'},
   ],
 };
 
 /// Descriptor for `AudioPreloadCommand`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List audioPreloadCommandDescriptor = $convert.base64Decode(
     'ChNBdWRpb1ByZWxvYWRDb21tYW5kEhUKBmN1ZV9pZBgBIAEoCVIFY3VlSWQSGwoJZmlsZV9wYX'
-    'RoGAIgASgJUghmaWxlUGF0aA==');
+    'RoGAIgASgJUghmaWxlUGF0aBIZCghhc3NldF9pZBgDIAEoCVIHYXNzZXRJZA==');
 
 @$core.Deprecated('Use audioPlayCommandDescriptor instead')
 const AudioPlayCommand$json = {

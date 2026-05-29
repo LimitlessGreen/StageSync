@@ -139,6 +139,7 @@ const AudioCueParams$json = {
     {'1': 'start_time_ms', '3': 6, '4': 1, '5': 1, '10': 'startTimeMs'},
     {'1': 'end_time_ms', '3': 7, '4': 1, '5': 1, '10': 'endTimeMs'},
     {'1': 'output_device', '3': 8, '4': 1, '5': 9, '10': 'outputDevice'},
+    {'1': 'asset_id', '3': 9, '4': 1, '5': 9, '10': 'assetId'},
   ],
 };
 
@@ -148,7 +149,8 @@ final $typed_data.Uint8List audioCueParamsDescriptor = $convert.base64Decode(
     '9kYhgCIAEoAVIIdm9sdW1lRGISHAoKZmFkZV9pbl9tcxgDIAEoAVIIZmFkZUluTXMSHgoLZmFk'
     'ZV9vdXRfbXMYBCABKAFSCWZhZGVPdXRNcxISCgRsb29wGAUgASgIUgRsb29wEiIKDXN0YXJ0X3'
     'RpbWVfbXMYBiABKAFSC3N0YXJ0VGltZU1zEh4KC2VuZF90aW1lX21zGAcgASgBUgllbmRUaW1l'
-    'TXMSIwoNb3V0cHV0X2RldmljZRgIIAEoCVIMb3V0cHV0RGV2aWNl');
+    'TXMSIwoNb3V0cHV0X2RldmljZRgIIAEoCVIMb3V0cHV0RGV2aWNlEhkKCGFzc2V0X2lkGAkgAS'
+    'gJUgdhc3NldElk');
 
 @$core.Deprecated('Use maOscCueParamsDescriptor instead')
 const MaOscCueParams$json = {
@@ -672,6 +674,14 @@ const NodeHealthEvent$json = {
       '10': 'node'
     },
     {'1': 'clock_delta_ms', '3': 11, '4': 1, '5': 3, '10': 'clockDeltaMs'},
+    {
+      '1': 'capabilities',
+      '3': 12,
+      '4': 1,
+      '5': 11,
+      '6': '.stagesync.v1.NodeCapabilities',
+      '10': 'capabilities'
+    },
   ],
   '4': [NodeHealthEvent_HealthEventType$json],
 };
@@ -694,9 +704,10 @@ final $typed_data.Uint8List nodeHealthEventDescriptor = $convert.base64Decode(
     'dlc3luYy52MS5Ob2RlSGVhbHRoRXZlbnQuSGVhbHRoRXZlbnRUeXBlUgR0eXBlEjgKC29jY3Vy'
     'cmVkX2F0GAMgASgLMhcuc3RhZ2VzeW5jLnYxLlRpbWVzdGFtcFIKb2NjdXJyZWRBdBIqCgRub2'
     'RlGAogASgLMhYuc3RhZ2VzeW5jLnYxLk5vZGVJbmZvUgRub2RlEiQKDmNsb2NrX2RlbHRhX21z'
-    'GAsgASgDUgxjbG9ja0RlbHRhTXMibQoPSGVhbHRoRXZlbnRUeXBlEhMKD0hFQUxUSF9TTkFQU0'
-    'hPVBAAEg8KC05PREVfT05MSU5FEAESEAoMTk9ERV9PRkZMSU5FEAISEQoNTk9ERV9ERUdSQURF'
-    'RBADEg8KC0NMT0NLX0RFTFRBEAQ=');
+    'GAsgASgDUgxjbG9ja0RlbHRhTXMSQgoMY2FwYWJpbGl0aWVzGAwgASgLMh4uc3RhZ2VzeW5jLn'
+    'YxLk5vZGVDYXBhYmlsaXRpZXNSDGNhcGFiaWxpdGllcyJtCg9IZWFsdGhFdmVudFR5cGUSEwoP'
+    'SEVBTFRIX1NOQVBTSE9UEAASDwoLTk9ERV9PTkxJTkUQARIQCgxOT0RFX09GRkxJTkUQAhIRCg'
+    '1OT0RFX0RFR1JBREVEEAMSDwoLQ0xPQ0tfREVMVEEQBA==');
 
 @$core.Deprecated('Use watchMediaSyncRequestDescriptor instead')
 const WatchMediaSyncRequest$json = {

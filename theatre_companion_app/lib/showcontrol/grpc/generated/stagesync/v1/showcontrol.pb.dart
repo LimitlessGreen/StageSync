@@ -16,6 +16,7 @@ import 'package:fixnum/fixnum.dart' as $fixnum;
 import 'package:protobuf/protobuf.dart' as $pb;
 
 import 'common.pb.dart' as $2;
+import 'node.pb.dart' as $3;
 import 'showcontrol.pbenum.dart';
 
 export 'package:protobuf/protobuf.dart' show GeneratedMessageGenericExtensions;
@@ -326,6 +327,7 @@ class AudioCueParams extends $pb.GeneratedMessage {
     $core.double? startTimeMs,
     $core.double? endTimeMs,
     $core.String? outputDevice,
+    $core.String? assetId,
   }) {
     final result = create();
     if (filePath != null) result.filePath = filePath;
@@ -336,6 +338,7 @@ class AudioCueParams extends $pb.GeneratedMessage {
     if (startTimeMs != null) result.startTimeMs = startTimeMs;
     if (endTimeMs != null) result.endTimeMs = endTimeMs;
     if (outputDevice != null) result.outputDevice = outputDevice;
+    if (assetId != null) result.assetId = assetId;
     return result;
   }
 
@@ -360,6 +363,7 @@ class AudioCueParams extends $pb.GeneratedMessage {
     ..aD(6, _omitFieldNames ? '' : 'startTimeMs')
     ..aD(7, _omitFieldNames ? '' : 'endTimeMs')
     ..aOS(8, _omitFieldNames ? '' : 'outputDevice')
+    ..aOS(9, _omitFieldNames ? '' : 'assetId')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -452,6 +456,15 @@ class AudioCueParams extends $pb.GeneratedMessage {
   $core.bool hasOutputDevice() => $_has(7);
   @$pb.TagNumber(8)
   void clearOutputDevice() => $_clearField(8);
+
+  @$pb.TagNumber(9)
+  $core.String get assetId => $_getSZ(8);
+  @$pb.TagNumber(9)
+  set assetId($core.String value) => $_setString(8, value);
+  @$pb.TagNumber(9)
+  $core.bool hasAssetId() => $_has(8);
+  @$pb.TagNumber(9)
+  void clearAssetId() => $_clearField(9);
 }
 
 class MaOscCueParams extends $pb.GeneratedMessage {
@@ -2215,6 +2228,7 @@ class NodeHealthEvent extends $pb.GeneratedMessage {
     $2.Timestamp? occurredAt,
     $2.NodeInfo? node,
     $fixnum.Int64? clockDeltaMs,
+    $3.NodeCapabilities? capabilities,
   }) {
     final result = create();
     if (seq != null) result.seq = seq;
@@ -2222,6 +2236,7 @@ class NodeHealthEvent extends $pb.GeneratedMessage {
     if (occurredAt != null) result.occurredAt = occurredAt;
     if (node != null) result.node = node;
     if (clockDeltaMs != null) result.clockDeltaMs = clockDeltaMs;
+    if (capabilities != null) result.capabilities = capabilities;
     return result;
   }
 
@@ -2246,6 +2261,8 @@ class NodeHealthEvent extends $pb.GeneratedMessage {
     ..aOM<$2.NodeInfo>(10, _omitFieldNames ? '' : 'node',
         subBuilder: $2.NodeInfo.create)
     ..aInt64(11, _omitFieldNames ? '' : 'clockDeltaMs')
+    ..aOM<$3.NodeCapabilities>(12, _omitFieldNames ? '' : 'capabilities',
+        subBuilder: $3.NodeCapabilities.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -2315,6 +2332,17 @@ class NodeHealthEvent extends $pb.GeneratedMessage {
   $core.bool hasClockDeltaMs() => $_has(4);
   @$pb.TagNumber(11)
   void clearClockDeltaMs() => $_clearField(11);
+
+  @$pb.TagNumber(12)
+  $3.NodeCapabilities get capabilities => $_getN(5);
+  @$pb.TagNumber(12)
+  set capabilities($3.NodeCapabilities value) => $_setField(12, value);
+  @$pb.TagNumber(12)
+  $core.bool hasCapabilities() => $_has(5);
+  @$pb.TagNumber(12)
+  void clearCapabilities() => $_clearField(12);
+  @$pb.TagNumber(12)
+  $3.NodeCapabilities ensureCapabilities() => $_ensure(5);
 }
 
 class WatchMediaSyncRequest extends $pb.GeneratedMessage {

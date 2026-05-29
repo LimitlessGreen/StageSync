@@ -1625,10 +1625,12 @@ class AudioPreloadCommand extends $pb.GeneratedMessage {
   factory AudioPreloadCommand({
     $core.String? cueId,
     $core.String? filePath,
+    $core.String? assetId,
   }) {
     final result = create();
     if (cueId != null) result.cueId = cueId;
     if (filePath != null) result.filePath = filePath;
+    if (assetId != null) result.assetId = assetId;
     return result;
   }
 
@@ -1647,6 +1649,7 @@ class AudioPreloadCommand extends $pb.GeneratedMessage {
       createEmptyInstance: create)
     ..aOS(1, _omitFieldNames ? '' : 'cueId')
     ..aOS(2, _omitFieldNames ? '' : 'filePath')
+    ..aOS(3, _omitFieldNames ? '' : 'assetId')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1685,6 +1688,15 @@ class AudioPreloadCommand extends $pb.GeneratedMessage {
   $core.bool hasFilePath() => $_has(1);
   @$pb.TagNumber(2)
   void clearFilePath() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get assetId => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set assetId($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasAssetId() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearAssetId() => $_clearField(3);
 }
 
 class AudioPlayCommand extends $pb.GeneratedMessage {
