@@ -63,7 +63,6 @@ class _MobileShellState extends ConsumerState<MobileShell> {
             _StatusStrip(
               sessionName: sessionState.session?.name ?? 'Show Control',
               nodes: domainState.nodes,
-              onLeave: _leaveSession,
             ),
             const Divider(height: 1, color: ScColors.divider),
             // ── Read-only cue list ────────────────────────────────────────
@@ -81,6 +80,7 @@ class _MobileShellState extends ConsumerState<MobileShell> {
               onStop: () => notifier.stop(),
               onPause: () => notifier.pause(),
               onResume: () => notifier.resume(),
+              onLeave: _leaveSession,
             ),
           ],
         ),
@@ -94,24 +94,19 @@ class _MobileShellState extends ConsumerState<MobileShell> {
 class _StatusStrip extends StatelessWidget {
   final String sessionName;
   final List nodes;
-  final VoidCallback onLeave;
 
-  const _StatusStrip({
-    required this.sessionName,
-    required this.nodes,
-    required this.onLeave,
-  });
+  const _StatusStrip({required this.sessionName, required this.nodes});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 44,
+      height: 36,
       color: ScColors.surface,
       padding: const EdgeInsets.symmetric(horizontal: ScSpacing.panelPad),
       child: Row(
         children: [
-          const Icon(Icons.theater_comedy, size: 14, color: ScColors.textDim),
-          const SizedBox(width: 8),
+          const Icon(Icons.theater_comedy, size: 12, color: ScColors.textDim),
+          const SizedBox(width: 6),
           Expanded(
             child: Text(
               sessionName,
@@ -119,29 +114,8 @@ class _StatusStrip extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          NodeHealthStrip(nodes: nodes.cast()),
-          const SizedBox(width: 8),
-          GestureDetector(
-            onTap: onLeave,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                border: Border.all(color: ScColors.error.withValues(alpha: 0.5)),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(Icons.logout, size: 14, color: ScColors.error),
-                  const SizedBox(width: 4),
-                  Text(
-                    'Verlassen',
-                    style: ScText.label.copyWith(color: ScColors.error, fontSize: 11),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          if ((nodes as List).isNotEmpty)
+            NodeHealthStrip(nodes: nodes.cast()),
         ],
       ),
     );
@@ -199,6 +173,7 @@ class _TransportControls extends StatelessWidget {
   final VoidCallback onStop;
   final VoidCallback onPause;
   final VoidCallback onResume;
+  final VoidCallback onLeave;
 
   const _TransportControls({
     required this.playhead,
@@ -206,6 +181,7 @@ class _TransportControls extends StatelessWidget {
     required this.onStop,
     required this.onPause,
     required this.onResume,
+    required this.onLeave,
   });
 
   @override
@@ -265,6 +241,18 @@ class _TransportControls extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 16),
+          // Leave session — full-width outlined button
+          SizedBox(
+            width: double.infinity,
+            child: ScButton(
+              label: 'Session verlassen',
+              icon: Icons.logout,
+              variant: ScButtonVariant.danger,
+              size: ScButtonSize.compact,
+              onPressed: onLeave,
+            ),
           ),
         ],
       ),
