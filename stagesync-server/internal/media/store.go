@@ -18,10 +18,11 @@ import (
 // AudioInfo enthält technische Metadaten einer Audiodatei.
 // Wird beim Listing aus dem Datei-Header gelesen (WAV: RIFF-Chunk-Analyse).
 type AudioInfo struct {
-	DurationMs int64 `json:"duration_ms"` // 0 = unbekannt
-	Channels   int32 `json:"channels"`    // 0 = unbekannt
-	SampleRate int32 `json:"sample_rate"` // Hz
-	BitDepth   int32 `json:"bit_depth"`   // 0 = unbekannt
+	DurationMs   int64    `json:"duration_ms"`             // 0 = unbekannt
+	Channels     int32    `json:"channels"`                // 0 = unbekannt
+	SampleRate   int32    `json:"sample_rate"`             // Hz
+	BitDepth     int32    `json:"bit_depth"`               // 0 = unbekannt
+	LoudnessLufs *float64 `json:"loudness_lufs,omitempty"` // nil = nicht gemessen (erfordert ffprobe)
 }
 
 // FileInfo beschreibt eine gespeicherte Mediendatei. sha256 dient als
@@ -131,6 +132,12 @@ func SafeName(name string) string {
 
 func (s *Store) path(name string) string {
 	return filepath.Join(s.dir, SafeName(name))
+}
+
+// FilePath returns the absolute path of the named file in the media store.
+// It does not verify that the file exists; use Stat for that.
+func (s *Store) FilePath(name string) string {
+	return s.path(name)
 }
 
 // List liefert alle Audiodateien inkl. Inhalts-Hash (gecacht nach mtime/size).
