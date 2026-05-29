@@ -1,0 +1,24 @@
+[
+  {
+    "session_id": "163dc0cc-d592-47a9-9604-e815d39b843a",
+    "updated_at": "2026-05-28T23:48:30.812978+02:00",
+    "cue_list_id": "main",
+    "name": "Main",
+    "version": 2,
+    "cues": [
+      {
+        "cue_id": "mpq0y63aqh",
+        "number": "1",
+        "label": "1",
+        "cue_type": 1,
+        "target_node_id": "6deb7aa3-fd2b-4474-a75b-80985f0e51f2",
+        "auto_continue": false,
+        "pre_wait_ms": 0,
+        "post_wait_ms": 0,
+        "version": 2,
+        "file_path": "XC733542 - Soundscape.mp3",
+        "fade_in_ms": 300
+      }
+    ]
+  }
+]

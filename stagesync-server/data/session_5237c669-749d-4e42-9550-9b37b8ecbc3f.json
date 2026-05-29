@@ -1,0 +1,23 @@
+[
+  {
+    "session_id": "5237c669-749d-4e42-9550-9b37b8ecbc3f",
+    "updated_at": "2026-05-28T15:22:34.5466222+02:00",
+    "cue_list_id": "main",
+    "name": "Main",
+    "version": 2,
+    "cues": [
+      {
+        "cue_id": "mppivialjh",
+        "number": "1",
+        "label": "Audio",
+        "cue_type": 1,
+        "target_node_id": "e4c72e12-e401-448b-a837-a3becaf85cf8",
+        "auto_continue": false,
+        "pre_wait_ms": 0,
+        "post_wait_ms": 0,
+        "version": 2,
+        "file_path": "Brüllender Löwe in Südafrika [uutVXoZ66a8].wav"
+      }
+    ]
+  }
+]

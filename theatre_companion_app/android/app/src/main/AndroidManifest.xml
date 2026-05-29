@@ -1,0 +1,109 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         BLE-Berechtigungen (Bluetooth Low Energy / StageSync Mesh)
+         ═══════════════════════════════════════════════════════════════════ -->
+
+    <!-- Legacy BLE-Zugriff (Android ≤ 11 / API ≤ 30) -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_ADMIN"
+        android:maxSdkVersion="30" />
+
+    <!-- Standort-Berechtigung für BLE-Scan (Android 6–11 / API 23–30).
+         Hinweis: permission_handler fordert ACCESS_FINE_LOCATION für API 23–30
+         an; auf API 31+ mit BLUETOOTH_SCAN/neverForLocation nicht benötigt. -->
+    <uses-permission
+        android:name="android.permission.ACCESS_FINE_LOCATION"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.ACCESS_COARSE_LOCATION"
+        android:maxSdkVersion="30" />
+
+    <!-- Android 12+ (API 31+) explizite BLE-Berechtigungen.
+         neverForLocation: Scan erfolgt NICHT zur Standortbestimmung.
+         → Kein ACCESS_FINE_LOCATION-Fallback auf neueren Geräten erforderlich.
+         → Vermeidet sensitiven Location-Permission-Dialog im Play Store. -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="31" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_CONNECT"
+        tools:targetApi="31" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_ADVERTISE"
+        tools:targetApi="31" />
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         Netzwerk-Berechtigungen (WebSocket / Server-Gateway)
+         ═══════════════════════════════════════════════════════════════════ -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+         Kamera-Berechtigung (QR-Code / Barcode-Scanner)
+         ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••• -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         Background / Wake (BLE-Mesh im Hintergrund halten)
+         ═══════════════════════════════════════════════════════════════════ -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- FOREGROUND_SERVICE_CONNECTED_DEVICE: für BLE/Android 14+.
+         Erlaubt, dass ein Foreground Service mit verbundenen BLE-Geräten
+         kommuniziert, auch wenn die App im Hintergrund ist. -->
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"
+        tools:targetApi="34" />
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         Hardware-Feature-Deklaration
+         ═══════════════════════════════════════════════════════════════════ -->
+    <!-- required="false": Tablets ohne BLE sollen die App auch installieren
+         können – sie laufen dann im WebSocket-only-Modus (StubBleService).
+         required="true" hätte die App im Play Store für BLE-lose Tablets
+         und Chromebooks ausgeschlossen. -->
+    <uses-feature
+        android:name="android.hardware.bluetooth_le"
+        android:required="false" />
+
+    <application
+        android:label="StageSync"
+        android:name="${applicationName}"
+        android:icon="@mipmap/ic_launcher">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:taskAffinity=""
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+            <meta-data
+              android:name="io.flutter.embedding.android.NormalTheme"
+              android:resource="@style/NormalTheme"
+              />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+    </application>
+
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.PROCESS_TEXT"/>
+            <data android:mimeType="text/plain"/>
+        </intent>
+    </queries>
+</manifest>

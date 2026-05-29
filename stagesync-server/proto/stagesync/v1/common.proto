@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package stagesync.v1;
+
+option go_package = "stagesync-server/gen/go/stagesync/v1;stagesyncv1";
+
+// ── Node Types ────────────────────────────────────────────────────────────────
+
+// NodeType: Primäre Gerätekategorie (für Routing, backward-compat).
+// Für Capability-Auswahl: siehe NodeTask.
+enum NodeType {
+  NODE_TYPE_UNSPECIFIED = 0;
+  NODE_TYPE_MASTER      = 1;
+  NODE_TYPE_AUDIO       = 2;
+  NODE_TYPE_VIEWER      = 3;
+  NODE_TYPE_MA          = 4;
+  NODE_TYPE_LIGHTING    = 5;
+}
+
+enum NodeRole {
+  NODE_ROLE_UNSPECIFIED = 0;
+  NODE_ROLE_MASTER      = 1; // Besitzt die Session
+  NODE_ROLE_BACKUP      = 2; // Übernimmt bei Master-Ausfall
+  NODE_ROLE_CLIENT      = 3; // Vollständiger Client (Editor-Zugriff)
+  NODE_ROLE_VIEWER      = 4; // Read-only
+}
+
+// NodeTask: Aufgaben, die ein Node gleichzeitig übernehmen kann.
+// Ein Gerät kann z.B. MASTER + AUDIO_OUTPUT + EDITOR gleichzeitig sein.
+enum NodeTask {
+  NODE_TASK_UNSPECIFIED  = 0;
+  NODE_TASK_MASTER       = 1; // Show-Kontrolle (GO/Stop/Pause)
+  NODE_TASK_AUDIO_OUTPUT = 2; // Audio-Wiedergabe
+  NODE_TASK_EDITOR       = 3; // CueList bearbeiten
+  NODE_TASK_VIEWER       = 4; // GO-Screen (nur lesen)
+  NODE_TASK_MA_OSC       = 5; // GrandMA OSC-Bridge
+}
+
+// ── Cue Types & State ─────────────────────────────────────────────────────────
+
+enum CueType {
+  CUE_TYPE_UNSPECIFIED = 0;
+  CUE_TYPE_AUDIO       = 1;
+  CUE_TYPE_MA_OSC      = 2; // GrandMA via OSC
+  CUE_TYPE_WAIT        = 3; // Zeitverzögerung
+  CUE_TYPE_GROUP       = 4; // Parallele Ausführung
+  CUE_TYPE_GOTO        = 5; // Sprung zu Cue-Nummer
+}
+
+enum CueState {
+  CUE_STATE_UNSPECIFIED = 0;
+  CUE_STATE_IDLE        = 1;
+  CUE_STATE_ARMED       = 2;
+  CUE_STATE_PLAYING     = 3;
+  CUE_STATE_PAUSED      = 4;
+  CUE_STATE_DONE        = 5;
+  CUE_STATE_ERROR       = 6;
+}
+
+// ── Shared Messages ───────────────────────────────────────────────────────────
+
+message Timestamp {
+  int64 unix_millis = 1;
+}
+
+message NodeInfo {
+  string            node_id          = 1;
+  string            name             = 2;
+  NodeType          node_type        = 3; // primäre Kategorie (backward-compat)
+  NodeRole          node_role        = 4;
+  string            address          = 5;
+  bool              online           = 6;
+  repeated NodeTask tasks            = 7; // aktive Aufgaben dieses Geräts
+  string            media_server_url = 8; // HTTP-URL des MediaServers (nur Audio-Nodes)
+}

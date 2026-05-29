@@ -1,0 +1,46 @@
+[
+  {
+    "session_id": "4f815f79-b812-46b0-88b7-462fd087458d",
+    "updated_at": "2026-05-29T02:12:58.0590673+02:00",
+    "cue_list_id": "main",
+    "name": "Main",
+    "version": 15,
+    "cues": [
+      {
+        "cue_id": "mpq40j6hl7",
+        "number": "1",
+        "label": "Song 1",
+        "cue_type": 1,
+        "target_node_id": "214eb83a-0721-4664-8378-5f9ac6137976",
+        "auto_continue": false,
+        "pre_wait_ms": 0,
+        "post_wait_ms": 0,
+        "version": 8,
+        "file_path": "SK21_2023_03_27_18_05_02-normalized.wav"
+      },
+      {
+        "cue_id": "mpq46j7x4",
+        "number": "2",
+        "label": "Song 2",
+        "cue_type": 1,
+        "target_node_id": "214eb83a-0721-4664-8378-5f9ac6137976",
+        "auto_continue": false,
+        "pre_wait_ms": 0,
+        "post_wait_ms": 0,
+        "version": 6,
+        "file_path": "xeno-canto_audio-data_skylar_XC571988.mp3"
+      },
+      {
+        "cue_id": "mpq64j0p71",
+        "number": "3",
+        "label": "Warten",
+        "cue_type": 3,
+        "target_node_id": "",
+        "auto_continue": false,
+        "pre_wait_ms": 0,
+        "post_wait_ms": 0,
+        "version": 1
+      }
+    ]
+  }
+]

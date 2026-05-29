@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta http-equiv="X-UA-Compatible" content="IE=Edge">
+  <meta name="description" content="StageSync – Dezentrales Theater-Inventar und Kommunikationssystem mit BLE-Mesh.">
+  <meta name="theme-color" content="#6B3FA0">
+
+  <!-- ═══════════════════════════════════════════════════════════
+       PWA / iOS Apple-spezifische Meta-Tags
+       Hinweis: Safari/iOS unterstützt Web Bluetooth NICHT.
+       Die App läuft im WebSocket-only-Modus auf iOS-Geräten.
+       ═══════════════════════════════════════════════════════════ -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="StageSync">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <link rel="apple-touch-icon" sizes="512x512" href="icons/Icon-512.png">
+
+  <!-- ═══════════════════════════════════════════════════════════
+       Open Graph / Social Sharing
+       ═══════════════════════════════════════════════════════════ -->
+  <meta property="og:title" content="StageSync">
+  <meta property="og:description" content="Theater Companion App mit BLE-Mesh und P2P-Synchronisation">
+  <meta property="og:type" content="website">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png">
+
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="manifest.json">
+
+  <title>StageSync</title>
+
+  <!-- ═══════════════════════════════════════════════════════════
+       sql.js für Drift WebDatabase (IndexedDB-Backend)
+       Benötigt für lokale Datenpersistenz im Browser.
+       HINWEIS: Ohne sql.js läuft die App im reinen In-Memory-Modus.
+       Browser-Einschränkungen:
+         • Chrome/Edge: BLE via Web Bluetooth API (experimentell)
+         • Firefox: Kein BLE  – WebSocket-only
+         • Safari/iOS: Kein BLE, kein Web Bluetooth – WebSocket-only
+       ═══════════════════════════════════════════════════════════ -->
+  <script
+    src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/sql-wasm.js"
+    crossorigin="anonymous"
+    referrerpolicy="no-referrer"
+    defer>
+  </script>
+
+</head>
+<body>
+  <!--
+    Flutter lädt vollständig asynchron via flutter_bootstrap.js.
+    Kein Blocking-Script, optimale PWA-Performance.
+  -->
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

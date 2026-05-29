@@ -1,0 +1,215 @@
+syntax = "proto3";
+
+package stagesync.v1;
+
+import "stagesync/v1/common.proto";
+import "google/protobuf/empty.proto";
+
+option go_package = "stagesync-server/gen/go/stagesync/v1;stagesyncv1";
+
+// ── Node Service ──────────────────────────────────────────────────────────────
+
+service NodeService {
+  // Node bei der Session registrieren
+  rpc RegisterNode(RegisterNodeRequest) returns (NodeResponse);
+
+  // Node abmelden
+  rpc UnregisterNode(UnregisterNodeRequest) returns (google.protobuf.Empty);
+
+  // Alle Nodes der Session auflisten
+  rpc ListNodes(ListNodesRequest) returns (ListNodesResponse);
+
+  // Node-Events streamen
+  rpc WatchNodes(WatchNodesRequest) returns (stream NodeEvent);
+
+  // Node-Capability-Update (z.B. Audio-Device-Liste)
+  rpc UpdateCapabilities(UpdateCapabilitiesRequest) returns (google.protobuf.Empty);
+
+  // Node öffnet diesen Stream — Server pusht Commands (Audio play/stop, OSC, …)
+  rpc StreamNodeCommands(StreamNodeCommandsRequest) returns (stream NodeCommandRequest);
+
+  // Master/Client sendet Command an einen bestimmten Node (über Dispatcher)
+  rpc SendNodeCommand(SendNodeCommandRequest) returns (NodeCommandResponse);
+}
+
+// ── Node Capabilities ─────────────────────────────────────────────────────────
+
+message AudioDeviceInfo {
+  int32  index      = 1;
+  string name       = 2;
+  bool   is_default = 3;
+}
+
+message AudioCapabilities {
+  repeated string          output_devices    = 1; // deprecated, durch available_devices ersetzt
+  repeated string          supported_formats = 2;
+  int32                    max_simultaneous  = 3;
+  string                   media_server_url  = 4;
+  repeated AudioDeviceInfo available_devices = 5;
+  int32                    selected_device   = 6; // Index des gewählten Geräts
+}
+
+message MediaFileInfo {
+  string filename    = 1;
+  int64  size_bytes  = 2;
+  string format      = 3; // "wav", "mp3", etc.
+  int64  duration_ms = 4; // 0 = unbekannt
+  Timestamp modified_at = 5;
+}
+
+message MaCapabilities {
+  string  grandma_version = 1; // "GMA2", "GMA3"
+  string  grandma_address = 2; // IP der GrandMA
+  int32   grandma_osc_port = 3;
+  bool    osc_enabled      = 4;
+  bool    telnet_enabled   = 5;
+}
+
+message NodeCapabilities {
+  AudioCapabilities audio = 1; // gesetzt wenn Node AUDIO_OUTPUT-Task hat
+  MaCapabilities    ma    = 2; // gesetzt wenn Node MA_OSC-Task hat
+}
+
+// ── Messages ──────────────────────────────────────────────────────────────────
+
+message RegisterNodeRequest {
+  string           session_id    = 1;
+  string           token         = 2;
+  NodeInfo         node          = 3;
+  NodeCapabilities capabilities  = 4;
+}
+
+message NodeResponse {
+  NodeInfo node  = 1;
+  string   token = 2;
+}
+
+message UnregisterNodeRequest {
+  string session_id = 1;
+  string node_id    = 2;
+  string token      = 3;
+}
+
+message ListNodesRequest {
+  string session_id = 1;
+  string token      = 2;
+}
+
+message ListNodesResponse {
+  repeated NodeInfo nodes = 1;
+}
+
+message WatchNodesRequest {
+  string session_id = 1;
+  string token      = 2;
+}
+
+message NodeEvent {
+  enum Type {
+    TYPE_UNSPECIFIED  = 0;
+    TYPE_REGISTERED   = 1;
+    TYPE_UNREGISTERED = 2;
+    TYPE_OFFLINE      = 3;
+    TYPE_ONLINE       = 4;
+    TYPE_CAPS_UPDATED = 5;
+  }
+  Type      type          = 1;
+  NodeInfo  node          = 2;
+  Timestamp occurred_at   = 3;
+}
+
+message UpdateCapabilitiesRequest {
+  string           session_id   = 1;
+  string           node_id      = 2;
+  string           token        = 3;
+  NodeCapabilities capabilities = 4;
+}
+
+// Node-Commands: Server→Node für direkte Steuerung
+
+// StreamNodeCommandsRequest: Node öffnet den Command-Stream
+message StreamNodeCommandsRequest {
+  string session_id = 1;
+  string node_id    = 2;
+  string token      = 3;
+}
+
+// NodeCommandRequest: wird über den Stream an den Node gepusht
+message NodeCommandRequest {
+  string   session_id     = 1;
+  string   command_id     = 2; // UUID für Idempotenz
+  string   target_node_id = 3; // direkte NodeID (leer = task-basiert)
+  NodeTask target_task    = 8; // task-basiertes Routing (wenn target_node_id leer)
+  oneof command {
+    AudioPreloadCommand  audio_preload  = 4;
+    AudioPlayCommand     audio_play     = 5;
+    AudioStopCommand     audio_stop     = 6;
+    MaOscCommand         ma_osc         = 7;
+    AudioPauseCommand    audio_pause    = 9;  // Voice anhalten (nicht stoppen)
+    AudioResumeCommand   audio_resume   = 10; // angehaltene Voice fortsetzen
+    AudioTestSignalCommand audio_test   = 11; // Node generiert Testton/-sweep selbst
+  }
+}
+
+// SendNodeCommandRequest: Master/Client sendet Command an einen Node
+message SendNodeCommandRequest {
+  string session_id     = 1;
+  string token          = 2;
+  string target_node_id = 3;
+  NodeCommandRequest command = 4;
+}
+
+message AudioPreloadCommand {
+  string cue_id   = 1;
+  string file_path = 2;
+}
+
+message AudioPlayCommand {
+  string cue_id          = 1;
+  int64  start_unix_millis = 2; // Synchronisierter Startzeitpunkt
+  double volume_db        = 3;
+  double fade_in_ms       = 4;
+}
+
+message AudioStopCommand {
+  string cue_id      = 1;
+  double fade_out_ms = 2;
+}
+
+// Hält die laufende Voice an (Playhead bleibt stehen). cue_id leer = alle.
+message AudioPauseCommand {
+  string cue_id      = 1;
+  double fade_out_ms = 2; // kurzer Fade gegen Knackser (0 = hart)
+}
+
+// Setzt eine angehaltene Voice fort. cue_id leer = alle.
+message AudioResumeCommand {
+  string cue_id     = 1;
+  double fade_in_ms = 2; // kurzer Fade gegen Knackser (0 = hart)
+}
+
+// Anweisung an den Node, ein Testsignal SELBST zu generieren und abzuspielen
+// (es wird kein Audio über das Netz übertragen).
+message AudioTestSignalCommand {
+  enum Kind {
+    KIND_TONE  = 0; // Sinuston (frequency_hz)
+    KIND_SWEEP = 1; // exponentieller Sweep (start_hz → end_hz)
+  }
+  string cue_id       = 1;
+  Kind   kind         = 2;
+  double start_hz     = 3; // Sweep-Start
+  double end_hz       = 4; // Sweep-Ende
+  double frequency_hz = 5; // Ton-Frequenz
+  double duration_ms  = 6;
+  double amplitude    = 7; // 0..1
+}
+
+message MaOscCommand {
+  string osc_address  = 1;
+  string osc_argument = 2;
+}
+
+message NodeCommandResponse {
+  bool   success    = 1;
+  string error_msg  = 2;
+}

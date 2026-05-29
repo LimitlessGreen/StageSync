@@ -1,0 +1,108 @@
+syntax = "proto3";
+
+package stagesync.v1;
+
+import "stagesync/v1/common.proto";
+import "google/protobuf/empty.proto";
+
+option go_package = "stagesync-server/gen/go/stagesync/v1;stagesyncv1";
+
+// ── Session Service ───────────────────────────────────────────────────────────
+
+service SessionService {
+  // Session erstellen (wird Master)
+  rpc CreateSession(CreateSessionRequest) returns (SessionResponse);
+
+  // Einer bestehenden Session beitreten
+  rpc JoinSession(JoinSessionRequest) returns (SessionResponse);
+
+  // Session verlassen
+  rpc LeaveSession(LeaveSessionRequest) returns (google.protobuf.Empty);
+
+  // Heartbeat — Node meldet sich als aktiv
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+
+  // Session-Events streamen (Node-Join/Leave, Master-Wechsel, etc.)
+  rpc WatchSession(WatchSessionRequest) returns (stream SessionEvent);
+
+  // Alle aktiven Sessions im Netz auflisten
+  rpc ListSessions(ListSessionsRequest) returns (ListSessionsResponse);
+}
+
+// ── Messages ──────────────────────────────────────────────────────────────────
+
+message Session {
+  string   session_id   = 1;
+  string   name         = 2;
+  string   show_name    = 3;
+  bool     password_protected = 4;
+  string   master_node_id    = 5;
+  repeated NodeInfo nodes    = 6;
+  Timestamp created_at       = 7;
+  bool     persistent        = 8; // überlebt einen Server-Neustart
+}
+
+message CreateSessionRequest {
+  string   session_name  = 1;
+  string   show_name     = 2;
+  string   password      = 3; // leer = keine Authentifizierung
+  NodeInfo my_node       = 4;
+  bool     persistent    = 5; // Session überlebt einen Server-Neustart
+}
+
+message JoinSessionRequest {
+  string   session_id    = 1;
+  string   password      = 2;
+  NodeInfo my_node       = 3;
+}
+
+message LeaveSessionRequest {
+  string session_id = 1;
+  string node_id    = 2;
+  string token      = 3;
+}
+
+message SessionResponse {
+  Session session = 1;
+  string  token   = 2; // Session-Token für folgende Requests
+  NodeInfo assigned_node = 3; // Server kann Role anpassen
+}
+
+message HeartbeatRequest {
+  string session_id = 1;
+  string node_id    = 2;
+  string token      = 3;
+  int64  unix_millis = 4;
+}
+
+message HeartbeatResponse {
+  int64  server_unix_millis = 1;
+  bool   session_healthy    = 2;
+}
+
+message WatchSessionRequest {
+  string session_id = 1;
+  string node_id    = 2;
+  string token      = 3;
+}
+
+message SessionEvent {
+  enum Type {
+    TYPE_UNSPECIFIED   = 0;
+    TYPE_NODE_JOINED   = 1;
+    TYPE_NODE_LEFT     = 2;
+    TYPE_NODE_OFFLINE  = 3;
+    TYPE_MASTER_CHANGED = 4;
+    TYPE_SESSION_CLOSED = 5;
+  }
+  Type      type      = 1;
+  Session   session   = 2;
+  NodeInfo  affected_node = 3;
+  Timestamp occurred_at  = 4;
+}
+
+message ListSessionsRequest {}
+
+message ListSessionsResponse {
+  repeated Session sessions = 1;
+}

@@ -1,0 +1,206 @@
+syntax = "proto3";
+
+package stagesync.v1;
+
+import "stagesync/v1/common.proto";
+import "google/protobuf/empty.proto";
+
+option go_package = "stagesync-server/gen/go/stagesync/v1;stagesyncv1";
+
+// ── Show Control Service ──────────────────────────────────────────────────────
+
+service ShowControlService {
+  // Aktuelle CueList abrufen
+  rpc GetCueList(GetCueListRequest) returns (CueListResponse);
+
+  // CueList ersetzen (Master/Client-Role erforderlich)
+  rpc UpdateCueList(UpdateCueListRequest) returns (CueListResponse);
+
+  // Eine einzelne Cue hinzufügen / aktualisieren
+  rpc UpsertCue(UpsertCueRequest) returns (CueResponse);
+
+  // Eine Cue löschen
+  rpc DeleteCue(DeleteCueRequest) returns (google.protobuf.Empty);
+
+  // GO — nächste Cue oder spezifische Cue ausführen
+  rpc Go(GoRequest) returns (GoResponse);
+
+  // STOP — alle laufenden Cues stoppen
+  rpc Stop(StopRequest) returns (google.protobuf.Empty);
+
+  // PAUSE / RESUME
+  rpc Pause(PauseRequest) returns (google.protobuf.Empty);
+  rpc Resume(ResumeRequest) returns (google.protobuf.Empty);
+
+  // Show-State streamen (aktuelle Cue, Nodes-Status, etc.)
+  rpc WatchShowState(WatchShowStateRequest) returns (stream ShowStateEvent);
+}
+
+// ── Cue Data Model ────────────────────────────────────────────────────────────
+
+message Cue {
+  string   cue_id     = 1;
+  string   number     = 2; // Anzeigenummer z.B. "1", "1.5", "10A"
+  string   label      = 3;
+  CueType  cue_type   = 4;
+  CueState state      = 5;
+
+  // Welcher Node führt diese Cue aus
+  string   target_node_id   = 6;
+  // Leer = nächste Cue automatisch, sonst wartet die Engine auf GO
+  bool     auto_continue    = 7;
+  double   pre_wait_ms      = 8;
+  double   post_wait_ms     = 9;
+
+  // Type-spezifische Parameter (oneof)
+  oneof params {
+    AudioCueParams  audio  = 10;
+    MaOscCueParams  ma_osc = 11;
+    WaitCueParams   wait   = 12;
+    GotoCueParams   goto_p = 13;
+  }
+
+  Timestamp created_at  = 14;
+  Timestamp updated_at  = 15;
+  int64     version     = 16; // CRDT-Version für Sync
+}
+
+message AudioCueParams {
+  string  file_path      = 1;
+  double  volume_db      = 2; // 0.0 = unity, negative = Dämpfung
+  double  fade_in_ms     = 3;
+  double  fade_out_ms    = 4;
+  bool    loop           = 5;
+  double  start_time_ms  = 6;
+  double  end_time_ms    = 7; // 0 = bis Ende
+  string  output_device  = 8; // leer = System-Default
+}
+
+message MaOscCueParams {
+  // OSC-Adresse, die an GrandMA gesendet wird
+  // z.B. "/gma3/cmd" mit Argument "Executor 1 Go"
+  string  osc_address    = 1;
+  string  osc_argument   = 2;
+  // Alternativ: direkte GrandMA-Executor-Steuerung
+  int32   executor_page  = 3;
+  int32   executor_no    = 4;
+  enum MaCommand {
+    MA_CMD_UNSPECIFIED = 0;
+    MA_CMD_GO          = 1;
+    MA_CMD_OFF         = 2;
+    MA_CMD_PAUSE       = 3;
+    MA_CMD_GOTO        = 4;
+  }
+  MaCommand command      = 5;
+  int32   goto_cue       = 6; // für MA_CMD_GOTO
+}
+
+message WaitCueParams {
+  double duration_ms = 1;
+}
+
+message GotoCueParams {
+  string target_cue_id = 1;
+  string target_number = 2; // alternativ nach Anzeigenummer
+}
+
+// ── CueList ───────────────────────────────────────────────────────────────────
+
+message CueList {
+  string         cue_list_id   = 1;
+  string         name          = 2;
+  repeated Cue   cues          = 3;
+  string         active_cue_id = 4;
+  string         next_cue_id   = 5;
+  int64          version       = 6;
+  Timestamp      updated_at    = 7;
+}
+
+// ── Request/Response ──────────────────────────────────────────────────────────
+
+message GetCueListRequest {
+  string session_id   = 1;
+  string token        = 2;
+  string cue_list_id  = 3; // leer = aktive CueList
+}
+
+message UpdateCueListRequest {
+  string  session_id  = 1;
+  string  token       = 2;
+  CueList cue_list    = 3;
+}
+
+message CueListResponse {
+  CueList cue_list = 1;
+}
+
+message UpsertCueRequest {
+  string session_id   = 1;
+  string token        = 2;
+  string cue_list_id  = 3;
+  Cue    cue          = 4;
+}
+
+message CueResponse {
+  Cue cue = 1;
+}
+
+message DeleteCueRequest {
+  string session_id  = 1;
+  string token       = 2;
+  string cue_list_id = 3;
+  string cue_id      = 4;
+}
+
+message GoRequest {
+  string session_id  = 1;
+  string token       = 2;
+  string cue_id      = 3; // leer = nächste Cue
+}
+
+message GoResponse {
+  Cue    executing_cue = 1;
+  Cue    next_cue      = 2;
+}
+
+message StopRequest {
+  string session_id = 1;
+  string token      = 2;
+}
+
+message PauseRequest {
+  string session_id = 1;
+  string token      = 2;
+}
+
+message ResumeRequest {
+  string session_id = 1;
+  string token      = 2;
+}
+
+message WatchShowStateRequest {
+  string session_id = 1;
+  string node_id    = 2;
+  string token      = 3;
+}
+
+message ShowStateEvent {
+  enum Type {
+    TYPE_UNSPECIFIED   = 0;
+    TYPE_CUE_STARTED   = 1;
+    TYPE_CUE_STOPPED   = 2;
+    TYPE_CUE_PAUSED    = 3;
+    TYPE_CUE_DONE      = 4;
+    TYPE_CUE_ERROR     = 5;
+    TYPE_LIST_UPDATED  = 6;
+    TYPE_POSITION_CHANGED = 7;
+  }
+  Type      type         = 1;
+  CueList   cue_list     = 2;
+  Cue       affected_cue = 3;
+  string    node_id      = 4; // welcher Node meldet
+  Timestamp occurred_at  = 5;
+  string    error_msg    = 6;
+  int64     seq          = 7; // monoton steigend pro Session → Reihenfolge/Stale-Erkennung
+  bool      is_paused    = 8; // Transport-Status im Snapshot
+}

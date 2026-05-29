@@ -1,0 +1,22 @@
+[
+  {
+    "session_id": "fc1e7ac7-0828-404c-a7ff-026010f0e02a",
+    "updated_at": "2026-05-28T22:26:28.1946197+02:00",
+    "cue_list_id": "main",
+    "name": "Main",
+    "version": 1,
+    "cues": [
+      {
+        "cue_id": "mppy1909cw",
+        "number": "1",
+        "label": "Audio",
+        "cue_type": 1,
+        "target_node_id": "",
+        "auto_continue": false,
+        "pre_wait_ms": 0,
+        "post_wait_ms": 0,
+        "version": 1
+      }
+    ]
+  }
+]

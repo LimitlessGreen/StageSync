@@ -1,0 +1,35 @@
+[
+  {
+    "session_id": "28514e29-f44d-467c-b766-20c0422c08fd",
+    "updated_at": "2026-05-29T01:07:08.9527624+02:00",
+    "cue_list_id": "main",
+    "name": "Main",
+    "version": 5,
+    "cues": [
+      {
+        "cue_id": "mpq3olqs1z",
+        "number": "1",
+        "label": "Song 1",
+        "cue_type": 1,
+        "target_node_id": "115ee2e7-c135-47d1-91c3-77e3f466a2cc",
+        "auto_continue": false,
+        "pre_wait_ms": 0,
+        "post_wait_ms": 0,
+        "version": 3,
+        "file_path": "SK21_2023_03_27_18_05_02-normalized.wav"
+      },
+      {
+        "cue_id": "mpq3rlzrqf",
+        "number": "2",
+        "label": "Song 2",
+        "cue_type": 1,
+        "target_node_id": "115ee2e7-c135-47d1-91c3-77e3f466a2cc",
+        "auto_continue": false,
+        "pre_wait_ms": 0,
+        "post_wait_ms": 0,
+        "version": 2,
+        "file_path": "SK21_2023_03_27_18_05_02-normalized.wav"
+      }
+    ]
+  }
+]
