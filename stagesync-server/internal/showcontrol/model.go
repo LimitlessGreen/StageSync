@@ -9,17 +9,21 @@ import (
 	pb "stagesync-server/gen/go/stagesync/v1"
 )
 
-// Store hält alle CueLists einer Session.
+// Store hält alle CueLists einer Session und die 4 Event-Broadcast-Kanäle.
 type Store struct {
 	mu       sync.RWMutex
 	cueLists map[string]*CueList // cueListID → CueList
 	activeID string
 
-	// Echter Fan-out: jeder Watcher hat seinen eigenen Channel (sonst würden
-	// sich mehrere Geräte die Events teilen → divergierender State).
-	subMu       sync.Mutex
-	subscribers map[chan *pb.ShowStateEvent]struct{}
-	seq         int64 // monoton, pro Store; in jedes Event geschrieben
+	// Stream 1: Show-Definition (CueList-Änderungen)
+	defMu   sync.Mutex
+	defSubs map[chan *pb.ShowDefinitionEvent]struct{}
+	defSeq  int64
+
+	// Stream 2: Show-Execution (Transport-Events)
+	execMu   sync.Mutex
+	execSubs map[chan *pb.ShowExecutionEvent]struct{}
+	execSeq  int64
 }
 
 type CueList struct {
@@ -32,10 +36,10 @@ type CueList struct {
 
 func NewStore() *Store {
 	s := &Store{
-		cueLists:    make(map[string]*CueList),
-		subscribers: make(map[chan *pb.ShowStateEvent]struct{}),
+		cueLists: make(map[string]*CueList),
+		defSubs:  make(map[chan *pb.ShowDefinitionEvent]struct{}),
+		execSubs: make(map[chan *pb.ShowExecutionEvent]struct{}),
 	}
-	// Standard-CueList beim Start erstellen
 	defaultList := newCueList("main", "Main")
 	s.cueLists["main"] = defaultList
 	s.activeID = "main"
@@ -86,16 +90,15 @@ func (s *Store) ReplaceCueList(incoming *pb.CueList) *pb.CueList {
 	}
 	s.cueLists[incoming.CueListId] = cl
 
-	s.broadcast(&pb.ShowStateEvent{
-		Type:       pb.ShowStateEvent_TYPE_LIST_UPDATED,
-		CueList:    cloneProto(incoming),
+	s.broadcastDef(&pb.ShowDefinitionEvent{
+		Type:    pb.ShowDefinitionEvent_CUE_LIST_CHANGED,
+		CueList: cloneProto(incoming),
 		OccurredAt: nowProto(),
 	})
 
 	return cloneProto(incoming)
 }
 
-// UpsertCue fügt eine Cue ein oder aktualisiert sie (versioniertes Merge).
 func (s *Store) UpsertCue(cueListID string, cue *pb.Cue) (*pb.Cue, bool) {
 	s.mu.Lock()
 	cl, ok := s.cueLists[cueListID]
@@ -111,7 +114,6 @@ func (s *Store) UpsertCue(cueListID string, cue *pb.Cue) (*pb.Cue, bool) {
 	cue.Version++
 
 	if idx, exists := cl.cueIndex[cue.CueId]; exists {
-		// Nur aktualisieren, wenn neue Version höher
 		existing := cl.proto.Cues[idx]
 		if cue.Version <= existing.Version {
 			return cloneCue(existing), true
@@ -125,17 +127,15 @@ func (s *Store) UpsertCue(cueListID string, cue *pb.Cue) (*pb.Cue, bool) {
 	cl.proto.UpdatedAt = nowProto()
 	cl.proto.Version++
 
-	s.broadcast(&pb.ShowStateEvent{
-		Type:        pb.ShowStateEvent_TYPE_LIST_UPDATED,
-		CueList:     cloneProto(cl.proto),
-		AffectedCue: cloneCue(cue),
-		OccurredAt:  nowProto(),
+	s.broadcastDef(&pb.ShowDefinitionEvent{
+		Type:    pb.ShowDefinitionEvent_CUE_LIST_CHANGED,
+		CueList: cloneProto(cl.proto),
+		OccurredAt: nowProto(),
 	})
 
 	return cloneCue(cue), true
 }
 
-// DeleteCue entfernt eine Cue.
 func (s *Store) DeleteCue(cueListID, cueID string) bool {
 	s.mu.Lock()
 	cl, ok := s.cueLists[cueListID]
@@ -154,16 +154,15 @@ func (s *Store) DeleteCue(cueListID, cueID string) bool {
 
 	cl.proto.Cues = append(cl.proto.Cues[:idx], cl.proto.Cues[idx+1:]...)
 	delete(cl.cueIndex, cueID)
-	// Index neu aufbauen
 	for i, c := range cl.proto.Cues {
 		cl.cueIndex[c.CueId] = i
 	}
 	cl.proto.UpdatedAt = nowProto()
 	cl.proto.Version++
 
-	s.broadcast(&pb.ShowStateEvent{
-		Type:       pb.ShowStateEvent_TYPE_LIST_UPDATED,
-		CueList:    cloneProto(cl.proto),
+	s.broadcastDef(&pb.ShowDefinitionEvent{
+		Type:    pb.ShowDefinitionEvent_CUE_LIST_CHANGED,
+		CueList: cloneProto(cl.proto),
 		OccurredAt: nowProto(),
 	})
 	return true
@@ -171,7 +170,6 @@ func (s *Store) DeleteCue(cueListID, cueID string) bool {
 
 // ── Position Tracking ─────────────────────────────────────────────────────────
 
-// GetActiveCue gibt die aktuell aktive Cue zurück (nil wenn keine).
 func (s *Store) GetActiveCue(cueListID string) *pb.Cue {
 	s.mu.RLock()
 	cl, ok := s.cueLists[cueListID]
@@ -202,7 +200,6 @@ func (s *Store) SetActiveCue(cueListID, cueID string) {
 	cl.activeCueID = cueID
 	cl.proto.ActiveCueId = cueID
 
-	// Nächste Cue ermitteln
 	if idx, exists := cl.cueIndex[cueID]; exists && idx+1 < len(cl.proto.Cues) {
 		cl.nextCueID = cl.proto.Cues[idx+1].CueId
 		cl.proto.NextCueId = cl.nextCueID
@@ -213,7 +210,6 @@ func (s *Store) SetActiveCue(cueListID, cueID string) {
 	cl.mu.Unlock()
 }
 
-// NextCue gibt die nächste auszuführende Cue zurück.
 func (s *Store) NextCue(cueListID string) (*pb.Cue, bool) {
 	s.mu.RLock()
 	cl, ok := s.cueLists[cueListID]
@@ -230,59 +226,90 @@ func (s *Store) NextCue(cueListID string) (*pb.Cue, bool) {
 			return cloneCue(cl.proto.Cues[idx]), true
 		}
 	}
-	// Noch keine aktive Cue: erste Cue
 	if len(cl.proto.Cues) > 0 {
 		return cloneCue(cl.proto.Cues[0]), true
 	}
 	return nil, false
 }
 
-// Subscribe registriert einen neuen Watcher und gibt seinen Channel zurück.
-func (s *Store) Subscribe() chan *pb.ShowStateEvent {
-	ch := make(chan *pb.ShowStateEvent, 64)
-	s.subMu.Lock()
-	s.subscribers[ch] = struct{}{}
-	s.subMu.Unlock()
+// ── Stream 1: Definition Subscribe/Broadcast ──────────────────────────────────
+
+func (s *Store) SubscribeDef() chan *pb.ShowDefinitionEvent {
+	ch := make(chan *pb.ShowDefinitionEvent, 64)
+	s.defMu.Lock()
+	s.defSubs[ch] = struct{}{}
+	s.defMu.Unlock()
 	return ch
 }
 
-// Unsubscribe entfernt einen Watcher und schließt seinen Channel.
-func (s *Store) Unsubscribe(ch chan *pb.ShowStateEvent) {
-	s.subMu.Lock()
-	if _, ok := s.subscribers[ch]; ok {
-		delete(s.subscribers, ch)
+func (s *Store) UnsubscribeDef(ch chan *pb.ShowDefinitionEvent) {
+	s.defMu.Lock()
+	if _, ok := s.defSubs[ch]; ok {
+		delete(s.defSubs, ch)
 		close(ch)
 	}
-	s.subMu.Unlock()
+	s.defMu.Unlock()
 }
 
-// CurrentSeq gibt die zuletzt vergebene Sequenznummer zurück.
-func (s *Store) CurrentSeq() int64 {
-	s.subMu.Lock()
-	defer s.subMu.Unlock()
-	return s.seq
-}
-
-// broadcast vergibt eine Sequenznummer und sendet das Event an ALLE Watcher
-// (Fan-out, non-blocking).
-func (s *Store) broadcast(ev *pb.ShowStateEvent) {
-	s.subMu.Lock()
-	s.seq++
-	ev.Seq = s.seq
-	for ch := range s.subscribers {
+func (s *Store) broadcastDef(ev *pb.ShowDefinitionEvent) {
+	s.defMu.Lock()
+	s.defSeq++
+	ev.Seq = s.defSeq
+	for ch := range s.defSubs {
 		select {
 		case ch <- ev:
-		default: // Watcher zu langsam — Event verwerfen statt blockieren
+		default:
 		}
 	}
-	s.subMu.Unlock()
+	s.defMu.Unlock()
+}
+
+func (s *Store) CurrentDefSeq() int64 {
+	s.defMu.Lock()
+	defer s.defMu.Unlock()
+	return s.defSeq
+}
+
+// ── Stream 2: Execution Subscribe/Broadcast ───────────────────────────────────
+
+func (s *Store) SubscribeExec() chan *pb.ShowExecutionEvent {
+	ch := make(chan *pb.ShowExecutionEvent, 64)
+	s.execMu.Lock()
+	s.execSubs[ch] = struct{}{}
+	s.execMu.Unlock()
+	return ch
+}
+
+func (s *Store) UnsubscribeExec(ch chan *pb.ShowExecutionEvent) {
+	s.execMu.Lock()
+	if _, ok := s.execSubs[ch]; ok {
+		delete(s.execSubs, ch)
+		close(ch)
+	}
+	s.execMu.Unlock()
+}
+
+func (s *Store) BroadcastExec(ev *pb.ShowExecutionEvent) {
+	s.execMu.Lock()
+	s.execSeq++
+	ev.Seq = s.execSeq
+	for ch := range s.execSubs {
+		select {
+		case ch <- ev:
+		default:
+		}
+	}
+	s.execMu.Unlock()
+}
+
+func (s *Store) CurrentExecSeq() int64 {
+	s.execMu.Lock()
+	defer s.execMu.Unlock()
+	return s.execSeq
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-// Deep-Clone für gRPC-Responses und Broadcasts: proto.Clone kopiert auch
-// verschachtelte Felder (Params, Timestamps) und vermeidet das Kopieren des
-// internen Mutex/MessageState — verhindert geteilte Pointer & Data-Races.
 func cloneProto(cl *pb.CueList) *pb.CueList {
 	return proto.Clone(cl).(*pb.CueList)
 }

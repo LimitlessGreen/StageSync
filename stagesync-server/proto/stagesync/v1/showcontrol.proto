@@ -13,7 +13,7 @@ service ShowControlService {
   // Aktuelle CueList abrufen
   rpc GetCueList(GetCueListRequest) returns (CueListResponse);
 
-  // CueList ersetzen (Master/Client-Role erforderlich)
+  // CueList ersetzen (Master/Editor-Role erforderlich)
   rpc UpdateCueList(UpdateCueListRequest) returns (CueListResponse);
 
   // Eine einzelne Cue hinzufügen / aktualisieren
@@ -32,8 +32,18 @@ service ShowControlService {
   rpc Pause(PauseRequest) returns (google.protobuf.Empty);
   rpc Resume(ResumeRequest) returns (google.protobuf.Empty);
 
-  // Show-State streamen (aktuelle Cue, Nodes-Status, etc.)
-  rpc WatchShowState(WatchShowStateRequest) returns (stream ShowStateEvent);
+  // ── 4-Stream EventBus ────────────────────────────────────────────────────
+  // Stream 1: Show-Definition (CueList, Patch, Assets)
+  rpc WatchShowDefinition(WatchShowDefinitionRequest) returns (stream ShowDefinitionEvent);
+
+  // Stream 2: Show-Execution (Transport, Cue-States)
+  rpc WatchShowExecution(WatchShowExecutionRequest) returns (stream ShowExecutionEvent);
+
+  // Stream 3: Node Health (Online/Offline, Clock-Delta)
+  rpc WatchNodeHealth(WatchNodeHealthRequest) returns (stream NodeHealthEvent);
+
+  // Stream 4: Media Sync (Asset-Änderungen)
+  rpc WatchMediaSync(WatchMediaSyncRequest) returns (stream MediaSyncEvent);
 }
 
 // ── Cue Data Model ────────────────────────────────────────────────────────────
@@ -78,11 +88,8 @@ message AudioCueParams {
 }
 
 message MaOscCueParams {
-  // OSC-Adresse, die an GrandMA gesendet wird
-  // z.B. "/gma3/cmd" mit Argument "Executor 1 Go"
   string  osc_address    = 1;
   string  osc_argument   = 2;
-  // Alternativ: direkte GrandMA-Executor-Steuerung
   int32   executor_page  = 3;
   int32   executor_no    = 4;
   enum MaCommand {
@@ -93,7 +100,7 @@ message MaOscCueParams {
     MA_CMD_GOTO        = 4;
   }
   MaCommand command      = 5;
-  int32   goto_cue       = 6; // für MA_CMD_GOTO
+  int32   goto_cue       = 6;
 }
 
 message WaitCueParams {
@@ -102,12 +109,12 @@ message WaitCueParams {
 
 message GotoCueParams {
   string target_cue_id = 1;
-  string target_number = 2; // alternativ nach Anzeigenummer
+  string target_number = 2;
 }
 
 message GroupCueParams {
   repeated string child_cue_ids = 1;
-  bool sequential               = 2; // false = parallele Ausführung
+  bool sequential               = 2;
 }
 
 // ── CueList ───────────────────────────────────────────────────────────────────
@@ -127,7 +134,7 @@ message CueList {
 message GetCueListRequest {
   string session_id   = 1;
   string token        = 2;
-  string cue_list_id  = 3; // leer = aktive CueList
+  string cue_list_id  = 3;
 }
 
 message UpdateCueListRequest {
@@ -161,7 +168,7 @@ message DeleteCueRequest {
 message GoRequest {
   string session_id  = 1;
   string token       = 2;
-  string cue_id      = 3; // leer = nächste Cue
+  string cue_id      = 3;
   string command_id  = 4; // UUID — Server dedupliziert für 60 s
 }
 
@@ -188,36 +195,110 @@ message ResumeRequest {
   string command_id = 3;
 }
 
-message WatchShowStateRequest {
+// ── Stream 1: Show-Definition ─────────────────────────────────────────────────
+
+message WatchShowDefinitionRequest {
   string session_id = 1;
   string node_id    = 2;
   string token      = 3;
 }
 
-message ShowStateEvent {
-  enum Type {
-    TYPE_UNSPECIFIED      = 0;
-    TYPE_CUE_STARTED      = 1;
-    TYPE_CUE_STOPPED      = 2;
-    TYPE_CUE_PAUSED       = 3;
-    TYPE_CUE_DONE         = 4;
-    TYPE_CUE_ERROR        = 5;
-    TYPE_LIST_UPDATED     = 6;
-    TYPE_POSITION_CHANGED = 7;
+message ShowDefinitionEvent {
+  int64   seq         = 1;
+  DefinitionEventType type = 2;
+  Timestamp occurred_at    = 3;
+
+  enum DefinitionEventType {
+    DEFINITION_SNAPSHOT = 0; // vollständiger State beim Stream-Start
+    CUE_LIST_CHANGED    = 1;
   }
-  Type      type              = 1;
-  CueList   cue_list          = 2;
-  Cue       affected_cue      = 3;
-  string    node_id           = 4; // welcher Node meldet
-  Timestamp occurred_at       = 5;
-  string    error_msg         = 6;
-  int64     seq               = 7; // monoton steigend pro Session
-  bool      is_paused         = 8; // Transport-Status im Snapshot
+
+  CueList cue_list = 10;
+}
+
+// ── Stream 2: Show-Execution ──────────────────────────────────────────────────
+
+message WatchShowExecutionRequest {
+  string session_id = 1;
+  string node_id    = 2;
+  string token      = 3;
+}
+
+message ShowExecutionEvent {
+  int64   seq              = 1;
+  ExecutionEventType type  = 2;
+  Timestamp occurred_at   = 3;
+
+  enum ExecutionEventType {
+    EXECUTION_SNAPSHOT = 0; // vollständiger Transport-State beim Stream-Start
+    CUE_STARTED        = 1;
+    CUE_PAUSED         = 2;
+    CUE_RESUMED        = 3;
+    CUE_STOPPED        = 4;
+    CUE_DONE           = 5;
+    CUE_ERROR          = 6;
+  }
+
+  Cue             affected_cue      = 10;
+  string          node_id           = 11;
+  string          error_msg         = 12;
   // Explizite Startzeit der aktiven Cue in Server-Unix-Millis.
-  // Bei TYPE_CUE_STARTED und Snapshot-Events gesetzt.
   // Clients nutzen diesen Wert + ClockSync für korrekte Elapsed-Berechnung.
-  int64              cue_started_at_ms = 9;
-  // IDs aller gleichzeitig laufenden Cues (z.B. parallele Group-Children).
-  // Leer bei normalen Einzelcues; befüllt während Group-Ausführung.
-  repeated string    running_cue_ids   = 10;
+  int64           cue_started_at_ms = 13;
+  bool            is_paused         = 14;
+  // IDs aller gleichzeitig laufenden Cues (parallele Group-Children).
+  repeated string running_cue_ids   = 15;
+}
+
+// ── Stream 3: Node Health ─────────────────────────────────────────────────────
+
+message WatchNodeHealthRequest {
+  string session_id = 1;
+  string node_id    = 2;
+  string token      = 3;
+}
+
+message NodeHealthEvent {
+  int64   seq             = 1;
+  HealthEventType type    = 2;
+  Timestamp occurred_at  = 3;
+
+  enum HealthEventType {
+    HEALTH_SNAPSHOT  = 0; // vollständiger Node-State beim Stream-Start
+    NODE_ONLINE      = 1;
+    NODE_OFFLINE     = 2;
+    NODE_DEGRADED    = 3;
+    CLOCK_DELTA      = 4;
+  }
+
+  NodeInfo node           = 10;
+  int64    clock_delta_ms = 11;
+}
+
+// ── Stream 4: Media Sync ──────────────────────────────────────────────────────
+
+message WatchMediaSyncRequest {
+  string session_id = 1;
+  string node_id    = 2;
+  string token      = 3;
+  string show_id    = 4;
+}
+
+message MediaSyncEvent {
+  int64   seq            = 1;
+  MediaEventType type    = 2;
+  Timestamp occurred_at = 3;
+
+  enum MediaEventType {
+    MEDIA_SNAPSHOT = 0; // vollständiges Asset-Manifest beim Stream-Start
+    ASSET_ADDED    = 1;
+    ASSET_REMOVED  = 2;
+    ASSET_UPDATED  = 3;
+  }
+
+  // Asset-Informationen (für ASSET_ADDED/REMOVED/UPDATED)
+  string asset_id   = 10;
+  string asset_name = 11;
+  string sha256     = 12;
+  int64  size_bytes = 13;
 }

@@ -94,8 +94,8 @@ func TestEngine_GroupSequential_RunsInOrder(t *testing.T) {
 	disp  := &recordingDispatcher{}
 	engine := NewEngine("sess", "main", store, disp)
 
-	events := store.Subscribe()
-	defer store.Unsubscribe(events)
+	events := store.SubscribeExec()
+	defer store.UnsubscribeExec(events)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -105,7 +105,7 @@ func TestEngine_GroupSequential_RunsInOrder(t *testing.T) {
 	}
 
 	// Collect: 2×START + 2×DONE
-	var collected []*pb.ShowStateEvent
+	var collected []*pb.ShowExecutionEvent
 	for {
 		select {
 		case ev := <-events:
@@ -118,8 +118,8 @@ func TestEngine_GroupSequential_RunsInOrder(t *testing.T) {
 		}
 	}
 done:
-	if collected[0].Type != pb.ShowStateEvent_TYPE_CUE_STARTED {
-		t.Errorf("expected first event TYPE_CUE_STARTED, got %v", collected[0].Type)
+	if collected[0].Type != pb.ShowExecutionEvent_CUE_STARTED {
+		t.Errorf("expected first event CUE_STARTED, got %v", collected[0].Type)
 	}
 	if collected[0].AffectedCue.CueId != "c1" {
 		t.Errorf("expected c1 first, got %s", collected[0].AffectedCue.CueId)
@@ -132,7 +132,6 @@ done:
 // ── Group parallel ────────────────────────────────────────────────────────────
 
 func TestEngine_GroupParallel_BroadcastsRunningIDs(t *testing.T) {
-	// Use slightly different durations so ordering is deterministic enough to test
 	child1 := waitCue("p1", "1", 20)
 	child2 := waitCue("p2", "2", 20)
 
@@ -141,8 +140,8 @@ func TestEngine_GroupParallel_BroadcastsRunningIDs(t *testing.T) {
 	engine := NewEngine("sess", "main", store, disp)
 	engine.runningCueIDs = make(map[string]struct{})
 
-	events := store.Subscribe()
-	defer store.Unsubscribe(events)
+	events := store.SubscribeExec()
+	defer store.UnsubscribeExec(events)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -152,7 +151,7 @@ func TestEngine_GroupParallel_BroadcastsRunningIDs(t *testing.T) {
 	}
 
 	// Collect all events (2×START + 2×DONE = 4 minimum)
-	var collected []*pb.ShowStateEvent
+	var collected []*pb.ShowExecutionEvent
 	collecting:
 	for {
 		select {
@@ -170,10 +169,9 @@ func TestEngine_GroupParallel_BroadcastsRunningIDs(t *testing.T) {
 		t.Fatalf("expected at least 4 events, got %d", len(collected))
 	}
 
-	// At least one START event should have RunningCueIds populated
 	var foundRunning bool
 	for _, ev := range collected {
-		if ev.Type == pb.ShowStateEvent_TYPE_CUE_STARTED && len(ev.RunningCueIds) > 0 {
+		if ev.Type == pb.ShowExecutionEvent_CUE_STARTED && len(ev.RunningCueIds) > 0 {
 			foundRunning = true
 			break
 		}

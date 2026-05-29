@@ -198,9 +198,9 @@ func (e *Engine) Stop(ctx context.Context) error {
 		})
 	}
 
-	e.store.broadcast(&pb.ShowStateEvent{
-		Type:        pb.ShowStateEvent_TYPE_CUE_STOPPED,
-		AffectedCue: activeCue, // nil-safe: proto omits nil fields
+	e.store.BroadcastExec(&pb.ShowExecutionEvent{
+		Type:        pb.ShowExecutionEvent_CUE_STOPPED,
+		AffectedCue: activeCue,
 		OccurredAt:  nowProto(),
 	})
 	return nil
@@ -249,8 +249,8 @@ func (e *Engine) Pause(ctx context.Context) error {
 		})
 	}
 
-	e.store.broadcast(&pb.ShowStateEvent{
-		Type:        pb.ShowStateEvent_TYPE_CUE_PAUSED,
+	e.store.BroadcastExec(&pb.ShowExecutionEvent{
+		Type:        pb.ShowExecutionEvent_CUE_PAUSED,
 		AffectedCue: activeCue,
 		OccurredAt:  &pb.Timestamp{UnixMillis: pausedAt.UnixMilli()},
 	})
@@ -292,10 +292,11 @@ func (e *Engine) Resume(ctx context.Context) error {
 	if activeCue != nil {
 		// Re-broadcast als CUE_STARTED mit angepasster Startzeit → Clients
 		// setzen die verstrichene Zeit korrekt fort.
-		e.store.broadcast(&pb.ShowStateEvent{
-			Type:        pb.ShowStateEvent_TYPE_CUE_STARTED,
-			AffectedCue: activeCue,
-			OccurredAt:  &pb.Timestamp{UnixMillis: newStart.UnixMilli()},
+		e.store.BroadcastExec(&pb.ShowExecutionEvent{
+			Type:           pb.ShowExecutionEvent_CUE_STARTED,
+			AffectedCue:    activeCue,
+			OccurredAt:     &pb.Timestamp{UnixMillis: newStart.UnixMilli()},
+			CueStartedAtMs: newStart.UnixMilli(),
 		})
 	}
 	return nil
@@ -326,8 +327,8 @@ func (e *Engine) dispatchCue(ctx context.Context, cue *pb.Cue) {
 	e.mu.Lock()
 	runningIDs := e.runningCueIDsList()
 	e.mu.Unlock()
-	e.store.broadcast(&pb.ShowStateEvent{
-		Type:           pb.ShowStateEvent_TYPE_CUE_STARTED,
+	e.store.BroadcastExec(&pb.ShowExecutionEvent{
+		Type:           pb.ShowExecutionEvent_CUE_STARTED,
 		AffectedCue:    cue,
 		OccurredAt:     &pb.Timestamp{UnixMillis: startedAt.UnixMilli()},
 		CueStartedAtMs: startedAt.UnixMilli(),
@@ -362,15 +363,14 @@ func (e *Engine) dispatchCue(ctx context.Context, cue *pb.Cue) {
 		return
 	}
 
-	evType := pb.ShowStateEvent_TYPE_CUE_DONE
+	execEvType := pb.ShowExecutionEvent_CUE_DONE
 	errMsg := ""
 	if err != nil {
-		evType = pb.ShowStateEvent_TYPE_CUE_ERROR
+		execEvType = pb.ShowExecutionEvent_CUE_ERROR
 		errMsg = err.Error()
 	}
-
-	e.store.broadcast(&pb.ShowStateEvent{
-		Type:        evType,
+	e.store.BroadcastExec(&pb.ShowExecutionEvent{
+		Type:        execEvType,
 		AffectedCue: cue,
 		OccurredAt:  nowProto(),
 		ErrorMsg:    errMsg,
@@ -560,8 +560,8 @@ func (e *Engine) dispatchGroupSequential(ctx context.Context, children []*pb.Cue
 		e.addRunning(child.CueId)
 		e.mu.Unlock()
 
-		e.store.broadcast(&pb.ShowStateEvent{
-			Type:          pb.ShowStateEvent_TYPE_CUE_STARTED,
+		e.store.BroadcastExec(&pb.ShowExecutionEvent{
+			Type:          pb.ShowExecutionEvent_CUE_STARTED,
 			AffectedCue:   child,
 			OccurredAt:    nowProto(),
 			RunningCueIds: e.runningCueIDsList(),
@@ -582,14 +582,14 @@ func (e *Engine) dispatchGroupSequential(ctx context.Context, children []*pb.Cue
 		ids := e.runningCueIDsList()
 		e.mu.Unlock()
 
-		evType := pb.ShowStateEvent_TYPE_CUE_DONE
+		execEvType := pb.ShowExecutionEvent_CUE_DONE
 		errMsg := ""
 		if err != nil && err != context.Canceled {
-			evType = pb.ShowStateEvent_TYPE_CUE_ERROR
+			execEvType = pb.ShowExecutionEvent_CUE_ERROR
 			errMsg = err.Error()
 		}
-		e.store.broadcast(&pb.ShowStateEvent{
-			Type:          evType,
+		e.store.BroadcastExec(&pb.ShowExecutionEvent{
+			Type:          execEvType,
 			AffectedCue:   child,
 			OccurredAt:    nowProto(),
 			ErrorMsg:      errMsg,
@@ -613,8 +613,8 @@ func (e *Engine) dispatchGroupParallel(ctx context.Context, children []*pb.Cue) 
 		ids := e.runningCueIDsList()
 		e.mu.Unlock()
 
-		e.store.broadcast(&pb.ShowStateEvent{
-			Type:          pb.ShowStateEvent_TYPE_CUE_STARTED,
+		e.store.BroadcastExec(&pb.ShowExecutionEvent{
+			Type:          pb.ShowExecutionEvent_CUE_STARTED,
 			AffectedCue:   child,
 			OccurredAt:    nowProto(),
 			RunningCueIds: ids,
@@ -640,14 +640,14 @@ func (e *Engine) dispatchGroupParallel(ctx context.Context, children []*pb.Cue) 
 			remaining := e.runningCueIDsList()
 			e.mu.Unlock()
 
-			evType := pb.ShowStateEvent_TYPE_CUE_DONE
+			execEvType := pb.ShowExecutionEvent_CUE_DONE
 			errMsg := ""
 			if err != nil && err != context.Canceled {
-				evType = pb.ShowStateEvent_TYPE_CUE_ERROR
+				execEvType = pb.ShowExecutionEvent_CUE_ERROR
 				errMsg = err.Error()
 			}
-			e.store.broadcast(&pb.ShowStateEvent{
-				Type:          evType,
+			e.store.BroadcastExec(&pb.ShowExecutionEvent{
+				Type:          execEvType,
 				AffectedCue:   c,
 				OccurredAt:    nowProto(),
 				ErrorMsg:      errMsg,
@@ -658,7 +658,6 @@ func (e *Engine) dispatchGroupParallel(ctx context.Context, children []*pb.Cue) 
 
 	wg.Wait()
 
-	// Ersten aufgetretenen Fehler zurückgeben (nicht context.Canceled)
 	for _, err := range errs {
 		if err != nil && err != context.Canceled {
 			return err

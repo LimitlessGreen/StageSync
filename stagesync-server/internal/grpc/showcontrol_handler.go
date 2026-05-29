@@ -7,7 +7,6 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	pb "stagesync-server/gen/go/stagesync/v1"
@@ -19,8 +18,8 @@ import (
 // commandDedup verhindert dass dasselbe Command (identische commandId) doppelt
 // ausgeführt wird. TTL = 60 s — nach Ablauf ist eine Re-Execution erlaubt.
 type commandDedup struct {
-	mu      sync.Mutex
-	seen    map[string]time.Time // commandId → Zeit des ersten Empfangs
+	mu   sync.Mutex
+	seen map[string]time.Time // commandId → Zeit des ersten Empfangs
 }
 
 func newCommandDedup() *commandDedup {
@@ -30,15 +29,14 @@ func newCommandDedup() *commandDedup {
 }
 
 // checkAndMark gibt true zurück wenn das commandId BEREITS gesehen wurde (Duplikat).
-// Registriert das commandId beim ersten Aufruf.
 func (d *commandDedup) checkAndMark(commandID string) bool {
 	if commandID == "" {
-		return false // kein commandId → keine Dedup
+		return false
 	}
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if _, exists := d.seen[commandID]; exists {
-		return true // Duplikat
+		return true
 	}
 	d.seen[commandID] = time.Now()
 	return false
@@ -93,7 +91,6 @@ func (h *ShowControlHandler) getOrCreateStore(sessionID string) *showcontrol.Sto
 	h.stores[sessionID] = store
 	engine := showcontrol.NewEngine(sessionID, "main", store, h.dispatcher)
 	h.engines[sessionID] = engine
-	// Gespeicherten Zustand laden (no-op wenn keine Datei existiert)
 	h.persistence.Load(sessionID, store)
 	return store
 }
@@ -114,7 +111,6 @@ func (h *ShowControlHandler) auth(sessionID, token string) error {
 }
 
 // authWrite prüft Authentifizierung UND dass die Node MASTER- oder EDITOR-Rechte hat.
-// Nur Nodes mit diesen Tasks dürfen Transport-Commands (GO/STOP/PAUSE) senden.
 func (h *ShowControlHandler) authWrite(sessionID, token string) error {
 	sess, nodeID, err := h.sessionMgr.ValidateToken(sessionID, token)
 	if err != nil {
@@ -131,6 +127,8 @@ func (h *ShowControlHandler) authWrite(sessionID, token string) error {
 	}
 	return status.Error(codes.PermissionDenied, "only MASTER or EDITOR nodes may send transport commands")
 }
+
+// ── CueList RPCs ──────────────────────────────────────────────────────────────
 
 func (h *ShowControlHandler) GetCueList(ctx context.Context, req *pb.GetCueListRequest) (*pb.CueListResponse, error) {
 	if err := h.auth(req.SessionId, req.Token); err != nil {
@@ -179,12 +177,13 @@ func (h *ShowControlHandler) DeleteCue(ctx context.Context, req *pb.DeleteCueReq
 	return &emptypb.Empty{}, nil
 }
 
+// ── Transport RPCs ────────────────────────────────────────────────────────────
+
 func (h *ShowControlHandler) Go(ctx context.Context, req *pb.GoRequest) (*pb.GoResponse, error) {
 	if err := h.authWrite(req.SessionId, req.Token); err != nil {
 		return nil, err
 	}
 	if h.dedup.checkAndMark(req.CommandId) {
-		// Duplikat: selbes Command bereits verarbeitet → idempotente Antwort
 		return &pb.GoResponse{}, nil
 	}
 	h.getOrCreateStore(req.SessionId)
@@ -242,19 +241,59 @@ func (h *ShowControlHandler) Resume(ctx context.Context, req *pb.ResumeRequest) 
 	return &emptypb.Empty{}, nil
 }
 
-func (h *ShowControlHandler) WatchShowState(req *pb.WatchShowStateRequest, stream pb.ShowControlService_WatchShowStateServer) error {
+// ── Stream 1: WatchShowDefinition ─────────────────────────────────────────────
+
+func (h *ShowControlHandler) WatchShowDefinition(req *pb.WatchShowDefinitionRequest, stream pb.ShowControlService_WatchShowDefinitionServer) error {
+	if err := h.auth(req.SessionId, req.Token); err != nil {
+		return err
+	}
+	store := h.getOrCreateStore(req.SessionId)
+
+	// Erst abonnieren, dann Snapshot senden → kein Event geht verloren.
+	ch := store.SubscribeDef()
+	defer store.UnsubscribeDef(ch)
+
+	// Snapshot: aktuelle CueList senden.
+	if cl, ok := store.GetCueList(""); ok {
+		if err := stream.Send(&pb.ShowDefinitionEvent{
+			Type:       pb.ShowDefinitionEvent_DEFINITION_SNAPSHOT,
+			CueList:    cl,
+			OccurredAt: nowProto(),
+			Seq:        store.CurrentDefSeq(),
+		}); err != nil {
+			return err
+		}
+	}
+
+	for {
+		select {
+		case <-stream.Context().Done():
+			return nil
+		case ev, ok := <-ch:
+			if !ok {
+				return nil
+			}
+			if err := stream.Send(ev); err != nil {
+				return err
+			}
+		}
+	}
+}
+
+// ── Stream 2: WatchShowExecution ──────────────────────────────────────────────
+
+func (h *ShowControlHandler) WatchShowExecution(req *pb.WatchShowExecutionRequest, stream pb.ShowControlService_WatchShowExecutionServer) error {
 	if err := h.auth(req.SessionId, req.Token); err != nil {
 		return err
 	}
 	store := h.getOrCreateStore(req.SessionId)
 	engine, _ := h.getEngine(req.SessionId)
 
-	// Zuerst abonnieren, dann Snapshot senden: Events, die dazwischen passieren,
-	// landen im Channel und werden (per seq) korrekt nach dem Snapshot angewandt.
-	ch := store.Subscribe()
-	defer store.Unsubscribe(ch)
+	ch := store.SubscribeExec()
+	defer store.UnsubscribeExec(ch)
 
-	for _, ev := range h.snapshotEvents(store, engine, req.NodeId) {
+	// Snapshot: aktuelle Transport-State senden.
+	for _, ev := range h.executionSnapshot(store, engine, req.NodeId) {
 		if err := stream.Send(ev); err != nil {
 			return err
 		}
@@ -268,56 +307,98 @@ func (h *ShowControlHandler) WatchShowState(req *pb.WatchShowStateRequest, strea
 			if !ok {
 				return nil
 			}
-			// Klonen: der Event-Pointer wird an alle Watcher fan-out — NodeId
-			// pro Stream zu setzen würde sonst den geteilten Pointer mutieren.
-			out := proto.Clone(ev).(*pb.ShowStateEvent)
-			out.NodeId = req.NodeId
-			if err := stream.Send(out); err != nil {
+			ev.NodeId = req.NodeId
+			if err := stream.Send(ev); err != nil {
 				return err
 			}
 		}
 	}
 }
 
-// snapshotEvents baut den aktuellen Show-Zustand als Event-Folge für einen neu
-// verbundenen Watcher (Cue-Liste + ggf. laufender/pausierter Transport).
-func (h *ShowControlHandler) snapshotEvents(store *showcontrol.Store, engine *showcontrol.Engine, nodeID string) []*pb.ShowStateEvent {
-	seq := store.CurrentSeq()
-	out := make([]*pb.ShowStateEvent, 0, 2)
+// executionSnapshot erstellt den Transport-Snapshot für neu verbundene Watcher.
+func (h *ShowControlHandler) executionSnapshot(store *showcontrol.Store, engine *showcontrol.Engine, nodeID string) []*pb.ShowExecutionEvent {
+	seq := store.CurrentExecSeq()
+	out := make([]*pb.ShowExecutionEvent, 0, 2)
 
-	if cl, ok := store.GetCueList(""); ok {
-		out = append(out, &pb.ShowStateEvent{
-			Type:       pb.ShowStateEvent_TYPE_LIST_UPDATED,
-			CueList:    cl,
+	if engine == nil {
+		out = append(out, &pb.ShowExecutionEvent{
+			Type:       pb.ShowExecutionEvent_EXECUTION_SNAPSHOT,
 			NodeId:     nodeID,
-			OccurredAt: &pb.Timestamp{UnixMillis: time.Now().UnixMilli()},
+			OccurredAt: nowProto(),
+			Seq:        seq,
+		})
+		return out
+	}
+
+	ts := engine.TransportSnapshot()
+	if ts.Running && ts.ActiveCue != nil {
+		out = append(out, &pb.ShowExecutionEvent{
+			Type:           pb.ShowExecutionEvent_EXECUTION_SNAPSHOT,
+			AffectedCue:    ts.ActiveCue,
+			NodeId:         nodeID,
+			OccurredAt:     &pb.Timestamp{UnixMillis: ts.CueStartedAtMs},
+			CueStartedAtMs: ts.CueStartedAtMs,
+			IsPaused:       ts.Paused,
+			Seq:            seq,
+		})
+		if ts.Paused {
+			out = append(out, &pb.ShowExecutionEvent{
+				Type:        pb.ShowExecutionEvent_CUE_PAUSED,
+				AffectedCue: ts.ActiveCue,
+				NodeId:      nodeID,
+				OccurredAt:  &pb.Timestamp{UnixMillis: ts.PausedAtMs},
+				IsPaused:    true,
+				Seq:         seq,
+			})
+		}
+	} else {
+		out = append(out, &pb.ShowExecutionEvent{
+			Type:       pb.ShowExecutionEvent_EXECUTION_SNAPSHOT,
+			NodeId:     nodeID,
+			OccurredAt: nowProto(),
 			Seq:        seq,
 		})
 	}
-
-	if engine != nil {
-		ts := engine.TransportSnapshot()
-		if ts.Running && ts.ActiveCue != nil {
-			out = append(out, &pb.ShowStateEvent{
-				Type:           pb.ShowStateEvent_TYPE_CUE_STARTED,
-				AffectedCue:    ts.ActiveCue,
-				NodeId:         nodeID,
-				OccurredAt:     &pb.Timestamp{UnixMillis: ts.CueStartedAtMs},
-				CueStartedAtMs: ts.CueStartedAtMs,
-				IsPaused:       ts.Paused,
-				Seq:            seq,
-			})
-			if ts.Paused {
-				out = append(out, &pb.ShowStateEvent{
-					Type:        pb.ShowStateEvent_TYPE_CUE_PAUSED,
-					AffectedCue: ts.ActiveCue,
-					NodeId:      nodeID,
-					OccurredAt:  &pb.Timestamp{UnixMillis: ts.PausedAtMs},
-					IsPaused:    true,
-					Seq:         seq,
-				})
-			}
-		}
-	}
 	return out
+}
+
+// ── Stream 3: WatchNodeHealth ─────────────────────────────────────────────────
+
+func (h *ShowControlHandler) WatchNodeHealth(req *pb.WatchNodeHealthRequest, stream pb.ShowControlService_WatchNodeHealthServer) error {
+	if err := h.auth(req.SessionId, req.Token); err != nil {
+		return err
+	}
+	// Snapshot: leerer Health-State (Node-Health kommt primär via NodeService.WatchNodes).
+	if err := stream.Send(&pb.NodeHealthEvent{
+		Type:       pb.NodeHealthEvent_HEALTH_SNAPSHOT,
+		OccurredAt: nowProto(),
+	}); err != nil {
+		return err
+	}
+	// Stream offen halten bis Client trennt.
+	<-stream.Context().Done()
+	return nil
+}
+
+// ── Stream 4: WatchMediaSync ──────────────────────────────────────────────────
+
+func (h *ShowControlHandler) WatchMediaSync(req *pb.WatchMediaSyncRequest, stream pb.ShowControlService_WatchMediaSyncServer) error {
+	if err := h.auth(req.SessionId, req.Token); err != nil {
+		return err
+	}
+	// Snapshot: leerer Media-State (Asset-Events kommen via HTTP SSE / MediaService).
+	if err := stream.Send(&pb.MediaSyncEvent{
+		Type:       pb.MediaSyncEvent_MEDIA_SNAPSHOT,
+		OccurredAt: nowProto(),
+	}); err != nil {
+		return err
+	}
+	<-stream.Context().Done()
+	return nil
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+func nowProto() *pb.Timestamp {
+	return &pb.Timestamp{UnixMillis: time.Now().UnixMilli()}
 }
