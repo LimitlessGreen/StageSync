@@ -38,6 +38,33 @@ type Engine struct {
 	cueStartedAt  time.Time     // Serverzeit, zu der die aktive Cue gestartet ist
 	pausedElapsed time.Duration // bei Pause: bereits verstrichene Zeit
 	pausedAt      time.Time     // absoluter Pausezeitpunkt (für genauen Snapshot)
+
+	// runningCueIDs: Menge aller gerade ausführenden Cue-IDs.
+	// Bei normalen Cues: {activeCueId}; bei Group-Cues: {groupId} ∪ {childIds…}
+	runningCueIDs map[string]struct{}
+}
+
+func (e *Engine) addRunning(ids ...string) {
+	if e.runningCueIDs == nil {
+		e.runningCueIDs = make(map[string]struct{})
+	}
+	for _, id := range ids {
+		e.runningCueIDs[id] = struct{}{}
+	}
+}
+
+func (e *Engine) removeRunning(ids ...string) {
+	for _, id := range ids {
+		delete(e.runningCueIDs, id)
+	}
+}
+
+func (e *Engine) runningCueIDsList() []string {
+	ids := make([]string, 0, len(e.runningCueIDs))
+	for id := range e.runningCueIDs {
+		ids = append(ids, id)
+	}
+	return ids
 }
 
 func NewEngine(sessionID, cueListID string, store *Store, dispatcher NodeDispatcher) *Engine {
@@ -296,12 +323,20 @@ func (e *Engine) dispatchCue(ctx context.Context, cue *pb.Cue) {
 	e.pausedElapsed = 0
 	e.pausedAt = time.Time{}
 	e.mu.Unlock()
+	e.mu.Lock()
+	runningIDs := e.runningCueIDsList()
+	e.mu.Unlock()
 	e.store.broadcast(&pb.ShowStateEvent{
-		Type:             pb.ShowStateEvent_TYPE_CUE_STARTED,
-		AffectedCue:      cue,
-		OccurredAt:       &pb.Timestamp{UnixMillis: startedAt.UnixMilli()},
-		CueStartedAtMs:   startedAt.UnixMilli(),
+		Type:           pb.ShowStateEvent_TYPE_CUE_STARTED,
+		AffectedCue:    cue,
+		OccurredAt:     &pb.Timestamp{UnixMillis: startedAt.UnixMilli()},
+		CueStartedAtMs: startedAt.UnixMilli(),
+		RunningCueIds:  runningIDs,
 	})
+
+	e.mu.Lock()
+	e.addRunning(cue.CueId)
+	e.mu.Unlock()
 
 	switch cue.CueType {
 	case pb.CueType_CUE_TYPE_AUDIO:
@@ -310,9 +345,15 @@ func (e *Engine) dispatchCue(ctx context.Context, cue *pb.Cue) {
 		err = e.dispatchMaOsc(ctx, cue)
 	case pb.CueType_CUE_TYPE_WAIT:
 		err = e.dispatchWait(ctx, cue)
+	case pb.CueType_CUE_TYPE_GROUP:
+		err = e.dispatchGroup(ctx, cue)
 	default:
 		err = ErrUnknownCueType
 	}
+
+	e.mu.Lock()
+	e.removeRunning(cue.CueId)
+	e.mu.Unlock()
 
 	// Abgebrochen (Stop/Pause hat den Context gecancelt) → KEIN DONE-Event.
 	// Sonst würde der Client die aktive Cue fälschlich reaktivieren und der
@@ -469,4 +510,159 @@ func (e *Engine) dispatchWait(ctx context.Context, cue *pb.Cue) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+// dispatchGroup führt eine Group-Cue aus: parallel oder sequentiell.
+//
+// Parallel: alle Kind-Cues starten gleichzeitig; die Group ist fertig wenn
+//
+//	die letzte Kind-Cue abgeschlossen ist.
+//
+// Sequentiell: Kind-Cues laufen der Reihe nach; Abbruch bei erstem Fehler.
+func (e *Engine) dispatchGroup(ctx context.Context, group *pb.Cue) error {
+	params, ok := group.Params.(*pb.Cue_Group)
+	if !ok || params == nil {
+		return errors.New("invalid group cue params")
+	}
+
+	// Kind-Cues aus der CueList auflösen
+	list, found := e.store.GetCueList(e.cueListID)
+	if !found {
+		return errors.New("cue list not found")
+	}
+	cueByID := make(map[string]*pb.Cue, len(list.Cues))
+	for _, c := range list.Cues {
+		cueByID[c.CueId] = c
+	}
+
+	children := make([]*pb.Cue, 0, len(params.Group.ChildCueIds))
+	for _, id := range params.Group.ChildCueIds {
+		if c, ok := cueByID[id]; ok {
+			children = append(children, c)
+		}
+	}
+	if len(children) == 0 {
+		return nil
+	}
+
+	if params.Group.Sequential {
+		return e.dispatchGroupSequential(ctx, children)
+	}
+	return e.dispatchGroupParallel(ctx, children)
+}
+
+func (e *Engine) dispatchGroupSequential(ctx context.Context, children []*pb.Cue) error {
+	for _, child := range children {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		e.mu.Lock()
+		e.addRunning(child.CueId)
+		e.mu.Unlock()
+
+		e.store.broadcast(&pb.ShowStateEvent{
+			Type:          pb.ShowStateEvent_TYPE_CUE_STARTED,
+			AffectedCue:   child,
+			OccurredAt:    nowProto(),
+			RunningCueIds: e.runningCueIDsList(),
+		})
+
+		var err error
+		switch child.CueType {
+		case pb.CueType_CUE_TYPE_AUDIO:
+			err = e.dispatchAudio(ctx, child)
+		case pb.CueType_CUE_TYPE_MA_OSC:
+			err = e.dispatchMaOsc(ctx, child)
+		case pb.CueType_CUE_TYPE_WAIT:
+			err = e.dispatchWait(ctx, child)
+		}
+
+		e.mu.Lock()
+		e.removeRunning(child.CueId)
+		ids := e.runningCueIDsList()
+		e.mu.Unlock()
+
+		evType := pb.ShowStateEvent_TYPE_CUE_DONE
+		errMsg := ""
+		if err != nil && err != context.Canceled {
+			evType = pb.ShowStateEvent_TYPE_CUE_ERROR
+			errMsg = err.Error()
+		}
+		e.store.broadcast(&pb.ShowStateEvent{
+			Type:          evType,
+			AffectedCue:   child,
+			OccurredAt:    nowProto(),
+			ErrorMsg:      errMsg,
+			RunningCueIds: ids,
+		})
+
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (e *Engine) dispatchGroupParallel(ctx context.Context, children []*pb.Cue) error {
+	var wg sync.WaitGroup
+	errs := make([]error, len(children))
+
+	for i, child := range children {
+		e.mu.Lock()
+		e.addRunning(child.CueId)
+		ids := e.runningCueIDsList()
+		e.mu.Unlock()
+
+		e.store.broadcast(&pb.ShowStateEvent{
+			Type:          pb.ShowStateEvent_TYPE_CUE_STARTED,
+			AffectedCue:   child,
+			OccurredAt:    nowProto(),
+			RunningCueIds: ids,
+		})
+
+		wg.Add(1)
+		go func(idx int, c *pb.Cue) {
+			defer wg.Done()
+
+			var err error
+			switch c.CueType {
+			case pb.CueType_CUE_TYPE_AUDIO:
+				err = e.dispatchAudio(ctx, c)
+			case pb.CueType_CUE_TYPE_MA_OSC:
+				err = e.dispatchMaOsc(ctx, c)
+			case pb.CueType_CUE_TYPE_WAIT:
+				err = e.dispatchWait(ctx, c)
+			}
+			errs[idx] = err
+
+			e.mu.Lock()
+			e.removeRunning(c.CueId)
+			remaining := e.runningCueIDsList()
+			e.mu.Unlock()
+
+			evType := pb.ShowStateEvent_TYPE_CUE_DONE
+			errMsg := ""
+			if err != nil && err != context.Canceled {
+				evType = pb.ShowStateEvent_TYPE_CUE_ERROR
+				errMsg = err.Error()
+			}
+			e.store.broadcast(&pb.ShowStateEvent{
+				Type:          evType,
+				AffectedCue:   c,
+				OccurredAt:    nowProto(),
+				ErrorMsg:      errMsg,
+				RunningCueIds: remaining,
+			})
+		}(i, child)
+	}
+
+	wg.Wait()
+
+	// Ersten aufgetretenen Fehler zurückgeben (nicht context.Canceled)
+	for _, err := range errs {
+		if err != nil && err != context.Canceled {
+			return err
+		}
+	}
+	return ctx.Err()
 }

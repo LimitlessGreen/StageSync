@@ -58,6 +58,7 @@ message Cue {
     MaOscCueParams  ma_osc = 11;
     WaitCueParams   wait   = 12;
     GotoCueParams   goto_p = 13;
+    GroupCueParams  group  = 17;
   }
 
   Timestamp created_at  = 14;
@@ -102,6 +103,11 @@ message WaitCueParams {
 message GotoCueParams {
   string target_cue_id = 1;
   string target_number = 2; // alternativ nach Anzeigenummer
+}
+
+message GroupCueParams {
+  repeated string child_cue_ids = 1;
+  bool sequential               = 2; // false = parallele Ausführung
 }
 
 // ── CueList ───────────────────────────────────────────────────────────────────
@@ -210,5 +216,8 @@ message ShowStateEvent {
   // Explizite Startzeit der aktiven Cue in Server-Unix-Millis.
   // Bei TYPE_CUE_STARTED und Snapshot-Events gesetzt.
   // Clients nutzen diesen Wert + ClockSync für korrekte Elapsed-Berechnung.
-  int64     cue_started_at_ms = 9;
+  int64              cue_started_at_ms = 9;
+  // IDs aller gleichzeitig laufenden Cues (z.B. parallele Group-Children).
+  // Leer bei normalen Einzelcues; befüllt während Group-Ausführung.
+  repeated string    running_cue_ids   = 10;
 }
