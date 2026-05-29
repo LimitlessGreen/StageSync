@@ -407,12 +407,27 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
     };
 
     final existing = _nodeMap[info.nodeId];
+
+    // Capabilities aus dem Event oder vorherigem Eintrag übernehmen.
+    AuditionCapability audition = AuditionCapability.none;
+    if (event.hasCapabilities() && event.capabilities.auditionSupported) {
+      audition = AuditionCapability(
+        supported: true,
+        deviceName: event.capabilities.auditionDevice.isEmpty
+            ? null
+            : event.capabilities.auditionDevice,
+      );
+    } else {
+      audition = existing?.audition ?? AuditionCapability.none;
+    }
+
     _nodeMap[info.nodeId] = NodeStatus(
       nodeId: info.nodeId,
       name: info.name,
       tasks: repo.ShowControlRepository.tasksFromProto(info.tasks.toList()),
       health: health,
       clockDeltaMs: existing?.clockDeltaMs,
+      audition: audition,
     );
 
     state = state.copyWith(nodeStatuses: _nodeMap.values.toList());

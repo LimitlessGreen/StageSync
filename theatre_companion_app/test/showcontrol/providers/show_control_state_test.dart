@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:theatre_companion_app/showcontrol/grpc/generated/stagesync/v1/showcontrol.pb.dart';
+import 'package:theatre_companion_app/showcontrol/grpc/generated/stagesync/v1/node.pb.dart' as pb_node;
 import 'package:theatre_companion_app/showcontrol/domain/node_status.dart';
 import 'package:theatre_companion_app/showcontrol/providers/show_control_provider.dart';
 
@@ -242,6 +243,84 @@ void main() {
         phaseFromEventType(NodeHealthEvent_HealthEventType.HEALTH_SNAPSHOT),
         NodeHealthPhase.online,
       );
+    });
+  });
+
+  // ── AuditionCapability from NodeHealthEvent ───────────────────────────────────
+
+  group('AuditionCapability from NodeHealthEvent', () {
+    AuditionCapability auditionFromEvent(NodeHealthEvent event) {
+      if (event.hasCapabilities() && event.capabilities.auditionSupported) {
+        return AuditionCapability(
+          supported: true,
+          deviceName: event.capabilities.auditionDevice.isEmpty
+              ? null
+              : event.capabilities.auditionDevice,
+        );
+      }
+      return AuditionCapability.none;
+    }
+
+    test('no capabilities → AuditionCapability.none', () {
+      final event = NodeHealthEvent()
+        ..type = NodeHealthEvent_HealthEventType.NODE_ONLINE;
+      expect(auditionFromEvent(event).supported, isFalse);
+    });
+
+    test('audition_supported=true → supported', () {
+      final event = NodeHealthEvent()
+        ..type = NodeHealthEvent_HealthEventType.NODE_ONLINE
+        ..capabilities = (pb_node.NodeCapabilities()
+          ..auditionSupported = true
+          ..auditionDevice = 'Headphones');
+      final result = auditionFromEvent(event);
+      expect(result.supported, isTrue);
+      expect(result.deviceName, 'Headphones');
+    });
+
+    test('audition_supported=true with empty device → deviceName is null', () {
+      final event = NodeHealthEvent()
+        ..type = NodeHealthEvent_HealthEventType.NODE_ONLINE
+        ..capabilities = (pb_node.NodeCapabilities()
+          ..auditionSupported = true);
+      final result = auditionFromEvent(event);
+      expect(result.supported, isTrue);
+      expect(result.deviceName, isNull);
+    });
+
+    test('audition_supported=false → none', () {
+      final event = NodeHealthEvent()
+        ..type = NodeHealthEvent_HealthEventType.HEALTH_SNAPSHOT
+        ..capabilities = (pb_node.NodeCapabilities()
+          ..auditionSupported = false);
+      expect(auditionFromEvent(event).supported, isFalse);
+    });
+  });
+
+  // ── MediaSyncEvent type mapping ───────────────────────────────────────────────
+
+  group('MediaSyncEvent type mapping', () {
+    test('MEDIA_SNAPSHOT has int value 0', () {
+      expect(MediaSyncEvent_MediaEventType.MEDIA_SNAPSHOT.value, 0);
+    });
+
+    test('ASSET_ADDED has int value 1', () {
+      expect(MediaSyncEvent_MediaEventType.ASSET_ADDED.value, 1);
+    });
+
+    test('ASSET_REMOVED has int value 2', () {
+      expect(MediaSyncEvent_MediaEventType.ASSET_REMOVED.value, 2);
+    });
+
+    test('MediaSyncEvent carries asset fields', () {
+      final ev = MediaSyncEvent()
+        ..type = MediaSyncEvent_MediaEventType.MEDIA_SNAPSHOT
+        ..assetId = 'abc123'
+        ..assetName = 'intro.wav'
+        ..sha256 = 'abc123';
+      expect(ev.assetId, 'abc123');
+      expect(ev.assetName, 'intro.wav');
+      expect(ev.sha256, 'abc123');
     });
   });
 }

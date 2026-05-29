@@ -47,8 +47,11 @@ class ShowControlRepository {
   static CueParams _paramsFromProto(pb.Cue proto) {
     return switch (proto.whichParams()) {
       pb.Cue_Params.audio => AudioParams(
-          // MIGRATION NOTE: assetId = basename until server sends real SHA-256 IDs.
-          assetId: p.basename(proto.audio.filePath),
+          // asset_id (SHA-256) bevorzugt; fallback auf basename(file_path) für
+          // Cues die noch ohne asset_id gespeichert wurden.
+          assetId: proto.audio.assetId.isNotEmpty
+              ? proto.audio.assetId
+              : p.basename(proto.audio.filePath),
           volumeDb: proto.audio.volumeDb,
           fadeInMs: proto.audio.fadeInMs,
           fadeOutMs: proto.audio.fadeOutMs,
@@ -136,9 +139,6 @@ class ShowControlRepository {
   // ── Domain → Proto (write path from Inspector) ────────────────────────────
 
   /// Converts a domain [Cue] back to a protobuf [pb.Cue] for server updates.
-  ///
-  /// MIGRATION NOTE: assetId is currently written back as [filePath] basename
-  /// until the server supports proper SHA-256 asset IDs (Phase 5).
   static pb.Cue cueToProto(Cue domain) {
     final proto = pb.Cue()
       ..cueId = domain.id
@@ -155,7 +155,8 @@ class ShowControlRepository {
     switch (domain.params) {
       case AudioParams ap:
         proto.audio = pb.AudioCueParams()
-          ..filePath = ap.assetId   // MIGRATION: stored as basename path for now
+          ..assetId = ap.assetId
+          ..filePath = ap.assetId   // backward compat: server liest beide Felder
           ..volumeDb = ap.volumeDb
           ..fadeInMs = ap.fadeInMs
           ..fadeOutMs = ap.fadeOutMs
