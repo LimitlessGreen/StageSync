@@ -2,10 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/show_control_provider.dart';
 import '../../providers/show_control_domain_provider.dart';
+import '../../providers/session_provider.dart';
+import '../../providers/audio_node_provider.dart';
+import '../../providers/ma_node_provider.dart';
+import '../../nodes/audio_node/audio_node_service.dart';
+import '../../nodes/ma_node/ma_node_service.dart';
+import '../../grpc/generated/stagesync/v1/common.pb.dart' show NodeTask;
 import '../design_system/sc_colors.dart';
 import '../design_system/sc_spacing.dart';
 import '../design_system/sc_typography.dart';
 import '../design_system/primitives/sc_button.dart';
+import '../design_system/primitives/sc_chip.dart';
 import '../design_system/primitives/sc_panel.dart';
 import '../design_system/primitives/sc_split_view.dart';
 import '../design_system/primitives/sc_inline_field.dart';
@@ -35,6 +42,31 @@ class _DesktopShellState extends ConsumerState<DesktopShell>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(showControlProvider.notifier).initialize();
+      _handleAutoReconnectNodeStart();
+    });
+  }
+
+  void _handleAutoReconnectNodeStart() {
+    final session = ref.read(sessionProvider);
+    if (!session.needsNodeStart) return;
+    ref.read(sessionProvider.notifier).clearNeedsNodeStart();
+    final tasks = session.myNode?.tasks.toList() ?? [];
+    if (tasks.contains(NodeTask.NODE_TASK_AUDIO_OUTPUT)) {
+      ref.read(audioNodeProvider.notifier).startAudioNode();
+    }
+  }
+
+  Future<void> _leaveSession() async {
+    final tasks = ref.read(sessionProvider).myNode?.tasks ?? [];
+    if (tasks.contains(NodeTask.NODE_TASK_AUDIO_OUTPUT)) {
+      await ref.read(audioNodeProvider.notifier).stopAudioNode();
+    }
+    if (tasks.contains(NodeTask.NODE_TASK_MA_OSC)) {
+      await ref.read(maNodeProvider.notifier).stopMaNode();
+    }
+    await ref.read(sessionProvider.notifier).leaveSession();
   }
 
   @override
@@ -45,13 +77,22 @@ class _DesktopShellState extends ConsumerState<DesktopShell>
 
   @override
   Widget build(BuildContext context) {
-    final domainState = ref.watch(showControlDomainProvider);
-    final notifier    = ref.read(showControlProvider.notifier);
+    final domainState  = ref.watch(showControlDomainProvider);
+    final sessionState = ref.watch(sessionProvider);
+    final notifier     = ref.read(showControlProvider.notifier);
 
     return Scaffold(
       backgroundColor: ScColors.bg,
       body: Column(
         children: [
+          // ── Header bar (session name + status chips + leave) ─────────
+          _HeaderBar(
+            sessionName: sessionState.session?.name ?? 'Show Control',
+            onLeave: _leaveSession,
+          ),
+          // ── Connection banner ─────────────────────────────────────────
+          if (sessionState.health != ConnectionHealth.connected)
+            _ConnectionBanner(health: sessionState.health, onLeave: _leaveSession),
           // ── Transport Bar (always visible) ───────────────────────────
           TransportBar(
             playhead: domainState.playhead,
@@ -84,6 +125,132 @@ class _DesktopShellState extends ConsumerState<DesktopShell>
           // ── Bottom tab bar ─────────────────────────────────────────────
           const Divider(height: 1, color: ScColors.divider),
           _BottomBar(controller: _tabController),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Header Bar ────────────────────────────────────────────────────────────────
+
+class _HeaderBar extends ConsumerWidget {
+  final String sessionName;
+  final VoidCallback onLeave;
+
+  const _HeaderBar({required this.sessionName, required this.onLeave});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final audioStatus = ref.watch(audioNodeProvider);
+    final maStatus    = ref.watch(maNodeProvider);
+    final tasks       = ref.watch(sessionProvider).myNode?.tasks.toList() ?? [];
+
+    return Container(
+      height: 36,
+      color: ScColors.surface,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Row(
+        children: [
+          const Icon(Icons.theater_comedy, size: 14, color: ScColors.textDim),
+          const SizedBox(width: 8),
+          Text(sessionName, style: ScText.panelTitle),
+          const Spacer(),
+          if (tasks.contains(NodeTask.NODE_TASK_AUDIO_OUTPUT)) ...[
+            _AudioChip(status: audioStatus),
+            const SizedBox(width: 8),
+          ],
+          if (tasks.contains(NodeTask.NODE_TASK_MA_OSC)) ...[
+            _MaChip(status: maStatus),
+            const SizedBox(width: 8),
+          ],
+          IconButton(
+            icon: const Icon(Icons.logout, size: 16),
+            color: ScColors.textDim,
+            tooltip: 'Session verlassen',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            onPressed: onLeave,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AudioChip extends StatelessWidget {
+  final AudioNodeStatus status;
+  const _AudioChip({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final chipState = switch (status.state) {
+      AudioNodeState.connected => ScChipState.ok,
+      AudioNodeState.error     => ScChipState.error,
+      _                        => ScChipState.idle,
+    };
+    return ScChip(label: 'AUDIO', state: chipState);
+  }
+}
+
+class _MaChip extends StatelessWidget {
+  final MaNodeStatus status;
+  const _MaChip({required this.status});
+
+  @override
+  Widget build(BuildContext context) {
+    final chipState = switch (status.state) {
+      MaNodeState.connected => ScChipState.ok,
+      MaNodeState.error     => ScChipState.error,
+      _                     => ScChipState.idle,
+    };
+    return ScChip(label: 'MA', state: chipState);
+  }
+}
+
+// ── Connection Banner ─────────────────────────────────────────────────────────
+
+class _ConnectionBanner extends StatelessWidget {
+  final ConnectionHealth health;
+  final VoidCallback onLeave;
+
+  const _ConnectionBanner({required this.health, required this.onLeave});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDisconnected = health == ConnectionHealth.disconnected;
+    final color  = isDisconnected ? ScColors.error : ScColors.warn;
+    final label  = isDisconnected
+        ? 'Verbindung zum Server getrennt'
+        : 'Verbindung wird wiederhergestellt…';
+
+    return Container(
+      color: color.withValues(alpha: 0.12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Row(
+        children: [
+          Icon(
+            isDisconnected ? Icons.cloud_off : Icons.cloud_sync,
+            size: 14, color: color,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(label, style: ScText.label.copyWith(color: color)),
+          ),
+          if (isDisconnected)
+            TextButton(
+              style: TextButton.styleFrom(
+                foregroundColor: color,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 28),
+              ),
+              onPressed: onLeave,
+              child: const Text('Verlassen', style: TextStyle(fontSize: 12)),
+            )
+          else
+            SizedBox(
+              width: 12, height: 12,
+              child: CircularProgressIndicator(strokeWidth: 2, color: color),
+            ),
         ],
       ),
     );
@@ -704,14 +871,15 @@ class _BottomBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 36,
+    // TabBar in M3 is 48px; use that as the natural height via IntrinsicHeight
+    return ColoredBox(
       color: ScColors.surface,
       child: Row(
         children: [
           TabBar(
             controller: controller,
             isScrollable: true,
+            dividerHeight: 0,
             indicatorColor: ScColors.active,
             labelColor: ScColors.active,
             unselectedLabelColor: ScColors.textDim,
@@ -719,12 +887,11 @@ class _BottomBar extends StatelessWidget {
             unselectedLabelStyle: ScText.label,
             tabAlignment: TabAlignment.start,
             tabs: const [
-              Tab(text: 'PATCH'),
-              Tab(text: 'MEDIA'),
+              Tab(text: 'PATCH', height: 36),
+              Tab(text: 'MEDIA', height: 36),
             ],
           ),
           const Spacer(),
-          // Clock / diagnostic info
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: _ClockInfo(),

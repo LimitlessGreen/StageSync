@@ -101,6 +101,8 @@ class _TransportBarState extends State<TransportBar> {
       });
     }
 
+    // shortcutHint text adds a second line — only show when bar is tall enough.
+    // Transport bar is fixed at 48px; hint labels need ~56px. Use tooltip only.
     return Container(
       height: ScSpacing.transportBarHeight,
       color: ScColors.surface,
@@ -108,41 +110,49 @@ class _TransportBarState extends State<TransportBar> {
       child: Row(
         children: [
           // GO
-          ScButton(
-            label: 'GO',
-            variant: ScButtonVariant.primary,
-            size: ScButtonSize.compact,
-            shortcutHint: widget.compact ? null : 'Space',
-            onPressed: widget.onGo,
+          Tooltip(
+            message: 'GO  [Space]',
+            child: ScButton(
+              label: 'GO',
+              variant: ScButtonVariant.primary,
+              size: ScButtonSize.compact,
+              onPressed: widget.onGo,
+            ),
           ),
           const SizedBox(width: 8),
           // STOP
-          ScButton(
-            label: 'STOP',
-            variant: ScButtonVariant.danger,
-            size: ScButtonSize.compact,
-            shortcutHint: widget.compact ? null : 'Esc',
-            onPressed: widget.onStop,
+          Tooltip(
+            message: 'STOP  [Esc]',
+            child: ScButton(
+              label: 'STOP',
+              variant: ScButtonVariant.danger,
+              size: ScButtonSize.compact,
+              onPressed: widget.onStop,
+            ),
           ),
           const SizedBox(width: 8),
           // PAUSE / RESUME
           if (widget.playhead.isPaused)
-            ScButton(
-              label: 'RESUME',
-              icon: Icons.play_arrow,
-              variant: ScButtonVariant.secondary,
-              size: ScButtonSize.compact,
-              shortcutHint: widget.compact ? null : 'P',
-              onPressed: widget.onResume,
+            Tooltip(
+              message: 'RESUME  [P]',
+              child: ScButton(
+                label: 'RESUME',
+                icon: Icons.play_arrow,
+                variant: ScButtonVariant.secondary,
+                size: ScButtonSize.compact,
+                onPressed: widget.onResume,
+              ),
             )
           else
-            ScButton(
-              label: 'PAUSE',
-              icon: Icons.pause,
-              variant: ScButtonVariant.secondary,
-              size: ScButtonSize.compact,
-              shortcutHint: widget.compact ? null : 'P',
-              onPressed: widget.onPause,
+            Tooltip(
+              message: 'PAUSE  [P]',
+              child: ScButton(
+                label: 'PAUSE',
+                icon: Icons.pause,
+                variant: ScButtonVariant.secondary,
+                size: ScButtonSize.compact,
+                onPressed: widget.onPause,
+              ),
             ),
           const SizedBox(width: 16),
           // Active cue + timer
