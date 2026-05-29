@@ -8,7 +8,7 @@ import 'package:shelf/shelf.dart';
 import 'package:shelf/shelf_io.dart' as io;
 import 'package:shelf_router/shelf_router.dart';
 
-import 'audio_engine.dart';
+import 'abstract_audio_engine.dart';
 
 /// HTTP-Dateiserver der auf dem AudioNode läuft.
 /// Erreichbar für Editor-Geräte im gleichen LAN.
@@ -23,7 +23,7 @@ class MediaServer {
   static const int defaultPort = 50052;
   static const String _previewCueId = '__preview__';
 
-  final AudioEngine _engine;
+  final AbstractAudioEngine _engine;
   HttpServer? _server;
   String? _mediaDir;
   String? _serverUrl;

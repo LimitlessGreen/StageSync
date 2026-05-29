@@ -6,10 +6,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_soloud/flutter_soloud.dart';
 
 import '../../session/clock_sync.dart';
+import 'abstract_audio_engine.dart';
 
 /// Verwaltet simultane Cue-Wiedergabe via SoLoud.
 /// Unterstützt Geräteauswahl (Windows/macOS/Linux/Android/iOS).
-class AudioEngine {
+///
+/// Implementiert [AbstractAudioEngine] — kann in Tests durch einen Fake ersetzt
+/// werden, indem [AbstractAudioEngine] gemockt wird statt dieser Klasse.
+class AudioEngine implements AbstractAudioEngine {
   final _soloud = SoLoud.instance;
 
   /// Maximale erlaubte Vorlauf-Zeit für synchronisierte Starts. Größere Werte
@@ -43,13 +47,22 @@ class AudioEngine {
 
   // ── Init / Gerät ──────────────────────────────────────────────────────────
 
+  @override
   Future<void> init({PlaybackDevice? device}) async {
     if (_soloud.isInitialized) {
+      // BUG-FIX: Stale Sources/Handles VOR dem deinit() bereinigen.
+      // Ohne disposeAll() bleiben ungültige AudioSource-Objekte in den Maps.
+      // preload() überspringt dann das Neuladen (weil _loadedPaths noch den
+      // alten Eintrag enthält) und play() verwendet einen ungültigen Handle.
+      await disposeAll();
       _soloud.deinit();
       _initialized = false;
     }
 
-    // Strategie 1: gewünschtes Gerät
+    // Strategie 1: gewünschtes Gerät.
+    // Hinweis: SoLoud v4 re-enumeriert Geräte intern und verwendet den
+    // PlaybackDevice.id als Index — daher sollte das Device-Objekt frisch
+    // aus listDevices() stammen (s. switchDevice).
     if (device != null) {
       try {
         await _soloud.init(device: device, bufferSize: _bufferSize);
@@ -79,7 +92,9 @@ class AudioEngine {
       if (_soloud.isInitialized) _soloud.deinit();
     }
 
-    // Strategie 3 (Windows-Fallback): explizit erstes Gerät aus der Liste
+    // Strategie 3 (Windows-Fallback): explizit erstes Gerät aus der Liste.
+    // listDevices() kann auch ohne init() aufgerufen werden (miniaudio enumeriert
+    // unabhängig vom Playback-State).
     try {
       final devices = listDevices();
       if (devices.isNotEmpty) {
@@ -99,9 +114,12 @@ class AudioEngine {
     throw Exception('SoLoud konnte auf keinem Gerät initialisiert werden');
   }
 
+  @override
   bool get isInitialized => _initialized && _soloud.isInitialized;
+  @override
   PlaybackDevice? get selectedDevice => _selectedDevice;
 
+  @override
   List<PlaybackDevice> listDevices() {
     try {
       return _soloud.listPlaybackDevices();
@@ -112,64 +130,54 @@ class AudioEngine {
 
   /// Wechselt das Ausgabegerät.
   ///
-  /// flutter_soloud v4: Nutzt [SoLoud.changeDevice()] für einen HOT-Wechsel
-  /// wenn die Engine bereits initialisiert ist. Das ist der entscheidende
-  /// Unterschied zu einem deinit+reinit:
-  ///   - Alle geladenen [AudioSource]s bleiben gültig (kein Datenverlust)
-  ///   - Alle [SoundHandle]s bleiben gültig (kein Ton-Ausfall)
-  ///   - gRPC-Verbindung bleibt unberührt
+  /// ## Warum kein `changeDevice()`?
   ///
-  /// Falls changeDevice() scheitert (Gerät nicht gefunden / Android / Web),
-  /// fällt es auf den System-Default zurück. Im worst case: deinit+reinit.
+  /// flutter_soloud v4.0.x hat einen C++-Bug in `player.cpp` (Zeile 138):
+  /// `changeDevice()` gibt **immer** `noError` zurück, auch wenn der Wechsel
+  /// intern fehlschlägt. In Dart ist `_soloud.changeDevice()` deshalb nicht
+  /// verlässlich — es wirft keine Exception und liefert trotzdem den falschen Output.
+  ///
+  /// ## Lösung
+  ///
+  /// Vollständiger `deinit + init(freshDevice)`:
+  /// 1. Gerät **per Name** in frischer Enumeration suchen (Index ist nicht stabil!)
+  /// 2. Engine deinit (gibt Sources/Handles frei)
+  /// 3. Kurze Pause für WASAPI-Freigabe
+  /// 4. Neu-Init mit dem gefundenen Device-Objekt
   ///
   /// Gibt das tatsächlich aktivierte Gerät zurück, oder `null` für Default.
+  @override
   Future<PlaybackDevice?> switchDevice(PlaybackDevice device) async {
-    if (_soloud.isInitialized) {
-      // HOT-Wechsel: Engine bleibt live, Quellen/Handles bleiben gültig.
-      try {
-        _soloud.changeDevice(newDevice: device);
-        _selectedDevice = device;
-        debugPrint('[AudioEngine] changeDevice OK: ${device.name}');
-        return device;
-      } catch (e) {
-        debugPrint('[AudioEngine] changeDevice "${device.name}" fehlgeschlagen: $e');
-        // Fallback auf System-Default (e.g. Android/Web unterstützt kein changeDevice)
-        try {
-          _soloud.changeDevice(); // newDevice: null → System-Default
-          _selectedDevice = null;
-          debugPrint('[AudioEngine] changeDevice → System-Default');
-          return null;
-        } catch (e2) {
-          debugPrint('[AudioEngine] changeDevice Default fehlgeschlagen: $e2 → deinit+reinit');
-        }
-      }
+    // Schritt 1: Frische Enumeration → Gerät per Name finden.
+    // PlaybackDevice.id ist ein sequenzieller Index der bei jeder Enumeration
+    // neu vergeben wird (s. player.cpp::listPlaybackDevices cd.id = i).
+    // Durch Name-Matching stellen wir sicher den richtigen Index zu verwenden.
+    final freshDevices = listDevices();
+    final freshDevice = freshDevices
+        .where((d) => d.name == device.name)
+        .firstOrNull ?? device;
+
+    // Schritt 2: Engine ordentlich herunterfahren (inkl. Sources/Handles).
+    await deinit();
+
+    // Schritt 3: Kurze Pause damit WASAPI das Gerät vollständig freigeben kann.
+    // Ohne diese Pause schlägt init() auf manchen Windows-Systemen fehl.
+    await Future.delayed(const Duration(milliseconds: 80));
+
+    // Schritt 4: Neu-Init mit dem Zielgerät (mit automatischem Default-Fallback).
+    try {
+      await init(device: freshDevice);
+    } catch (e) {
+      debugPrint('[AudioEngine] switchDevice init fehlgeschlagen: $e');
     }
 
-    // Fallback: deinit + reinit (Engine war nicht initialisiert oder changeDevice
-    // hat komplett versagt). Verliert geladene Quellen!
-    _initialized = false;
-    _selectedDevice = null;
-    if (_soloud.isInitialized) _soloud.deinit();
-    try {
-      await _soloud.init(device: device, bufferSize: _bufferSize);
-      if (_soloud.isInitialized) {
-        _initialized = true;
-        _selectedDevice = device;
-        debugPrint('[AudioEngine] switchDevice (reinit) OK: ${device.name}');
-        return device;
-      }
-    } catch (e) {
-      debugPrint('[AudioEngine] switchDevice (reinit) fehlgeschlagen: $e');
-      if (_soloud.isInitialized) _soloud.deinit();
-    }
-    try { await _soloud.init(bufferSize: _bufferSize); } catch (_) {}
-    _initialized = _soloud.isInitialized;
-    _selectedDevice = null;
-    return null;
+    debugPrint('[AudioEngine] switchDevice Ergebnis: ${_selectedDevice?.name ?? "Default"}');
+    return _selectedDevice;
   }
 
   // ── Preload / Play / Stop ─────────────────────────────────────────────────
 
+  @override
   Future<void> preload(String cueId, String filePath) async {
     if (!_initialized) await init();
     if (filePath.isEmpty) return;
@@ -191,13 +199,17 @@ class AudioEngine {
     }
   }
 
+  @override
   Future<void> playAt({
     required String cueId,
     required String filePath,
     required int startUnixMillis,
     double volumeDb = 0.0,
     double fadeInMs = 0.0,
+    double fadeOutMs = 0.0,
     bool loop = false,
+    double startTimeMs = 0.0,
+    double endTimeMs = 0.0,
   }) async {
     if (!_initialized) await init();
 
@@ -213,29 +225,24 @@ class AudioEngine {
 
     final volume = _dbToLinear(volumeDb);
     _targetVolumes[cueId] = volume;
-    // Neuer Start entwertet eine evtl. noch laufende Pause-Fade-Sequenz.
     _fadeGen[cueId] = (_fadeGen[cueId] ?? 0) + 1;
+    final gen = _fadeGen[cueId]!;
 
-    // startUnixMillis ist Serverzeit. Über den synchronisierten Offset prüfen,
-    // wie viel echter Vorlauf bleibt (s. ClockSync). Sicherheitsnetz: ohne
-    // Clock-Sync oder bei starker Drift wäre der Wert unplausibel → sofort starten.
-    final lead = startUnixMillis - ClockSync.instance.serverNow();
+    // startUnixMillis = Serverzeit-Anker. Clock-Sync-Prüfung: unplausibler
+    // Vorlauf → sofort abspielen (Drift oder fehlende Sync).
+    final lead = startUnixMillis > 0
+        ? startUnixMillis - ClockSync.instance.serverNow()
+        : 0;
     final scheduled = lead > 0 && lead <= _maxScheduleAheadMs;
-    if (lead > _maxScheduleAheadMs) {
+    if (startUnixMillis > 0 && lead > _maxScheduleAheadMs) {
       debugPrint('[AudioEngine] playAt: Vorlauf ${lead}ms unplausibel '
           '(synced=${ClockSync.instance.isSynced}) → sofort abspielen');
     }
 
-    // Re-Trigger derselben Cue: vorherige Instanz hart stoppen, damit sich
-    // mehrfaches GO NICHT überlagert (eine Cue-ID = genau eine Voice).
     await _stopHandleNow(cueId);
 
     try {
-      // Pre-Roll: Voice sofort PAUSIERT in den Mixer laden. Der eigentliche Start
-      // ist dann nur noch ein leichtgewichtiges Unpause zum exakten Zeitpunkt —
-      // das minimiert die Start-Varianz (QLab-artig) und damit den Versatz
-      // zwischen mehreren Audio-Geräten.
-      // flutter_soloud v4+: play() ist synchron (kein await).
+      // Pre-Roll: pausiert in Mixer laden → Unpause = exakter Startzeitpunkt.
       final handle = _soloud.play(
         source,
         volume: fadeInMs > 0 ? 0.0 : volume,
@@ -244,15 +251,33 @@ class AudioEngine {
       );
       _handles[cueId] = handle;
 
+      // Seek: Position innerhalb der Datei setzen (z.B. für trimmed audio).
+      if (startTimeMs > 0) {
+        _soloud.seek(handle, Duration(milliseconds: startTimeMs.round()));
+      }
+
       if (scheduled) {
         await _waitUntilServerMillis(startUnixMillis);
       }
       _soloud.setPause(handle, false);
-      debugPrint('[AudioEngine] play OK: $cueId handle=$handle (lead=${lead}ms)');
+      debugPrint('[AudioEngine] play OK: $cueId lead=${lead}ms start=${startTimeMs}ms');
 
       if (fadeInMs > 0) {
-        // Native, nicht-blockierende Fade-Rampe (statt manueller Step-Schleife).
         _soloud.fadeVolume(handle, volume, Duration(milliseconds: fadeInMs.round()));
+      }
+
+      // endTimeMs: Stop-Scheduling mit optionalem Fade-Out.
+      if (endTimeMs > startTimeMs && endTimeMs > 0) {
+        final playDuration = endTimeMs - startTimeMs;
+        // Fade-Out-Start: so früh dass der Fade genau beim endTimeMs endet.
+        final stopDelayMs = playDuration - (fadeOutMs > 0 ? fadeOutMs : 0);
+        if (stopDelayMs > 0) {
+          Future.delayed(Duration(milliseconds: stopDelayMs.round()), () async {
+            // Generation-Check: wurde die Cue in der Zwischenzeit gestoppt/neu gestartet?
+            if (_fadeGen[cueId] != gen) return;
+            await stop(cueId, fadeOutMs: fadeOutMs);
+          });
+        }
       }
     } catch (e) {
       debugPrint('[AudioEngine] play FEHLER ($cueId): $e');
@@ -260,6 +285,7 @@ class AudioEngine {
     }
   }
 
+  @override
   Future<void> stop(String cueId, {double fadeOutMs = 0.0}) async {
     final handle = _handles.remove(cueId);
     _targetVolumes.remove(cueId);
@@ -297,6 +323,7 @@ class AudioEngine {
   /// Stoppt ALLE aktiven Cues sofort — unabhängig von der Cue-ID.
   /// Wird für "alles stoppen" genutzt, z. B. bei Notfall-Stop oder wenn
   /// einzelne Handles nicht mehr nachverfolgbar sind (Android-Quirk).
+  @override
   Future<void> stopAll({double fadeOutMs = 0.0}) async {
     final ids = List<String>.from(_handles.keys);
     for (final id in ids) {
@@ -323,6 +350,7 @@ class AudioEngine {
   }
 
   /// Lädt WAV-Bytes direkt (ohne Datei) und spielt ab.
+  @override
   Future<void> playWavBytes(String cueId, List<int> wavBytes, {double volumeDb = 0.0}) async {
     if (!_initialized) await init();
     await _stopHandleNow(cueId); // Re-Trigger ersetzt vorherige Instanz
@@ -342,10 +370,12 @@ class AudioEngine {
   }
 
   /// Cue-IDs, die aktuell eine (gültige) Voice haben.
+  @override
   List<String> get activeCueIds => _handles.keys.toList(growable: false);
 
   /// Hält die Voice an (Playhead bleibt stehen). Optionaler Fade gegen Knackser.
   /// Idempotent und robust gegen bereits beendete/ungültige Voices.
+  @override
   Future<void> pause(String cueId, {double fadeOutMs = 0.0}) async {
     final handle = _handles[cueId];
     if (handle == null) return;
@@ -373,6 +403,7 @@ class AudioEngine {
 
   /// Setzt eine angehaltene Voice fort. Optionaler Fade gegen Knackser.
   /// Idempotent und robust gegen bereits beendete/ungültige Voices.
+  @override
   Future<void> resume(String cueId, {double fadeInMs = 0.0}) async {
     final handle = _handles[cueId];
     if (handle == null) return;
@@ -401,6 +432,7 @@ class AudioEngine {
     }
   }
 
+  @override
   Future<void> disposeAll() async {
     for (final handle in _handles.values) {
       try {
@@ -419,6 +451,7 @@ class AudioEngine {
     _fadeGen.clear();
   }
 
+  @override
   Future<void> deinit() async {
     await disposeAll();
     if (_soloud.isInitialized) {

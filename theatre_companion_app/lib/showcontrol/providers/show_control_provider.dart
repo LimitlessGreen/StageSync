@@ -1,11 +1,16 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 
 import '../grpc/stage_sync_client.dart';
 import '../grpc/generated/stagesync/v1/showcontrol.pb.dart';
+import '../infrastructure/grpc/show_control_repository.dart' as repo;
+import '../domain/show.dart' as domain;
 import '../session/clock_sync.dart';
 import 'session_provider.dart';
+
+const _uuid = Uuid();
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
@@ -113,7 +118,7 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
     }
   }
 
-  /// GO — nächste oder spezifische Cue ausführen.
+  /// GO — nächste Cue ausführen (ohne Argument = aktive Cue weiter).
   Future<void> go({String cueId = ''}) async {
     if (!_session.isInSession) return;
     final client = StageSyncClient.instance;
@@ -121,7 +126,8 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
     final req = GoRequest()
       ..sessionId = _sessionId
       ..token = _token
-      ..cueId = cueId;
+      ..cueId = cueId
+      ..commandId = _uuid.v4();
 
     try {
       final resp = await client.showControl.go(req);
@@ -141,7 +147,8 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
     if (!_session.isInSession) return;
     final req = StopRequest()
       ..sessionId = _sessionId
-      ..token = _token;
+      ..token = _token
+      ..commandId = _uuid.v4();
     await StageSyncClient.instance.showControl.stop(req);
     // Aktive Cue + Timer wirklich zurücksetzen (nicht nur isPaused).
     state = state.copyWith(
@@ -157,7 +164,8 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
     if (!_session.isInSession) return;
     final req = PauseRequest()
       ..sessionId = _sessionId
-      ..token = _token;
+      ..token = _token
+      ..commandId = _uuid.v4();
     await StageSyncClient.instance.showControl.pause(req);
     state = state.copyWith(
       isPaused: true,
@@ -172,9 +180,61 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
     if (!_session.isInSession) return;
     final req = ResumeRequest()
       ..sessionId = _sessionId
-      ..token = _token;
+      ..token = _token
+      ..commandId = _uuid.v4();
     await StageSyncClient.instance.showControl.resume(req);
     state = state.copyWith(isPaused: false);
+  }
+
+  /// GO — springt direkt zu einer bestimmten Cue (Kontext-Menü / Doppelklick).
+  Future<void> goToCue(String cueId) => go(cueId: cueId);
+
+  /// Cue löschen via Keyboard / Kontextmenü.
+  Future<void> deleteCueById(String cueId) => deleteCue(cueId);
+
+  /// Speichert ein Domain-[domain.Cue] via Proto-Mapper auf dem Server.
+  /// Wird vom Inspector-"Speichern"-Button aufgerufen.
+  Future<void> upsertDomainCue(domain.Cue domainCue) =>
+      upsertCue(repo.ShowControlRepository.cueToProto(domainCue));
+
+  /// Cue-Reihenfolge neu setzen (drag & drop im DesktopShell).
+  ///
+  /// [orderedIds] = neue Reihenfolge aller Cue-IDs.
+  Future<void> reorderCue({required List<String> orderedIds}) async {
+    final list = state.cueList;
+    if (list == null) return;
+
+    // Build a mutable deepCopy, reorder via the proto mutable field.
+    final byId = {for (final c in list.cues) c.cueId: c};
+    final reordered = orderedIds
+        .map((id) => byId[id])
+        .whereType<Cue>()
+        .toList();
+
+    final updated = list.deepCopy()
+      ..cues.clear()
+      ..cues.addAll(reordered);
+
+    await updateCueList(updated);
+  }
+
+  /// Neue leere Audio-Cue hinzufügen (wird an den Server gesendet).
+  Future<void> addCue() async {
+    if (!_session.isInSession) return;
+    final newCue = Cue()
+      ..cueId = _uuid.v4()
+      ..number = _nextCueNumber()
+      ..label = 'Neue Cue';
+    await upsertCue(newCue);
+  }
+
+  String _nextCueNumber() {
+    final cues = state.cueList?.cues ?? [];
+    if (cues.isEmpty) return '1';
+    final last = cues.last.number;
+    final n = int.tryParse(last);
+    if (n != null) return '${n + 1}';
+    return '${cues.length + 1}';
   }
 
   /// Cue hinzufügen oder aktualisieren.
@@ -241,11 +301,15 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
       case ShowStateEvent_Type.TYPE_CUE_STARTED:
         // Einzige autoritative Quelle für „aktive Cue + Timerstart" (auch Resume:
         // der Master schickt eine angepasste Startzeit). NUR hier wird gestartet.
+        // cueStartedAtMs bevorzugen (explizit gesetzt), Fallback auf occurred_at.
+        final startMs = event.cueStartedAtMs.toInt() != 0
+            ? event.cueStartedAtMs.toInt()
+            : _eventServerMs(event);
         state = state.copyWith(
           cueList: cueList,
           isPaused: false,
           activeCue: event.hasAffectedCue() ? event.affectedCue : state.activeCue,
-          activeCueStartedServerMs: _eventServerMs(event),
+          activeCueStartedServerMs: startMs,
           pausedAtServerMs: null,
         );
       case ShowStateEvent_Type.TYPE_CUE_PAUSED:

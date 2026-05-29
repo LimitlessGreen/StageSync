@@ -30,6 +30,14 @@ class AudioNodeNotifier extends StateNotifier<AudioNodeStatus> {
   Future<void> stopLocalPlayback(String cueId) => _service.stopLocalPlayback(cueId);
   Future<void> stopAllLocalPlayback() => _service.stopAllLocalPlayback();
 
+  Future<void> auditionPlay({
+    required String assetId,
+    required double volumeDb,
+    double startMs = 0,
+  }) => _service.auditionPlay(assetId: assetId, volumeDb: volumeDb, startMs: startMs);
+
+  Future<void> auditionStop() => _service.auditionStop();
+
   @override
   void dispose() {
     _service.dispose();

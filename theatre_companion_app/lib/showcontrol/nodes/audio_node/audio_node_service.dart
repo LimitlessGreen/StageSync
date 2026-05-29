@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_soloud/flutter_soloud.dart';
 import 'package:path/path.dart' as p;
 
+import 'package:meta/meta.dart';
+
 import '../../grpc/stage_sync_client.dart';
 import '../../grpc/generated/stagesync/v1/common.pb.dart';
 import '../../grpc/generated/stagesync/v1/node.pb.dart';
@@ -12,6 +14,7 @@ import '../../grpc/generated/stagesync/v1/node.pbgrpc.dart';
 import '../../media/media_sync.dart';
 import '../../media/server_media_client.dart';
 import '../../providers/session_provider.dart';
+import 'abstract_audio_engine.dart';
 import 'audio_engine.dart';
 import 'media_server.dart';
 import 'sweep_generator.dart';
@@ -60,7 +63,7 @@ class AudioNodeStatus {
 /// AudioNodeService registriert dieses Gerät als AUDIO-Node und empfängt
 /// Commands vom Server. Wird nur auf Geräten aktiv, die als AudioNode joinen.
 class AudioNodeService {
-  final AudioEngine _engine;
+  final AbstractAudioEngine _engine;
   final MediaServer _mediaServer;
   final Ref _ref;
 
@@ -87,6 +90,16 @@ class AudioNodeService {
     final engine = AudioEngine();
     return AudioNodeService._internal(ref, engine, MediaServer(engine));
   }
+
+  /// Nur für Tests: erlaubt das Injizieren einer [AbstractAudioEngine]-Fake-Implementierung
+  /// und eines [MediaServer]-Mocks, ohne gRPC oder SoLoud zu berühren.
+  @visibleForTesting
+  factory AudioNodeService.forTest({
+    required Ref ref,
+    required AbstractAudioEngine engine,
+    required MediaServer mediaServer,
+  }) =>
+      AudioNodeService._internal(ref, engine, mediaServer);
 
   Stream<AudioNodeStatus> get statusStream => _statusController.stream;
   AudioNodeStatus get status => _status;
@@ -130,7 +143,9 @@ class AudioNodeService {
           ..supportedFormats.addAll(['wav', 'mp3', 'flac', 'aac', 'ogg', 'm4a', 'aiff'])
           ..mediaServerUrl = _mediaServer.serverUrl ?? ''
           ..availableDevices.addAll(audioDevices)
-          ..selectedDevice = _status.selectedDevice?.id ?? 0);
+          ..selectedDevice = _status.selectedDevice?.id ?? 0)
+        ..auditionSupported = true
+        ..auditionDevice = _status.selectedDevice?.name ?? '';
 
       final registerReq = RegisterNodeRequest()
         ..sessionId = session.session!.sessionId
@@ -345,10 +360,84 @@ class AudioNodeService {
         await _handleResume(cmd.audioResume);
       case NodeCommandRequest_Command.audioTest:
         await _handleTestSignal(cmd.audioTest);
+      case NodeCommandRequest_Command.nodeConfig:
+        await _handleNodeConfig(cmd.nodeConfig);
       case NodeCommandRequest_Command.maOsc:
         break;
       case NodeCommandRequest_Command.notSet:
         break;
+    }
+  }
+
+  /// Verarbeitet einen Remote-Konfigurationsbefehl vom Master.
+  Future<void> _handleNodeConfig(NodeConfigCommand cmd) async {
+    _logCmd('NODE-CONFIG: device=${cmd.audioDeviceIndex} iface=${cmd.networkInterfaceAddress}');
+
+    // Audio-Gerät remote setzen
+    if (cmd.hasAudioDeviceIndex() && cmd.audioDeviceIndex >= 0) {
+      final devices = _engine.listDevices();
+      final match = devices.where((d) => d.id == cmd.audioDeviceIndex).firstOrNull
+          ?? (cmd.audioDeviceName.isNotEmpty
+              ? devices.where((d) => d.name == cmd.audioDeviceName).firstOrNull
+              : null);
+      if (match != null) {
+        await switchDevice(match);
+        _logCmd('NODE-CONFIG: Gerät gesetzt → ${match.name}');
+      } else {
+        _logCmd('NODE-CONFIG WARNUNG: Gerät index=${cmd.audioDeviceIndex} nicht gefunden');
+      }
+    } else if (cmd.hasAudioDeviceIndex() && cmd.audioDeviceIndex == -1) {
+      // -1 = auf System-Default zurücksetzen
+      await resetToDefaultDevice();
+      _logCmd('NODE-CONFIG: auf System-Default zurückgesetzt');
+    }
+
+    // Netzwerk-Interface remote setzen
+    if (cmd.networkInterfaceAddress.isNotEmpty) {
+      final ifaces = await MediaServer.listInterfaces();
+      final match = ifaces.where((i) => i.address == cmd.networkInterfaceAddress).firstOrNull;
+      if (match != null) {
+        await switchInterface(match);
+        _logCmd('NODE-CONFIG: Interface gesetzt → ${match.address}');
+      }
+    }
+
+    // Capabilities-Update an den Server senden damit UI aktualisiert wird
+    await _reportCapabilities();
+  }
+
+  /// Sendet aktualisierte Capabilities nach einer Konfigurationsänderung an den Server.
+  Future<void> _reportCapabilities() async {
+    final session = _ref.read(sessionProvider);
+    if (!session.isInSession || _status.state != AudioNodeState.connected) return;
+    try {
+      final devices = _engine.listDevices();
+      final audioDevices = devices.asMap().entries.map((e) {
+        return AudioDeviceInfo()
+          ..index = e.value.id
+          ..name = e.value.name
+          ..isDefault = e.key == 0;
+      }).toList();
+
+      final caps = NodeCapabilities()
+        ..audio = (AudioCapabilities()
+          ..maxSimultaneous = 8
+          ..supportedFormats.addAll(['wav', 'mp3', 'flac', 'aac', 'ogg', 'm4a', 'aiff'])
+          ..mediaServerUrl = _mediaServer.serverUrl ?? ''
+          ..availableDevices.addAll(audioDevices)
+          ..selectedDevice = _status.selectedDevice?.id ?? 0)
+        ..auditionSupported = true
+        ..auditionDevice = _status.selectedDevice?.name ?? '';
+
+      final req = UpdateCapabilitiesRequest()
+        ..sessionId = session.session!.sessionId
+        ..nodeId = session.myNode!.nodeId
+        ..token = session.token!
+        ..capabilities = caps;
+
+      await StageSyncClient.instance.node.updateCapabilities(req);
+    } catch (e) {
+      _logCmd('CAPS-UPDATE FEHLER: $e');
     }
   }
 
@@ -379,7 +468,7 @@ class AudioNodeService {
   }
 
   Future<void> _handlePlay(AudioPlayCommand cmd) async {
-    _logCmd('PLAY: ${cmd.cueId} vol=${cmd.volumeDb}dB');
+    _logCmd('PLAY: ${cmd.cueId} vol=${cmd.volumeDb}dB loop=${cmd.loop}');
     final playing = List<String>.from(_status.playingCueIds)..add(cmd.cueId);
     _updateStatus(_status.copyWith(playingCueIds: playing));
     try {
@@ -389,6 +478,10 @@ class AudioNodeService {
         startUnixMillis: cmd.startUnixMillis.toInt(),
         volumeDb: cmd.volumeDb,
         fadeInMs: cmd.fadeInMs,
+        fadeOutMs: cmd.fadeOutMs,
+        loop: cmd.loop,
+        startTimeMs: cmd.startTimeMs,
+        endTimeMs: cmd.endTimeMs,
       );
       _logCmd('PLAY OK: ${cmd.cueId}');
     } catch (e) {
@@ -477,6 +570,11 @@ class AudioNodeService {
   List<String> _resolveCueTargets(String cueId) =>
       cueId.isEmpty ? _engine.activeCueIds : [cueId];
 
+  /// Ermöglicht das Testen des Command-Dispatching ohne laufende gRPC-Verbindung.
+  /// Ruft intern [_handleCommandRaw] auf — gleiche Prioritätslogik wie im Betrieb.
+  @visibleForTesting
+  void handleCommandForTest(NodeCommandRequest cmd) => _handleCommandRaw(cmd);
+
   void _handleStreamError(Object error) {
     _updateStatus(AudioNodeStatus(
       state: AudioNodeState.error,
@@ -516,6 +614,57 @@ class AudioNodeService {
   /// da keine cueId-Kenntnis benötigt wird. Wichtig für Android-Fallback.
   Future<void> stopAllLocalPlayback() async {
     await _engine.stopAll(fadeOutMs: 200);
+  }
+
+  // ── Audition (lokaler Preview, kein Show-State) ────────────────────────────
+
+  /// Startet einen lokalen Preview-Play, vollständig isoliert vom Show-Playback.
+  ///
+  /// - Kein Server-Roundtrip, kein Command an ShowControlService.
+  /// - Eigener Handle-Prefix 'audition_' → kein Konflikt mit Show-Cues.
+  /// - Asynchron; Stoppen via [auditionStop].
+  Future<void> auditionPlay({
+    required String assetId,
+    required double volumeDb,
+    double startMs = 0,
+  }) async {
+    if (!_engine.isInitialized) {
+      await _engine.init(device: _status.selectedDevice);
+    }
+    final path = await _resolveMediaPath(assetId);
+    if (path == null) {
+      _logCmd('AUDITION FEHLER: Asset nicht lokal verfügbar: $assetId');
+      return;
+    }
+    final handleId = 'audition_$assetId';
+    // Stoppe ggf. laufende Audition desselben Assets
+    if (_engine.activeCueIds.contains(handleId)) {
+      await _engine.stop(handleId, fadeOutMs: 50);
+    }
+    try {
+      await _engine.preload(handleId, path);
+      await _engine.playAt(
+        cueId: handleId,
+        filePath: path,
+        startUnixMillis: DateTime.now().millisecondsSinceEpoch,
+        volumeDb: volumeDb,
+        startTimeMs: startMs,
+      );
+      _logCmd('AUDITION START: $assetId');
+    } catch (e) {
+      _logCmd('AUDITION FEHLER: $e');
+    }
+  }
+
+  /// Stoppt alle laufenden Audition-Previews (Prefix 'audition_').
+  Future<void> auditionStop() async {
+    final toStop = _engine.activeCueIds
+        .where((id) => id.startsWith('audition_'))
+        .toList();
+    for (final id in toStop) {
+      await _engine.stop(id, fadeOutMs: 100);
+    }
+    _logCmd('AUDITION STOP');
   }
 
   void dispose() {
