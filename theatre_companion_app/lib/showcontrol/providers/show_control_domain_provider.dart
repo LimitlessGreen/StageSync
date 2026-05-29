@@ -49,10 +49,14 @@ final showControlDomainProvider = Provider<ShowControlDomainState>((ref) {
   final playhead = _buildPlayhead(showState, cueList);
 
   // ── Map Node Statuses ─────────────────────────────────────────────────────
-  final nodes = ShowControlRepository.nodeStatusesFromNodes(
-    session.session?.nodes.toList() ?? [],
-    !session.isDisconnected,
-  );
+  // Prefer WatchNodeHealth stream (authoritative, real-time) over session nodes.
+  // Fall back to session nodes during stream init or when nodeStatuses is empty.
+  final nodes = showState.nodeStatuses.isNotEmpty
+      ? showState.nodeStatuses
+      : ShowControlRepository.nodeStatusesFromNodes(
+          session.session?.nodes.toList() ?? [],
+          !session.isDisconnected,
+        );
 
   return ShowControlDomainState(
     cueList: cueList,

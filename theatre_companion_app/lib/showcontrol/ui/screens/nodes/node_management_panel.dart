@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../providers/session_provider.dart';
 import '../../../providers/node_management_provider.dart';
+import '../../../providers/show_control_domain_provider.dart';
 import '../../../providers/audio_node_provider.dart';
 import '../../../nodes/audio_node/audio_node_service.dart';
 import '../../design_system/sc_colors.dart';
@@ -13,18 +14,21 @@ import '../../design_system/primitives/sc_chip.dart';
 import '../../../domain/node_status.dart';
 
 /// Desktop-only Node-Management-Panel.
-/// Zeigt alle verbundenen Nodes mit ihren Capabilities.
-/// Master kann: Audio-Gerät remote setzen, Test-Signale senden.
+/// Liest Nodes aus [nodeStatusListProvider] (WatchNodeHealth-Stream).
+/// Master und Editor können: Audio-Gerät remote setzen, Test-Signale senden.
 class NodeManagementPanel extends ConsumerWidget {
-  final List<NodeStatus> nodes;
-
-  const NodeManagementPanel({super.key, required this.nodes});
+  const NodeManagementPanel({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final mgmtState = ref.watch(nodeManagementProvider);
-    final session = ref.watch(sessionProvider);
-    final isMaster = session.myNode?.tasks.any((t) => t.value == 1) ?? false;
+    final session   = ref.watch(sessionProvider);
+    final nodes     = ref.watch(nodeStatusListProvider);
+    // Master (value=1) und Editor (value=3) dürfen Transport-Commands senden.
+    final isMasterOrEditor = session.myNode?.tasks.any(
+          (t) => t.value == 1 || t.value == 3,
+        ) ??
+        false;
 
     return Column(
       children: [
@@ -37,7 +41,7 @@ class NodeManagementPanel extends ConsumerWidget {
             children: [
               Text('NODES', style: ScText.panelTitle),
               const SizedBox(width: 12),
-              if (!isMaster)
+              if (!isMasterOrEditor)
                 ScChip(label: 'Nur lesen', state: ScChipState.idle),
               const Spacer(),
               if (mgmtState.isSending)
@@ -84,7 +88,7 @@ class NodeManagementPanel extends ConsumerWidget {
                       const Divider(height: 1, color: ScColors.divider),
                   itemBuilder: (context, i) => _NodeCard(
                     node: nodes[i],
-                    isMaster: isMaster,
+                    isMaster: isMasterOrEditor,
                   ),
                 ),
         ),

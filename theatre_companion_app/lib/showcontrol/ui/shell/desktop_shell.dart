@@ -21,6 +21,7 @@ import '../design_system/domain_components/cue_list_row.dart';
 import '../design_system/domain_components/active_cue_monitor.dart';
 import '../design_system/domain_components/node_status_badge.dart';
 import '../design_system/domain_components/audio_cue_minibar.dart';
+import '../screens/nodes/node_management_panel.dart';
 import '../../domain/show.dart';
 import '../../domain/cue_params.dart';
 import '../../domain/playhead.dart';
@@ -37,18 +38,19 @@ class _DesktopShellState extends ConsumerState<DesktopShell>
     with SingleTickerProviderStateMixin {
   String? _selectedCueId;
   late TabController _tabController;
+  bool _bottomPanelOpen = false;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(showControlProvider.notifier).initialize();
       _handleAutoReconnectNodeStart();
     });
   }
 
-  void _handleAutoReconnectNodeStart() {
+void _handleAutoReconnectNodeStart() {
     final session = ref.read(sessionProvider);
     if (!session.needsNodeStart) return;
     ref.read(sessionProvider.notifier).clearNeedsNodeStart();
@@ -122,9 +124,31 @@ class _DesktopShellState extends ConsumerState<DesktopShell>
               right: _MonitoringPanel(domainState: domainState),
             ),
           ),
-          // ── Bottom tab bar ─────────────────────────────────────────────
+          // ── Bottom tab bar + expandable panel ────────────────────────
           const Divider(height: 1, color: ScColors.divider),
-          _BottomBar(controller: _tabController),
+          AnimatedSize(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeInOut,
+            child: _bottomPanelOpen
+                ? SizedBox(
+                    height: 260,
+                    child: _BottomTabPanel(controller: _tabController),
+                  )
+                : const SizedBox.shrink(),
+          ),
+          if (_bottomPanelOpen)
+            const Divider(height: 1, color: ScColors.divider),
+          _BottomBar(
+            controller: _tabController,
+            onTabTap: (i) => setState(() {
+              if (_bottomPanelOpen && _tabController.index == i) {
+                _bottomPanelOpen = false;
+              } else {
+                _bottomPanelOpen = true;
+                _tabController.index = i;
+              }
+            }),
+          ),
         ],
       ),
     );
@@ -896,15 +920,65 @@ class _MonitoringPanel extends StatelessWidget {
   }
 }
 
+// ── Bottom Tab Panel (expandable content) ────────────────────────────────────
+
+class _BottomTabPanel extends StatelessWidget {
+  final TabController controller;
+  const _BottomTabPanel({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return TabBarView(
+      controller: controller,
+      // Swipe disabled — tabs are toggled via the tab bar buttons.
+      physics: const NeverScrollableScrollPhysics(),
+      children: const [
+        _PatchPlaceholder(),
+        _MediaPlaceholder(),
+        NodeManagementPanel(),
+      ],
+    );
+  }
+}
+
+class _PatchPlaceholder extends StatelessWidget {
+  const _PatchPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        'Patch-Matrix — Phase 4',
+        style: TextStyle(color: ScColors.textDim),
+      ),
+    );
+  }
+}
+
+class _MediaPlaceholder extends StatelessWidget {
+  const _MediaPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Text(
+        'Media-Manager — Phase 5',
+        style: TextStyle(color: ScColors.textDim),
+      ),
+    );
+  }
+}
+
 // ── Bottom Bar ─────────────────────────────────────────────────────────────────
 
 class _BottomBar extends StatelessWidget {
   final TabController controller;
-  const _BottomBar({required this.controller});
+  final ValueChanged<int> onTabTap;
+
+  const _BottomBar({required this.controller, required this.onTabTap});
 
   @override
   Widget build(BuildContext context) {
-    // TabBar in M3 is 48px; use that as the natural height via IntrinsicHeight
     return ColoredBox(
       color: ScColors.surface,
       child: Row(
@@ -919,9 +993,11 @@ class _BottomBar extends StatelessWidget {
             labelStyle: ScText.labelBold,
             unselectedLabelStyle: ScText.label,
             tabAlignment: TabAlignment.start,
+            onTap: onTabTap,
             tabs: const [
               Tab(text: 'PATCH', height: 36),
               Tab(text: 'MEDIA', height: 36),
+              Tab(text: 'NODES', height: 36),
             ],
           ),
           const Spacer(),
