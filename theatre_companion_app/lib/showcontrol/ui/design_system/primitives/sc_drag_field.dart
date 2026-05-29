@@ -44,6 +44,7 @@ class _ScDragFieldState extends State<ScDragField> {
   bool _hovered   = false;
   double _dragStart = 0;
   double _valueAtDragStart = 0;
+  double _fieldWidth = 120; // updated by LayoutBuilder
   late final TextEditingController _ctrl;
   late final FocusNode _focus;
 
@@ -111,7 +112,35 @@ class _ScDragFieldState extends State<ScDragField> {
   Widget build(BuildContext context) {
     final hasLabel = widget.label != null;
 
-    final field = MouseRegion(
+    final field = LayoutBuilder(
+      builder: (context, constraints) {
+        // Store available width for 1:1 drag-to-fill-bar sync.
+        // Schedule after build to avoid setState-during-build.
+        final w = constraints.maxWidth;
+        if (w != _fieldWidth) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() => _fieldWidth = w);
+          });
+        }
+        return _buildField();
+      },
+    );
+
+    if (!hasLabel) return field;
+
+    return Row(
+      children: [
+        SizedBox(
+          width: 64,
+          child: Text(widget.label!, style: ScText.label),
+        ),
+        Expanded(child: field),
+      ],
+    );
+  }
+
+  Widget _buildField() {
+    return MouseRegion(
       cursor: widget.readOnly
           ? SystemMouseCursors.basic
           : (_editing ? SystemMouseCursors.text : SystemMouseCursors.resizeLeftRight),
@@ -134,7 +163,14 @@ class _ScDragFieldState extends State<ScDragField> {
             ? null
             : (d) {
                 final delta = d.globalPosition.dx - _dragStart;
-                final newVal = _clamp(_valueAtDragStart + delta * widget.step);
+                final double newVal;
+                final hasFiniteRange = !widget.min.isInfinite && !widget.max.isInfinite;
+                if (hasFiniteRange && _fieldWidth > 0) {
+                  // 1:1 with fill bar: dragging across full field width = full range
+                  newVal = _clamp(_valueAtDragStart + (delta / _fieldWidth) * (widget.max - widget.min));
+                } else {
+                  newVal = _clamp(_valueAtDragStart + delta * widget.step);
+                }
                 widget.onChanged?.call(newVal);
               },
         onHorizontalDragEnd: widget.readOnly || _editing
@@ -153,18 +189,6 @@ class _ScDragFieldState extends State<ScDragField> {
                 decimalPlaces: widget.decimalPlaces,
               ),
       ),
-    );
-
-    if (!hasLabel) return field;
-
-    return Row(
-      children: [
-        SizedBox(
-          width: 64,
-          child: Text(widget.label!, style: ScText.label),
-        ),
-        Expanded(child: field),
-      ],
     );
   }
 }

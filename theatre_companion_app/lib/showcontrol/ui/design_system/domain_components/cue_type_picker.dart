@@ -3,17 +3,16 @@ import 'package:flutter/material.dart';
 import '../../../domain/cue_params.dart';
 
 /// Zeigt ein Popup-Menü zur Auswahl des Cue-Typs.
-/// [buttonBottomLeft] ist die globale Position der unteren linken Ecke des Buttons.
+/// [context] muss der BuildContext des Buttons selbst sein (Builder-Kontext).
 /// Gibt null zurück wenn der User abbricht.
-Future<CueParams?> showCueTypePicker(
-  BuildContext context,
-  Offset buttonBottomLeft,
-) async {
+Future<CueParams?> showCueTypePicker(BuildContext context) async {
+  final button  = context.findRenderObject() as RenderBox;
   final overlay = Navigator.of(context).overlay!.context.findRenderObject() as RenderBox;
-  final position = RelativeRect.fromRect(
-    Rect.fromLTWH(buttonBottomLeft.dx, buttonBottomLeft.dy, 0, 0),
-    Offset.zero & overlay.size,
+  final buttonRect = Rect.fromPoints(
+    button.localToGlobal(Offset.zero, ancestor: overlay),
+    button.localToGlobal(button.size.bottomRight(Offset.zero), ancestor: overlay),
   );
+  final position = RelativeRect.fromRect(buttonRect, Offset.zero & overlay.size);
   final result = await showMenu<String>(
     context: context,
     color: const Color(0xFF1E1E1E),

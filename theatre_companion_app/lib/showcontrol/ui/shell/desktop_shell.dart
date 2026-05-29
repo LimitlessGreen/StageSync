@@ -333,10 +333,7 @@ class _CueListPanel extends StatelessWidget {
                   constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                   tooltip: 'Cue hinzufügen',
                   onPressed: () async {
-                    final box = btnCtx.findRenderObject() as RenderBox?;
-                    if (box == null) return;
-                    final pos = box.localToGlobal(Offset(0, box.size.height));
-                    final params = await showCueTypePicker(btnCtx, pos);
+                    final params = await showCueTypePicker(btnCtx);
                     if (params != null) notifier.addCue(params: params);
                   },
                 ),

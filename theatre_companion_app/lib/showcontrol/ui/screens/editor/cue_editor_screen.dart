@@ -14,6 +14,7 @@ import '../../design_system/primitives/sc_inline_field.dart';
 import '../../design_system/primitives/sc_drag_field.dart';
 import '../../design_system/primitives/sc_split_view.dart';
 import '../../design_system/domain_components/cue_list_row.dart';
+import '../../../providers/media_provider.dart';
 import '../../design_system/domain_components/audio_cue_minibar.dart';
 import '../../design_system/domain_components/cue_type_picker.dart';
 
@@ -95,10 +96,7 @@ class _CueListPane extends StatelessWidget {
                   variant: ScButtonVariant.ghost,
                   size: ScButtonSize.compact,
                   onPressed: () async {
-                    final box = btnCtx.findRenderObject() as RenderBox?;
-                    if (box == null) return;
-                    final pos = box.localToGlobal(Offset(0, box.size.height));
-                    final params = await showCueTypePicker(btnCtx, pos);
+                    final params = await showCueTypePicker(btnCtx);
                     if (params != null) onAddCue(params);
                   },
                 ),
@@ -240,30 +238,106 @@ class _InspectorContent extends StatelessWidget {
   }
 }
 
-class _ParamsContent extends StatelessWidget {
+const _kTargetLufs = -23.0;
+
+class _ParamsContent extends ConsumerWidget {
   final Cue cue;
   final ShowControlNotifier notifier;
   const _ParamsContent({required this.cue, required this.notifier});
 
+  static double _autoVolume(double lufs) =>
+      (_kTargetLufs - lufs).clamp(-40.0, 20.0);
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return switch (cue.params) {
-      AudioParams ap => Column(
+      AudioParams ap => _buildAudioParams(context, ref, ap),
+      WaitParams wp => ScInlineField(
+          label: 'Dauer',
+          value: '${wp.durationMs.toStringAsFixed(0)} ms',
+        ),
+      MaOscParams mp => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ScInlineField(label: 'OSC',  value: mp.oscAddress),
+            ScInlineField(label: 'Arg',  value: mp.oscArgument),
+            ScInlineField(label: 'Page', value: '${mp.executorPage}'),
+            ScInlineField(label: 'Exec', value: '${mp.executorNo}'),
+          ],
+        ),
+      GotoParams gp => ScInlineField(label: 'Ziel', value: gp.targetNumber),
+      GroupParams gp => Text(
+          '${gp.childCueIds.length} Cues (${gp.sequential ? 'sequentiell' : 'parallel'})',
+          style: ScText.label,
+        ),
+      _ => Text(cue.params.runtimeType.toString(), style: ScText.label),
+    };
+  }
+
+  Widget _buildAudioParams(BuildContext context, WidgetRef ref, AudioParams ap) {
+    final asset      = ref.watch(assetWithReadinessProvider(ap.assetId));
+    final lufs       = asset?.audio?.loudnessLufs;
+    final autoVolDb  = lufs != null ? _autoVolume(lufs) : null;
+    final isAutoVol  = autoVolDb != null && (ap.volumeDb - autoVolDb).abs() < 0.05;
+
+    return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             AudioCueMinibar(params: ap, knownDurationMs: cue.displayDurationMs),
             const SizedBox(height: 8),
-            ScDragField(
-              label: 'Lautstärke',
-              value: ap.volumeDb,
-              min: -40,
-              max: 20,
-              step: 0.2,
-              suffix: 'dB',
-              decimalPlaces: 1,
-              onChanged: (v) => notifier.upsertDomainCue(
-                cue.copyWith(params: ap.copyWith(volumeDb: v)),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: ScDragField(
+                    label: 'Lautstärke',
+                    value: ap.volumeDb,
+                    min: -40,
+                    max: 20,
+                    step: 0.2,
+                    suffix: 'dB',
+                    decimalPlaces: 1,
+                    onChanged: (v) => notifier.upsertDomainCue(
+                      cue.copyWith(params: ap.copyWith(volumeDb: v)),
+                    ),
+                  ),
+                ),
+                if (isAutoVol) ...[
+                  const SizedBox(width: 6),
+                  Tooltip(
+                    message: 'Automatisch normiert auf $_kTargetLufs LUFS (EBU R128)',
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: ScColors.active.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text('EBU',
+                          style: ScText.label.copyWith(
+                              color: ScColors.active, fontSize: 9, fontWeight: FontWeight.w800)),
+                    ),
+                  ),
+                ] else if (autoVolDb != null) ...[
+                  const SizedBox(width: 6),
+                  Tooltip(
+                    message: 'Auf EBU R128 normieren (${autoVolDb.toStringAsFixed(1)} dB)',
+                    child: GestureDetector(
+                      onTap: () => notifier.upsertDomainCue(
+                        cue.copyWith(params: ap.copyWith(volumeDb: autoVolDb)),
+                      ),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: ScColors.textDim),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text('EBU',
+                            style: ScText.label.copyWith(
+                                color: ScColors.textDim, fontSize: 9, fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
             ScDragField(
               label: 'Fade In',
@@ -290,27 +364,7 @@ class _ParamsContent extends StatelessWidget {
               ),
             ),
           ],
-        ),
-      WaitParams wp => ScInlineField(
-          label: 'Dauer',
-          value: '${wp.durationMs.toStringAsFixed(0)} ms',
-        ),
-      MaOscParams mp => Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ScInlineField(label: 'OSC',  value: mp.oscAddress),
-            ScInlineField(label: 'Arg',  value: mp.oscArgument),
-            ScInlineField(label: 'Page', value: '${mp.executorPage}'),
-            ScInlineField(label: 'Exec', value: '${mp.executorNo}'),
-          ],
-        ),
-      GotoParams gp => ScInlineField(label: 'Ziel', value: gp.targetNumber),
-      GroupParams gp => Text(
-          '${gp.childCueIds.length} Cues (${gp.sequential ? 'sequentiell' : 'parallel'})',
-          style: ScText.label,
-        ),
-      _ => Text(cue.params.runtimeType.toString(), style: ScText.label),
-    };
+        );
   }
 }
 
