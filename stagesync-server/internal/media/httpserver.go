@@ -29,6 +29,7 @@ func NewServer(store *Store, addr string) *Server {
 	s := &Server{store: store}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/media", s.withCORS(s.handleMediaRoot))
+	mux.HandleFunc("/media/manifest", s.withCORS(s.handleManifest))
 	mux.HandleFunc("/media/upload", s.withCORS(s.handleUpload))
 	mux.HandleFunc("/media/download/", s.withCORS(s.handleDownload))
 	mux.HandleFunc("/media/events", s.withCORS(s.handleEvents))
@@ -55,6 +56,22 @@ func (s *Server) Start(ctx context.Context) error {
 // ── Handler ─────────────────────────────────────────────────────────────────
 
 func (s *Server) handleMediaRoot(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	files, err := s.store.List()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, files)
+}
+
+// handleManifest: GET /media/manifest — liefert alle Dateien mit SHA256 + MIME.
+// Clients (Flutter-Nodes) nutzen diesen Endpoint für Manifest-basierten Sync:
+// nur Dateien mit abweichendem SHA256 werden heruntergeladen.
+func (s *Server) handleManifest(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return

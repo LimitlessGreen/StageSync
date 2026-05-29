@@ -22,6 +22,29 @@ type FileInfo struct {
 	SizeBytes  int64  `json:"size_bytes"`
 	SHA256     string `json:"sha256"`
 	ModifiedMs int64  `json:"modified_ms"`
+	MimeType   string `json:"mime_type"`
+}
+
+// mimeForExt gibt den MIME-Typ für eine Audio-Endung zurück.
+func mimeForExt(ext string) string {
+	switch ext {
+	case ".wav":
+		return "audio/wav"
+	case ".mp3":
+		return "audio/mpeg"
+	case ".flac":
+		return "audio/flac"
+	case ".aac":
+		return "audio/aac"
+	case ".ogg":
+		return "audio/ogg"
+	case ".m4a":
+		return "audio/mp4"
+	case ".aiff", ".aif":
+		return "audio/aiff"
+	default:
+		return "application/octet-stream"
+	}
 }
 
 var ErrNotFound = errors.New("media file not found")
@@ -127,6 +150,7 @@ func (s *Store) List() ([]FileInfo, error) {
 			SizeBytes:  fi.Size(),
 			SHA256:     sha,
 			ModifiedMs: fi.ModTime().UnixMilli(),
+			MimeType:   mimeForExt(strings.ToLower(filepath.Ext(e.Name()))),
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
@@ -148,7 +172,13 @@ func (s *Store) Stat(name string) (FileInfo, error) {
 	if err != nil {
 		return FileInfo{}, err
 	}
-	return FileInfo{Name: SafeName(name), SizeBytes: fi.Size(), SHA256: sha, ModifiedMs: fi.ModTime().UnixMilli()}, nil
+	return FileInfo{
+		Name:       SafeName(name),
+		SizeBytes:  fi.Size(),
+		SHA256:     sha,
+		ModifiedMs: fi.ModTime().UnixMilli(),
+		MimeType:   mimeForExt(strings.ToLower(filepath.Ext(SafeName(name)))),
+	}, nil
 }
 
 // hashLocked berechnet/cached den SHA-256 einer Datei. Aufrufer hält s.mu.

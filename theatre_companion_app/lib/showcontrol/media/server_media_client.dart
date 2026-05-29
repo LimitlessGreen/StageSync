@@ -20,18 +20,20 @@ Future<String> mediaCacheDir() async {
   return dir;
 }
 
-/// Eine Datei im Medien-Speicher des Servers.
+/// Eine Datei im Medien-Speicher des Servers (Manifest-Eintrag).
 class MediaFile {
   final String name;
   final int sizeBytes;
   final String sha256;
   final int modifiedMs;
+  final String mimeType;
 
   const MediaFile({
     required this.name,
     required this.sizeBytes,
     required this.sha256,
     required this.modifiedMs,
+    this.mimeType = 'audio/wav',
   });
 
   factory MediaFile.fromJson(Map<String, dynamic> j) => MediaFile(
@@ -39,6 +41,7 @@ class MediaFile {
         sizeBytes: (j['size_bytes'] as num?)?.toInt() ?? 0,
         sha256: j['sha256'] as String? ?? '',
         modifiedMs: (j['modified_ms'] as num?)?.toInt() ?? 0,
+        mimeType: j['mime_type'] as String? ?? 'audio/wav',
       );
 }
 
@@ -63,17 +66,22 @@ class ServerMediaClient {
 
   Uri eventsUri() => _u('/media/events');
 
-  /// Listet alle Dateien auf dem Server.
-  Future<List<MediaFile>> list() async {
-    final resp = await http.get(_u('/media')).timeout(const Duration(seconds: 10));
+  /// Holt das Server-Manifest: alle Dateien mit Name, SHA256, MIME, Größe.
+  /// Nodes nutzen dieses für den Diff: nur fehlende/veränderte Dateien laden.
+  Future<List<MediaFile>> manifest() async {
+    final resp =
+        await http.get(_u('/media/manifest')).timeout(const Duration(seconds: 10));
     if (resp.statusCode != 200) {
-      throw HttpException('list fehlgeschlagen (HTTP ${resp.statusCode})');
+      throw HttpException('manifest fehlgeschlagen (HTTP ${resp.statusCode})');
     }
     final data = jsonDecode(resp.body) as List;
     return data
         .map((e) => MediaFile.fromJson(e as Map<String, dynamic>))
         .toList();
   }
+
+  /// Alias für Rückwärtskompatibilität — nutzt jetzt /media/manifest.
+  Future<List<MediaFile>> list() => manifest();
 
   /// Lädt eine Datei zum Server hoch.
   Future<MediaFile> upload(String filename, List<int> bytes) async {
