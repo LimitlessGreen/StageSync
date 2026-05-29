@@ -108,7 +108,7 @@ class ShowControlRepository {
     bool sessionConnected,
   ) {
     return nodes.map((node) {
-      final tasks = _tasksFromProto(node.tasks.toList());
+      final tasks = tasksFromProto(node.tasks.toList());
       final health = sessionConnected
           ? (node.online ? NodeHealthPhase.online : NodeHealthPhase.offline)
           : NodeHealthPhase.reconnecting;
@@ -122,7 +122,7 @@ class ShowControlRepository {
     }).toList();
   }
 
-  static List<String> _tasksFromProto(List<pb_common.NodeTask> tasks) {
+  static List<String> tasksFromProto(List<pb_common.NodeTask> tasks) {
     return tasks.map((t) => switch (t.value) {
           1 => 'master',
           2 => 'audio',

@@ -368,15 +368,53 @@ func (h *ShowControlHandler) WatchNodeHealth(req *pb.WatchNodeHealthRequest, str
 	if err := h.auth(req.SessionId, req.Token); err != nil {
 		return err
 	}
-	// Snapshot: leerer Health-State (Node-Health kommt primär via NodeService.WatchNodes).
-	if err := stream.Send(&pb.NodeHealthEvent{
-		Type:       pb.NodeHealthEvent_HEALTH_SNAPSHOT,
-		OccurredAt: nowProto(),
-	}); err != nil {
-		return err
+
+	// Erst abonnieren, dann Snapshot → kein Event geht verloren.
+	eventCh, sess, err := h.sessionMgr.WatchSession(stream.Context(), req.SessionId)
+	if err != nil {
+		return status.Errorf(codes.NotFound, "%v", err)
 	}
-	// Stream offen halten bis Client trennt.
-	<-stream.Context().Done()
+
+	// Snapshot: einen Event pro bekanntem Node senden.
+	// NodeInfo.Online trägt den aktuellen Online-Status.
+	nodes := sess.AllNodes()
+	for _, n := range nodes {
+		if err := stream.Send(&pb.NodeHealthEvent{
+			Type:       pb.NodeHealthEvent_HEALTH_SNAPSHOT,
+			Node:       n.Info,
+			OccurredAt: nowProto(),
+		}); err != nil {
+			return err
+		}
+	}
+	// Leerer Snapshot wenn keine Nodes → Client weiß dass Stream läuft.
+	if len(nodes) == 0 {
+		if err := stream.Send(&pb.NodeHealthEvent{
+			Type:       pb.NodeHealthEvent_HEALTH_SNAPSHOT,
+			OccurredAt: nowProto(),
+		}); err != nil {
+			return err
+		}
+	}
+
+	for ev := range eventCh {
+		var evType pb.NodeHealthEvent_HealthEventType
+		switch ev.Type {
+		case pb.SessionEvent_TYPE_NODE_JOINED:
+			evType = pb.NodeHealthEvent_NODE_ONLINE
+		case pb.SessionEvent_TYPE_NODE_LEFT, pb.SessionEvent_TYPE_NODE_OFFLINE:
+			evType = pb.NodeHealthEvent_NODE_OFFLINE
+		default:
+			continue
+		}
+		if err := stream.Send(&pb.NodeHealthEvent{
+			Type:       evType,
+			Node:       ev.AffectedNode,
+			OccurredAt: ev.OccurredAt,
+		}); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

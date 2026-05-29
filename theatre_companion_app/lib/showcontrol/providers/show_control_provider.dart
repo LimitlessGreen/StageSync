@@ -7,6 +7,7 @@ import '../grpc/stage_sync_client.dart';
 import '../grpc/generated/stagesync/v1/showcontrol.pb.dart';
 import '../infrastructure/grpc/show_control_repository.dart' as repo;
 import '../domain/show.dart' as domain;
+import '../domain/node_status.dart';
 import '../session/clock_sync.dart';
 import 'session_provider.dart';
 
@@ -35,6 +36,10 @@ class ShowControlState {
   /// Alle aktuell ausführenden Cue-IDs (bei Group-Cues mehrere).
   final Set<String> runningCueIds;
 
+  /// Alle Nodes der Session mit aktuellem Health-Status.
+  /// Wird über den WatchNodeHealth-Stream befüllt.
+  final List<NodeStatus> nodeStatuses;
+
   const ShowControlState({
     this.cueList,
     this.activeCue,
@@ -45,6 +50,7 @@ class ShowControlState {
     this.activeCueStartedServerMs,
     this.pausedAtServerMs,
     this.runningCueIds = const {},
+    this.nodeStatuses = const [],
   });
 
   ShowControlState copyWith({
@@ -53,6 +59,7 @@ class ShowControlState {
     bool? isPaused,
     String? error,
     Set<String>? runningCueIds,
+    List<NodeStatus>? nodeStatuses,
     Object? activeCue = _unset,
     Object? nextCue = _unset,
     Object? activeCueStartedServerMs = _unset,
@@ -66,6 +73,7 @@ class ShowControlState {
         isPaused: isPaused ?? this.isPaused,
         error: error,
         runningCueIds: runningCueIds ?? this.runningCueIds,
+        nodeStatuses: nodeStatuses ?? this.nodeStatuses,
         activeCueStartedServerMs: identical(activeCueStartedServerMs, _unset)
             ? this.activeCueStartedServerMs
             : activeCueStartedServerMs as int?,
@@ -95,6 +103,12 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
   StreamSubscription<ShowExecutionEvent>? _execSub;
   int _lastExecSeq = 0;
 
+  // Stream 3: Node-Health (Online/Offline-Events)
+  StreamSubscription<NodeHealthEvent>? _healthSub;
+  int _lastHealthSeq = 0;
+  // Lokale Kopie für Merge-Operationen (nodeId → NodeStatus).
+  final Map<String, NodeStatus> _nodeMap = {};
+
   ShowControlNotifier(this._ref) : super(const ShowControlState());
 
   SessionState get _session => _ref.read(sessionProvider);
@@ -120,6 +134,7 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
 
       _subscribeToDefinition();
       _subscribeToExecution();
+      _subscribeToNodeHealth();
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
     }
@@ -361,6 +376,48 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
     }
   }
 
+  // ── Stream 3: Node-Health ───────────────────────────────────────────────────
+
+  void _subscribeToNodeHealth() {
+    _healthSub?.cancel();
+    _lastHealthSeq = 0;
+    _nodeMap.clear();
+    final req = WatchNodeHealthRequest()
+      ..sessionId = _sessionId
+      ..nodeId = _session.myNode!.nodeId
+      ..token = _token;
+
+    _healthSub = StageSyncClient.instance.showControl
+        .watchNodeHealth(req)
+        .listen(_handleNodeHealthEvent);
+  }
+
+  void _handleNodeHealthEvent(NodeHealthEvent event) {
+    final seq = event.seq.toInt();
+    if (seq != 0 && seq < _lastHealthSeq) return;
+    if (seq > _lastHealthSeq) _lastHealthSeq = seq;
+
+    if (!event.hasNode()) return;
+
+    final info = event.node;
+    final health = switch (event.type) {
+      NodeHealthEvent_HealthEventType.NODE_OFFLINE => NodeHealthPhase.offline,
+      NodeHealthEvent_HealthEventType.NODE_DEGRADED => NodeHealthPhase.degraded,
+      _ => NodeHealthPhase.online, // HEALTH_SNAPSHOT + NODE_ONLINE
+    };
+
+    final existing = _nodeMap[info.nodeId];
+    _nodeMap[info.nodeId] = NodeStatus(
+      nodeId: info.nodeId,
+      name: info.name,
+      tasks: repo.ShowControlRepository.tasksFromProto(info.tasks.toList()),
+      health: health,
+      clockDeltaMs: existing?.clockDeltaMs,
+    );
+
+    state = state.copyWith(nodeStatuses: _nodeMap.values.toList());
+  }
+
   int _eventServerMs(ShowExecutionEvent event) {
     if (event.hasOccurredAt()) {
       final ms = event.occurredAt.unixMillis.toInt();
@@ -373,6 +430,7 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
   void dispose() {
     _defSub?.cancel();
     _execSub?.cancel();
+    _healthSub?.cancel();
     super.dispose();
   }
 }

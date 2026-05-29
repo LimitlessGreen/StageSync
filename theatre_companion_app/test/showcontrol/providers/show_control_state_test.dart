@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:theatre_companion_app/showcontrol/grpc/generated/stagesync/v1/showcontrol.pb.dart';
+import 'package:theatre_companion_app/showcontrol/domain/node_status.dart';
 import 'package:theatre_companion_app/showcontrol/providers/show_control_provider.dart';
 
 void main() {
@@ -141,6 +142,106 @@ void main() {
 
     test('CUE_LIST_CHANGED has int value 1', () {
       expect(ShowDefinitionEvent_DefinitionEventType.CUE_LIST_CHANGED.value, 1);
+    });
+  });
+
+  // ── ShowControlState.nodeStatuses ─────────────────────────────────────────────
+
+  group('ShowControlState.nodeStatuses', () {
+    const online = NodeStatus(
+      nodeId: 'n1',
+      name: 'AudioNode1',
+      tasks: ['audio'],
+      health: NodeHealthPhase.online,
+    );
+    const offline = NodeStatus(
+      nodeId: 'n2',
+      name: 'MaNode1',
+      tasks: ['ma_osc'],
+      health: NodeHealthPhase.offline,
+    );
+
+    test('defaults to empty list', () {
+      expect(const ShowControlState().nodeStatuses, isEmpty);
+    });
+
+    test('copyWith replaces nodeStatuses', () {
+      final s = const ShowControlState().copyWith(nodeStatuses: [online]);
+      expect(s.nodeStatuses, hasLength(1));
+      expect(s.nodeStatuses.first.nodeId, 'n1');
+    });
+
+    test('copyWith without nodeStatuses preserves existing', () {
+      final s = const ShowControlState(nodeStatuses: [online]);
+      final s2 = s.copyWith(isPaused: true);
+      expect(s2.nodeStatuses, hasLength(1));
+    });
+
+    test('can hold multiple nodes', () {
+      final s = const ShowControlState().copyWith(nodeStatuses: [online, offline]);
+      expect(s.nodeStatuses, hasLength(2));
+      expect(s.nodeStatuses.map((n) => n.health),
+          containsAll([NodeHealthPhase.online, NodeHealthPhase.offline]));
+    });
+  });
+
+  // ── NodeHealthEvent type mapping ──────────────────────────────────────────────
+
+  group('NodeHealthEvent type mapping', () {
+    test('HEALTH_SNAPSHOT has int value 0', () {
+      expect(NodeHealthEvent_HealthEventType.HEALTH_SNAPSHOT.value, 0);
+    });
+
+    test('NODE_ONLINE has int value 1', () {
+      expect(NodeHealthEvent_HealthEventType.NODE_ONLINE.value, 1);
+    });
+
+    test('NODE_OFFLINE has int value 2', () {
+      expect(NodeHealthEvent_HealthEventType.NODE_OFFLINE.value, 2);
+    });
+
+    test('NODE_DEGRADED has int value 3', () {
+      expect(NodeHealthEvent_HealthEventType.NODE_DEGRADED.value, 3);
+    });
+  });
+
+  // ── NodeHealthPhase mapping (proto → domain) ──────────────────────────────────
+
+  group('NodeHealthPhase from NodeHealthEvent type', () {
+    // This mirrors the switch logic in _handleNodeHealthEvent.
+    NodeHealthPhase phaseFromEventType(NodeHealthEvent_HealthEventType type) =>
+        switch (type) {
+          NodeHealthEvent_HealthEventType.NODE_OFFLINE => NodeHealthPhase.offline,
+          NodeHealthEvent_HealthEventType.NODE_DEGRADED => NodeHealthPhase.degraded,
+          _ => NodeHealthPhase.online,
+        };
+
+    test('NODE_OFFLINE → offline', () {
+      expect(
+        phaseFromEventType(NodeHealthEvent_HealthEventType.NODE_OFFLINE),
+        NodeHealthPhase.offline,
+      );
+    });
+
+    test('NODE_DEGRADED → degraded', () {
+      expect(
+        phaseFromEventType(NodeHealthEvent_HealthEventType.NODE_DEGRADED),
+        NodeHealthPhase.degraded,
+      );
+    });
+
+    test('NODE_ONLINE → online', () {
+      expect(
+        phaseFromEventType(NodeHealthEvent_HealthEventType.NODE_ONLINE),
+        NodeHealthPhase.online,
+      );
+    });
+
+    test('HEALTH_SNAPSHOT → online (initial state)', () {
+      expect(
+        phaseFromEventType(NodeHealthEvent_HealthEventType.HEALTH_SNAPSHOT),
+        NodeHealthPhase.online,
+      );
     });
   });
 }
