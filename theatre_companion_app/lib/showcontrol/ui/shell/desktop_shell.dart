@@ -1200,12 +1200,39 @@ class _BottomBar extends StatelessWidget {
   }
 }
 
-class _ClockInfo extends ConsumerWidget {
+class _ClockInfo extends StatelessWidget {
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Text(
-      '●  Show Control',
-      style: ScText.statusSmall,
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _hint('Space', 'GO'),
+        const SizedBox(width: 12),
+        _hint('Esc', 'STOP'),
+        const SizedBox(width: 12),
+        _hint('P', 'PAUSE'),
+        const SizedBox(width: 12),
+        _hint('↑↓', 'Nav'),
+        const SizedBox(width: 12),
+        _hint('Del', '🗑'),
+      ],
+    );
+  }
+
+  Widget _hint(String key, String label) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+          decoration: BoxDecoration(
+            border: Border.all(color: ScColors.divider),
+            borderRadius: BorderRadius.circular(3),
+          ),
+          child: Text(key, style: ScText.statusSmall),
+        ),
+        const SizedBox(width: 3),
+        Text(label, style: ScText.statusSmall),
+      ],
     );
   }
 }

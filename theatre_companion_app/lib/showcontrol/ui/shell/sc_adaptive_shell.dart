@@ -9,8 +9,8 @@ import 'mobile_shell.dart';
 /// Top-level adaptive shell for Show-Control.
 ///
 /// - Registers keyboard [Shortcuts] and [Actions] at root level (not per-widget).
-/// - Routes to [DesktopShell] (> 900px) or [MobileShell].
-/// - Wrap the navigation push to this widget instead of GoScreen directly.
+/// - Routes to [DesktopShell] on wide layouts or [MobileShell] on narrow layouts.
+/// - Wrap the navigation push to this widget instead of branching in callers.
 class ScAdaptiveShell extends ConsumerWidget {
   const ScAdaptiveShell({super.key});
 
@@ -27,7 +27,7 @@ class ScAdaptiveShell extends ConsumerWidget {
           actions: ScShortcuts.actions(ref),
           child: Focus(
             autofocus: true,
-            child: isDesktop ? const DesktopShell() : const MobileShell(),
+              child: isDesktop ? const DesktopShell() : const MobileShell(),
           ),
         ),
       ),
