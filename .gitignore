@@ -1,0 +1,37 @@
+# ── Go (stagesync-server) ─────────────────────────────────────────────
+stagesync-server/bin/
+stagesync-server/data/
+*.exe
+*.test
+*.out
+
+# ── Flutter / Dart (theatre_companion_app) ───────────────────────────
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+theatre_companion_app/build/
+theatre_companion_app/coverage/
+
+# Generated proto files are checked in (needed for CI without protoc)
+# Uncomment to exclude if protoc runs in CI:
+# theatre_companion_app/lib/showcontrol/grpc/generated/**/*.dart
+
+# ── Editors & OS ─────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+.DS_Store
+.history
+Thumbs.db
+*.swp
+*.log
+
+# ── Secrets & local config ────────────────────────────────────────────
+*.env
+.env.*
+!.env.example
