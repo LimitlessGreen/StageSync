@@ -297,54 +297,57 @@ class _AudioDeviceSectionState extends ConsumerState<_AudioDeviceSection> {
     final audioStatus = ref.watch(audioNodeProvider);
     final isLocalNode = widget.node.nodeId == session.myNode?.nodeId;
 
-    // Für den lokalen Node: Gerätliste aus dem lokalen AudioNode-Provider.
-    // Für Remote-Nodes: WatchNodes-Subscription noch nicht implementiert.
-    final localDevices = audioStatus.availableDevices;
-    final isLocalAudioConnected = audioStatus.state == AudioNodeState.connected;
-
-    if (!isLocalNode) {
-      return Text(
-        'Remote-Gerät-Liste benötigt WatchNodes-Subscription\n(Phase 4: 4-Stream EventBus)',
-        style: ScText.label.copyWith(color: ScColors.textDim),
-      );
-    }
+    // Local node: live device list from AudioNodeService.
+    // Remote node: device list from NodeStatus.availableDevices (populated via NodeHealthEvent).
+    final devices = isLocalNode
+        ? audioStatus.availableDevices
+        : widget.node.availableDevices;
+    final isLocalAudioConnected =
+        isLocalNode && audioStatus.state == AudioNodeState.connected;
+    final canInteract = isLocalNode ? isLocalAudioConnected : devices.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (localDevices.isEmpty || !isLocalAudioConnected)
+        if (devices.isEmpty)
           Text(
-            isLocalAudioConnected
-                ? 'Keine Audiogeräte gefunden'
-                : 'Audio-Node nicht aktiv',
+            isLocalNode
+                ? (isLocalAudioConnected
+                    ? 'Keine Audiogeräte gefunden'
+                    : 'Audio-Node nicht aktiv')
+                : 'Keine Gerätliste empfangen',
             style: ScText.label.copyWith(color: ScColors.textDim),
           )
         else
           DropdownButton<int>(
             value: _selectedIndex ??
-                audioStatus.selectedDevice?.let((d) =>
-                    localDevices.contains(d) ? localDevices.indexOf(d) : null),
+                (isLocalNode
+                    ? audioStatus.selectedDevice?.let((d) =>
+                        devices.contains(d) ? devices.indexOf(d) : null)
+                    : null),
             hint: Text(
-              audioStatus.selectedDevice?.name ?? 'Gerät auswählen',
+              isLocalNode
+                  ? (audioStatus.selectedDevice?.name ?? 'Gerät auswählen')
+                  : 'Gerät auswählen',
               style: ScText.label,
             ),
             dropdownColor: ScColors.surface,
             style: ScText.label.copyWith(color: ScColors.textPrimary),
             isExpanded: true,
-            items: localDevices
+            items: devices
                 .asMap()
                 .entries
                 .map((e) => DropdownMenuItem(
                       value: e.key,
-                      child: Text(e.value.name,
-                          overflow: TextOverflow.ellipsis),
+                      child:
+                          Text(e.value.name, overflow: TextOverflow.ellipsis),
                     ))
                 .toList(),
             onChanged: (idx) {
-              if (idx == null || idx >= localDevices.length) return;
+              if (idx == null || idx >= devices.length) return;
               setState(() {
                 _selectedIndex = idx;
-                _selectedName = localDevices[idx].name;
+                _selectedName = devices[idx].name;
               });
             },
           ),
@@ -356,14 +359,16 @@ class _AudioDeviceSectionState extends ConsumerState<_AudioDeviceSection> {
               icon: Icons.check,
               variant: ScButtonVariant.secondary,
               size: ScButtonSize.compact,
-              onPressed: (_selectedIndex != null && isLocalAudioConnected)
+              onPressed: (_selectedIndex != null && canInteract)
                   ? () {
-                      // Local node: switch device directly
-                      final dev = localDevices[_selectedIndex!];
-                      ref.read(audioNodeProvider.notifier).selectDevice(dev);
+                      if (isLocalNode) {
+                        ref
+                            .read(audioNodeProvider.notifier)
+                            .selectDevice(devices[_selectedIndex!]);
+                      }
                       ref.read(nodeManagementProvider.notifier).setAudioDevice(
                             targetNodeId: widget.node.nodeId,
-                            deviceIndex: _selectedIndex!,
+                            deviceIndex: devices[_selectedIndex!].index,
                             deviceName: _selectedName,
                           );
                     }
@@ -375,9 +380,13 @@ class _AudioDeviceSectionState extends ConsumerState<_AudioDeviceSection> {
               icon: Icons.restore,
               variant: ScButtonVariant.ghost,
               size: ScButtonSize.compact,
-              onPressed: isLocalAudioConnected
+              onPressed: canInteract
                   ? () {
-                      ref.read(audioNodeProvider.notifier).resetToDefaultDevice();
+                      if (isLocalNode) {
+                        ref
+                            .read(audioNodeProvider.notifier)
+                            .resetToDefaultDevice();
+                      }
                       ref.read(nodeManagementProvider.notifier).resetToDefault(
                             targetNodeId: widget.node.nodeId,
                           );

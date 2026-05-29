@@ -8,6 +8,7 @@ import '../grpc/generated/stagesync/v1/showcontrol.pb.dart' hide PatchConfig;
 import '../infrastructure/grpc/show_control_repository.dart' as repo;
 import '../domain/show.dart' as domain;
 import '../domain/node_status.dart';
+import '../nodes/audio_node/audio_device.dart';
 import '../domain/patch_config.dart';
 import '../session/clock_sync.dart';
 import 'session_provider.dart';
@@ -438,15 +439,27 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
 
     // Capabilities aus dem Event oder vorherigem Eintrag übernehmen.
     AuditionCapability audition = AuditionCapability.none;
-    if (event.hasCapabilities() && event.capabilities.auditionSupported) {
-      audition = AuditionCapability(
-        supported: true,
-        deviceName: event.capabilities.auditionDevice.isEmpty
-            ? null
-            : event.capabilities.auditionDevice,
-      );
-    } else {
-      audition = existing?.audition ?? AuditionCapability.none;
+    List<AudioDevice> availableDevices = existing?.availableDevices ?? const [];
+
+    if (event.hasCapabilities()) {
+      final caps = event.capabilities;
+      if (caps.auditionSupported) {
+        audition = AuditionCapability(
+          supported: true,
+          deviceName: caps.auditionDevice.isEmpty ? null : caps.auditionDevice,
+        );
+      } else {
+        audition = existing?.audition ?? AuditionCapability.none;
+      }
+      if (caps.hasAudio() && caps.audio.availableDevices.isNotEmpty) {
+        availableDevices = caps.audio.availableDevices
+            .map((d) => AudioDevice(
+                  id: d.name, // proto has no opaque id — use name as stable key
+                  name: d.name,
+                  index: d.index,
+                ))
+            .toList();
+      }
     }
 
     _nodeMap[info.nodeId] = NodeStatus(
@@ -456,6 +469,7 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
       health: health,
       clockDeltaMs: existing?.clockDeltaMs,
       audition: audition,
+      availableDevices: availableDevices,
     );
 
     state = state.copyWith(nodeStatuses: _nodeMap.values.toList());

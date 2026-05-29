@@ -1,5 +1,7 @@
 import 'package:meta/meta.dart';
 
+import '../nodes/audio_node/audio_device.dart';
+
 enum NodeHealthPhase { online, reconnecting, offline, degraded }
 
 /// Audition/preview capability of a node.
@@ -38,6 +40,10 @@ class NodeStatus {
 
   final AuditionCapability audition;
 
+  /// Audio output devices reported by this node via NodeCapabilities.
+  /// Empty for nodes that have no audio capability or haven't reported yet.
+  final List<AudioDevice> availableDevices;
+
   const NodeStatus({
     required this.nodeId,
     required this.name,
@@ -45,6 +51,7 @@ class NodeStatus {
     required this.health,
     this.clockDeltaMs,
     this.audition = AuditionCapability.none,
+    this.availableDevices = const [],
   });
 
   bool get isOnline   => health == NodeHealthPhase.online ||
@@ -61,6 +68,7 @@ class NodeStatus {
     NodeHealthPhase? health,
     int? clockDeltaMs,
     AuditionCapability? audition,
+    List<AudioDevice>? availableDevices,
   }) =>
       NodeStatus(
         nodeId: nodeId ?? this.nodeId,
@@ -69,5 +77,6 @@ class NodeStatus {
         health: health ?? this.health,
         clockDeltaMs: clockDeltaMs ?? this.clockDeltaMs,
         audition: audition ?? this.audition,
+        availableDevices: availableDevices ?? this.availableDevices,
       );
 }
