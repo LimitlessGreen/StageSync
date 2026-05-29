@@ -18,6 +18,7 @@ import '../design_system/primitives/sc_chip.dart';
 import '../design_system/primitives/sc_panel.dart';
 import '../design_system/primitives/sc_split_view.dart';
 import '../design_system/primitives/sc_inline_field.dart';
+import '../design_system/primitives/sc_drag_field.dart';
 import '../design_system/domain_components/transport_bar.dart';
 import '../design_system/domain_components/cue_list_row.dart';
 import '../design_system/domain_components/active_cue_monitor.dart';
@@ -45,6 +46,7 @@ class _DesktopShellState extends ConsumerState<DesktopShell>
   String? _selectedCueId;
   late TabController _tabController;
   bool _bottomPanelOpen = false;
+  int _lastOpenTab = 0;
 
   @override
   void initState() {
@@ -147,11 +149,11 @@ void _handleAutoReconnectNodeStart() {
           _BottomBar(
             controller: _tabController,
             onTabTap: (i) => setState(() {
-              if (_bottomPanelOpen && _tabController.index == i) {
+              if (_bottomPanelOpen && _lastOpenTab == i) {
                 _bottomPanelOpen = false;
               } else {
                 _bottomPanelOpen = true;
-                _tabController.index = i;
+                _lastOpenTab = i;
               }
             }),
           ),
@@ -323,19 +325,21 @@ class _CueListPanel extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.add, size: 18),
-                color: ScColors.textSecondary,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                tooltip: 'Cue hinzufügen',
-                onPressed: () async {
-                  final box = context.findRenderObject() as RenderBox?;
-                  if (box == null) return;
-                  final pos = box.localToGlobal(Offset(box.size.width, box.size.height));
-                  final params = await showCueTypePicker(context, pos);
-                  if (params != null) notifier.addCue(params: params);
-                },
+              Builder(
+                builder: (btnCtx) => IconButton(
+                  icon: const Icon(Icons.add, size: 18),
+                  color: ScColors.textSecondary,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  tooltip: 'Cue hinzufügen',
+                  onPressed: () async {
+                    final box = btnCtx.findRenderObject() as RenderBox?;
+                    if (box == null) return;
+                    final pos = box.localToGlobal(Offset(0, box.size.height));
+                    final params = await showCueTypePicker(btnCtx, pos);
+                    if (params != null) notifier.addCue(params: params);
+                  },
+                ),
               ),
             ],
           ),
@@ -853,15 +857,15 @@ class _AudioParamsEditor extends ConsumerWidget {
       Row(
         children: [
           Expanded(
-            child: ScInlineField(
+            child: ScDragField(
               label: 'Volume',
-              value: params.volumeDb.toStringAsFixed(1),
+              value: params.volumeDb,
+              min: -40,
+              max: 20,
+              step: 0.2,
               suffix: 'dB',
-              keyboardType:
-                  TextInputType.numberWithOptions(signed: true, decimal: true),
-              onChanged: (v) => onChanged(params.copyWith(
-                volumeDb: double.tryParse(v) ?? params.volumeDb,
-              )),
+              decimalPlaces: 1,
+              onChanged: (v) => onChanged(params.copyWith(volumeDb: v)),
             ),
           ),
           if (isAutoVol) ...[
@@ -910,44 +914,48 @@ class _AudioParamsEditor extends ConsumerWidget {
         ],
       ),
       const SizedBox(height: 6),
-      ScInlineField(
+      ScDragField(
         label: 'Fade In',
-        value: params.fadeInMs.toStringAsFixed(0),
+        value: params.fadeInMs,
+        min: 0,
+        max: 60000,
+        step: 10,
         suffix: 'ms',
-        keyboardType: TextInputType.number,
-        onChanged: (v) => onChanged(params.copyWith(
-          fadeInMs: double.tryParse(v) ?? params.fadeInMs,
-        )),
+        decimalPlaces: 0,
+        onChanged: (v) => onChanged(params.copyWith(fadeInMs: v)),
       ),
       const SizedBox(height: 6),
-      ScInlineField(
+      ScDragField(
         label: 'Fade Out',
-        value: params.fadeOutMs.toStringAsFixed(0),
+        value: params.fadeOutMs,
+        min: 0,
+        max: 60000,
+        step: 10,
         suffix: 'ms',
-        keyboardType: TextInputType.number,
-        onChanged: (v) => onChanged(params.copyWith(
-          fadeOutMs: double.tryParse(v) ?? params.fadeOutMs,
-        )),
+        decimalPlaces: 0,
+        onChanged: (v) => onChanged(params.copyWith(fadeOutMs: v)),
       ),
       const SizedBox(height: 6),
-      ScInlineField(
+      ScDragField(
         label: 'Start',
-        value: params.startTimeMs.toStringAsFixed(0),
+        value: params.startTimeMs,
+        min: 0,
+        max: 3600000,
+        step: 10,
         suffix: 'ms',
-        keyboardType: TextInputType.number,
-        onChanged: (v) => onChanged(params.copyWith(
-          startTimeMs: double.tryParse(v) ?? params.startTimeMs,
-        )),
+        decimalPlaces: 0,
+        onChanged: (v) => onChanged(params.copyWith(startTimeMs: v)),
       ),
       const SizedBox(height: 6),
-      ScInlineField(
+      ScDragField(
         label: 'End',
-        value: params.endTimeMs.toStringAsFixed(0),
+        value: params.endTimeMs,
+        min: 0,
+        max: 3600000,
+        step: 10,
         suffix: 'ms',
-        keyboardType: TextInputType.number,
-        onChanged: (v) => onChanged(params.copyWith(
-          endTimeMs: double.tryParse(v) ?? params.endTimeMs,
-        )),
+        decimalPlaces: 0,
+        onChanged: (v) => onChanged(params.copyWith(endTimeMs: v)),
       ),
       const SizedBox(height: 6),
       _BoolField(
@@ -1104,14 +1112,15 @@ class _WaitParamsEditor extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _Section(title: 'WAIT', children: [
-      ScInlineField(
+      ScDragField(
         label: 'Dauer',
-        value: params.durationMs.toStringAsFixed(0),
+        value: params.durationMs,
+        min: 0,
+        max: 3600000,
+        step: 50,
         suffix: 'ms',
-        keyboardType: TextInputType.number,
-        onChanged: (v) => onChanged(params.copyWith(
-          durationMs: double.tryParse(v) ?? params.durationMs,
-        )),
+        decimalPlaces: 0,
+        onChanged: (v) => onChanged(params.copyWith(durationMs: v)),
       ),
     ]);
   }
