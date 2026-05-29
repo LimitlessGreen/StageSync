@@ -22,7 +22,7 @@ export 'package:protobuf/protobuf.dart' show GeneratedMessageGenericExtensions;
 
 export 'showcontrol.pbenum.dart';
 
-enum Cue_Params { audio, maOsc, wait, gotoP, notSet }
+enum Cue_Params { audio, maOsc, wait, gotoP, group, notSet }
 
 class Cue extends $pb.GeneratedMessage {
   factory Cue({
@@ -42,6 +42,7 @@ class Cue extends $pb.GeneratedMessage {
     $2.Timestamp? createdAt,
     $2.Timestamp? updatedAt,
     $fixnum.Int64? version,
+    GroupCueParams? group,
   }) {
     final result = create();
     if (cueId != null) result.cueId = cueId;
@@ -60,6 +61,7 @@ class Cue extends $pb.GeneratedMessage {
     if (createdAt != null) result.createdAt = createdAt;
     if (updatedAt != null) result.updatedAt = updatedAt;
     if (version != null) result.version = version;
+    if (group != null) result.group = group;
     return result;
   }
 
@@ -77,13 +79,14 @@ class Cue extends $pb.GeneratedMessage {
     11: Cue_Params.maOsc,
     12: Cue_Params.wait,
     13: Cue_Params.gotoP,
+    17: Cue_Params.group,
     0: Cue_Params.notSet
   };
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(
       _omitMessageNames ? '' : 'Cue',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
       createEmptyInstance: create)
-    ..oo(0, [10, 11, 12, 13])
+    ..oo(0, [10, 11, 12, 13, 17])
     ..aOS(1, _omitFieldNames ? '' : 'cueId')
     ..aOS(2, _omitFieldNames ? '' : 'number')
     ..aOS(3, _omitFieldNames ? '' : 'label')
@@ -108,6 +111,8 @@ class Cue extends $pb.GeneratedMessage {
     ..aOM<$2.Timestamp>(15, _omitFieldNames ? '' : 'updatedAt',
         subBuilder: $2.Timestamp.create)
     ..aInt64(16, _omitFieldNames ? '' : 'version')
+    ..aOM<GroupCueParams>(17, _omitFieldNames ? '' : 'group',
+        subBuilder: GroupCueParams.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -132,11 +137,13 @@ class Cue extends $pb.GeneratedMessage {
   @$pb.TagNumber(11)
   @$pb.TagNumber(12)
   @$pb.TagNumber(13)
+  @$pb.TagNumber(17)
   Cue_Params whichParams() => _Cue_ParamsByTag[$_whichOneof(0)]!;
   @$pb.TagNumber(10)
   @$pb.TagNumber(11)
   @$pb.TagNumber(12)
   @$pb.TagNumber(13)
+  @$pb.TagNumber(17)
   void clearParams() => $_clearField($_whichOneof(0));
 
   @$pb.TagNumber(1)
@@ -296,6 +303,17 @@ class Cue extends $pb.GeneratedMessage {
   $core.bool hasVersion() => $_has(15);
   @$pb.TagNumber(16)
   void clearVersion() => $_clearField(16);
+
+  @$pb.TagNumber(17)
+  GroupCueParams get group => $_getN(16);
+  @$pb.TagNumber(17)
+  set group(GroupCueParams value) => $_setField(17, value);
+  @$pb.TagNumber(17)
+  $core.bool hasGroup() => $_has(16);
+  @$pb.TagNumber(17)
+  void clearGroup() => $_clearField(17);
+  @$pb.TagNumber(17)
+  GroupCueParams ensureGroup() => $_ensure(16);
 }
 
 class AudioCueParams extends $pb.GeneratedMessage {
@@ -672,6 +690,66 @@ class GotoCueParams extends $pb.GeneratedMessage {
   $core.bool hasTargetNumber() => $_has(1);
   @$pb.TagNumber(2)
   void clearTargetNumber() => $_clearField(2);
+}
+
+class GroupCueParams extends $pb.GeneratedMessage {
+  factory GroupCueParams({
+    $core.Iterable<$core.String>? childCueIds,
+    $core.bool? sequential,
+  }) {
+    final result = create();
+    if (childCueIds != null) result.childCueIds.addAll(childCueIds);
+    if (sequential != null) result.sequential = sequential;
+    return result;
+  }
+
+  GroupCueParams._();
+
+  factory GroupCueParams.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory GroupCueParams.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'GroupCueParams',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
+      createEmptyInstance: create)
+    ..pPS(1, _omitFieldNames ? '' : 'childCueIds')
+    ..aOB(2, _omitFieldNames ? '' : 'sequential')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GroupCueParams clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GroupCueParams copyWith(void Function(GroupCueParams) updates) =>
+      super.copyWith((message) => updates(message as GroupCueParams))
+          as GroupCueParams;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static GroupCueParams create() => GroupCueParams._();
+  @$core.override
+  GroupCueParams createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static GroupCueParams getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<GroupCueParams>(create);
+  static GroupCueParams? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<$core.String> get childCueIds => $_getList(0);
+
+  @$pb.TagNumber(2)
+  $core.bool get sequential => $_getBF(1);
+  @$pb.TagNumber(2)
+  set sequential($core.bool value) => $_setBool(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasSequential() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearSequential() => $_clearField(2);
 }
 
 class CueList extends $pb.GeneratedMessage {
@@ -1732,6 +1810,7 @@ class ShowStateEvent extends $pb.GeneratedMessage {
     $fixnum.Int64? seq,
     $core.bool? isPaused,
     $fixnum.Int64? cueStartedAtMs,
+    $core.Iterable<$core.String>? runningCueIds,
   }) {
     final result = create();
     if (type != null) result.type = type;
@@ -1743,6 +1822,7 @@ class ShowStateEvent extends $pb.GeneratedMessage {
     if (seq != null) result.seq = seq;
     if (isPaused != null) result.isPaused = isPaused;
     if (cueStartedAtMs != null) result.cueStartedAtMs = cueStartedAtMs;
+    if (runningCueIds != null) result.runningCueIds.addAll(runningCueIds);
     return result;
   }
 
@@ -1771,6 +1851,7 @@ class ShowStateEvent extends $pb.GeneratedMessage {
     ..aInt64(7, _omitFieldNames ? '' : 'seq')
     ..aOB(8, _omitFieldNames ? '' : 'isPaused')
     ..aInt64(9, _omitFieldNames ? '' : 'cueStartedAtMs')
+    ..pPS(10, _omitFieldNames ? '' : 'runningCueIds')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1881,6 +1962,11 @@ class ShowStateEvent extends $pb.GeneratedMessage {
   $core.bool hasCueStartedAtMs() => $_has(8);
   @$pb.TagNumber(9)
   void clearCueStartedAtMs() => $_clearField(9);
+
+  /// IDs aller gleichzeitig laufenden Cues (z.B. parallele Group-Children).
+  /// Leer bei normalen Einzelcues; befüllt während Group-Ausführung.
+  @$pb.TagNumber(10)
+  $pb.PbList<$core.String> get runningCueIds => $_getList(9);
 }
 
 const $core.bool _omitFieldNames =

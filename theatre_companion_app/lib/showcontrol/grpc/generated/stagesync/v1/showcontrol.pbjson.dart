@@ -79,6 +79,15 @@ const Cue$json = {
       '10': 'gotoP'
     },
     {
+      '1': 'group',
+      '3': 17,
+      '4': 1,
+      '5': 11,
+      '6': '.stagesync.v1.GroupCueParams',
+      '9': 0,
+      '10': 'group'
+    },
+    {
       '1': 'created_at',
       '3': 14,
       '4': 1,
@@ -112,10 +121,11 @@ final $typed_data.Uint8List cueDescriptor = $convert.base64Decode(
     'ZXN5bmMudjEuQXVkaW9DdWVQYXJhbXNIAFIFYXVkaW8SNQoGbWFfb3NjGAsgASgLMhwuc3RhZ2'
     'VzeW5jLnYxLk1hT3NjQ3VlUGFyYW1zSABSBW1hT3NjEjEKBHdhaXQYDCABKAsyGy5zdGFnZXN5'
     'bmMudjEuV2FpdEN1ZVBhcmFtc0gAUgR3YWl0EjQKBmdvdG9fcBgNIAEoCzIbLnN0YWdlc3luYy'
-    '52MS5Hb3RvQ3VlUGFyYW1zSABSBWdvdG9QEjYKCmNyZWF0ZWRfYXQYDiABKAsyFy5zdGFnZXN5'
-    'bmMudjEuVGltZXN0YW1wUgljcmVhdGVkQXQSNgoKdXBkYXRlZF9hdBgPIAEoCzIXLnN0YWdlc3'
-    'luYy52MS5UaW1lc3RhbXBSCXVwZGF0ZWRBdBIYCgd2ZXJzaW9uGBAgASgDUgd2ZXJzaW9uQggK'
-    'BnBhcmFtcw==');
+    '52MS5Hb3RvQ3VlUGFyYW1zSABSBWdvdG9QEjQKBWdyb3VwGBEgASgLMhwuc3RhZ2VzeW5jLnYx'
+    'Lkdyb3VwQ3VlUGFyYW1zSABSBWdyb3VwEjYKCmNyZWF0ZWRfYXQYDiABKAsyFy5zdGFnZXN5bm'
+    'MudjEuVGltZXN0YW1wUgljcmVhdGVkQXQSNgoKdXBkYXRlZF9hdBgPIAEoCzIXLnN0YWdlc3lu'
+    'Yy52MS5UaW1lc3RhbXBSCXVwZGF0ZWRBdBIYCgd2ZXJzaW9uGBAgASgDUgd2ZXJzaW9uQggKBn'
+    'BhcmFtcw==');
 
 @$core.Deprecated('Use audioCueParamsDescriptor instead')
 const AudioCueParams$json = {
@@ -208,6 +218,20 @@ const GotoCueParams$json = {
 final $typed_data.Uint8List gotoCueParamsDescriptor = $convert.base64Decode(
     'Cg1Hb3RvQ3VlUGFyYW1zEiIKDXRhcmdldF9jdWVfaWQYASABKAlSC3RhcmdldEN1ZUlkEiMKDX'
     'RhcmdldF9udW1iZXIYAiABKAlSDHRhcmdldE51bWJlcg==');
+
+@$core.Deprecated('Use groupCueParamsDescriptor instead')
+const GroupCueParams$json = {
+  '1': 'GroupCueParams',
+  '2': [
+    {'1': 'child_cue_ids', '3': 1, '4': 3, '5': 9, '10': 'childCueIds'},
+    {'1': 'sequential', '3': 2, '4': 1, '5': 8, '10': 'sequential'},
+  ],
+};
+
+/// Descriptor for `GroupCueParams`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List groupCueParamsDescriptor = $convert.base64Decode(
+    'Cg5Hcm91cEN1ZVBhcmFtcxIiCg1jaGlsZF9jdWVfaWRzGAEgAygJUgtjaGlsZEN1ZUlkcxIeCg'
+    'pzZXF1ZW50aWFsGAIgASgIUgpzZXF1ZW50aWFs');
 
 @$core.Deprecated('Use cueListDescriptor instead')
 const CueList$json = {
@@ -510,6 +534,7 @@ const ShowStateEvent$json = {
     {'1': 'seq', '3': 7, '4': 1, '5': 3, '10': 'seq'},
     {'1': 'is_paused', '3': 8, '4': 1, '5': 8, '10': 'isPaused'},
     {'1': 'cue_started_at_ms', '3': 9, '4': 1, '5': 3, '10': 'cueStartedAtMs'},
+    {'1': 'running_cue_ids', '3': 10, '4': 3, '5': 9, '10': 'runningCueIds'},
   ],
   '4': [ShowStateEvent_Type$json],
 };
@@ -537,8 +562,8 @@ final $typed_data.Uint8List showStateEventDescriptor = $convert.base64Decode(
     'ZlY3RlZEN1ZRIXCgdub2RlX2lkGAQgASgJUgZub2RlSWQSOAoLb2NjdXJyZWRfYXQYBSABKAsy'
     'Fy5zdGFnZXN5bmMudjEuVGltZXN0YW1wUgpvY2N1cnJlZEF0EhsKCWVycm9yX21zZxgGIAEoCV'
     'IIZXJyb3JNc2cSEAoDc2VxGAcgASgDUgNzZXESGwoJaXNfcGF1c2VkGAggASgIUghpc1BhdXNl'
-    'ZBIpChFjdWVfc3RhcnRlZF9hdF9tcxgJIAEoA1IOY3VlU3RhcnRlZEF0TXMitgEKBFR5cGUSFA'
-    'oQVFlQRV9VTlNQRUNJRklFRBAAEhQKEFRZUEVfQ1VFX1NUQVJURUQQARIUChBUWVBFX0NVRV9T'
-    'VE9QUEVEEAISEwoPVFlQRV9DVUVfUEFVU0VEEAMSEQoNVFlQRV9DVUVfRE9ORRAEEhIKDlRZUE'
-    'VfQ1VFX0VSUk9SEAUSFQoRVFlQRV9MSVNUX1VQREFURUQQBhIZChVUWVBFX1BPU0lUSU9OX0NI'
-    'QU5HRUQQBw==');
+    'ZBIpChFjdWVfc3RhcnRlZF9hdF9tcxgJIAEoA1IOY3VlU3RhcnRlZEF0TXMSJgoPcnVubmluZ1'
+    '9jdWVfaWRzGAogAygJUg1ydW5uaW5nQ3VlSWRzIrYBCgRUeXBlEhQKEFRZUEVfVU5TUEVDSUZJ'
+    'RUQQABIUChBUWVBFX0NVRV9TVEFSVEVEEAESFAoQVFlQRV9DVUVfU1RPUFBFRBACEhMKD1RZUE'
+    'VfQ1VFX1BBVVNFRBADEhEKDVRZUEVfQ1VFX0RPTkUQBBISCg5UWVBFX0NVRV9FUlJPUhAFEhUK'
+    'EVRZUEVfTElTVF9VUERBVEVEEAYSGQoVVFlQRV9QT1NJVElPTl9DSEFOR0VEEAc=');
