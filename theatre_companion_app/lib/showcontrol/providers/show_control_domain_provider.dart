@@ -3,17 +3,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/show.dart';
 import '../domain/playhead.dart';
 import '../domain/node_status.dart';
+import '../domain/patch_config.dart';
 import '../infrastructure/grpc/show_control_repository.dart';
 import 'show_control_provider.dart';
 import 'session_provider.dart';
 
 // ── Domain State ──────────────────────────────────────────────────────────────
 
-/// Combined domain state: definition + live execution + node health.
+/// Combined domain state: definition + live execution + node health + patch.
 class ShowControlDomainState {
   final CueList? cueList;
   final PlayheadState playhead;
   final List<NodeStatus> nodes;
+  final PatchConfig patchConfig;
   final bool isLoading;
   final String? error;
 
@@ -21,6 +23,7 @@ class ShowControlDomainState {
     this.cueList,
     required this.playhead,
     this.nodes = const [],
+    this.patchConfig = PatchConfig.empty,
     this.isLoading = false,
     this.error,
   });
@@ -62,6 +65,7 @@ final showControlDomainProvider = Provider<ShowControlDomainState>((ref) {
     cueList: cueList,
     playhead: playhead,
     nodes: nodes,
+    patchConfig: showState.patchConfig,
     isLoading: showState.isLoading,
     error: showState.error,
   );

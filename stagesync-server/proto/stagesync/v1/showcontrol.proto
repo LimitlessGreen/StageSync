@@ -33,6 +33,9 @@ service ShowControlService {
   rpc Pause(PauseRequest) returns (google.protobuf.Empty);
   rpc Resume(ResumeRequest) returns (google.protobuf.Empty);
 
+  // PatchConfig setzen (Master/Editor erforderlich)
+  rpc UpdatePatchConfig(UpdatePatchConfigRequest) returns (PatchConfigResponse);
+
   // ── 4-Stream EventBus ────────────────────────────────────────────────────
   // Stream 1: Show-Definition (CueList, Patch, Assets)
   rpc WatchShowDefinition(WatchShowDefinitionRequest) returns (stream ShowDefinitionEvent);
@@ -197,6 +200,16 @@ message ResumeRequest {
   string command_id = 3;
 }
 
+message UpdatePatchConfigRequest {
+  string      session_id   = 1;
+  string      token        = 2;
+  PatchConfig patch_config = 3;
+}
+
+message PatchConfigResponse {
+  PatchConfig patch_config = 1;
+}
+
 // ── Stream 1: Show-Definition ─────────────────────────────────────────────────
 
 message WatchShowDefinitionRequest {
@@ -211,11 +224,41 @@ message ShowDefinitionEvent {
   Timestamp occurred_at    = 3;
 
   enum DefinitionEventType {
-    DEFINITION_SNAPSHOT = 0; // vollständiger State beim Stream-Start
-    CUE_LIST_CHANGED    = 1;
+    DEFINITION_SNAPSHOT  = 0; // vollständiger State beim Stream-Start
+    CUE_LIST_CHANGED     = 1;
+    PATCH_CONFIG_CHANGED = 2;
   }
 
-  CueList cue_list = 10;
+  CueList     cue_list     = 10;
+  PatchConfig patch_config = 11;
+}
+
+// ── PatchConfig (4-Ebenen Audio-Routing) ──────────────────────────────────────
+
+message PatchConfig {
+  repeated PatchLogicalOutput logical_outputs = 1; // Ebene 1: benannte logische Ausgänge
+  repeated PatchNodeAssign    node_assigns    = 2; // Ebene 2: Bus → Nodes
+  repeated PatchDeviceAssign  device_assigns  = 3; // Ebene 3: Node → physisches Gerät
+}
+
+// Layer 1: ein benannter logischer Ausgang (z.B. "Main L/R", "Monitor").
+message PatchLogicalOutput {
+  string id   = 1;
+  string name = 2;
+}
+
+// Layer 2: logischer Ausgang → eine oder mehrere Node-IDs.
+message PatchNodeAssign {
+  string          logical_output_id = 1;
+  repeated string node_ids          = 2; // mehrere = Redundanz / Multi-Room
+}
+
+// Layer 3: node-lokale Device-Zuordnung (vom Node gemeldet, Server speichert).
+message PatchDeviceAssign {
+  string logical_output_id = 1;
+  string node_id           = 2;
+  int32  device_index      = 3;
+  string device_name       = 4;
 }
 
 // ── Stream 2: Show-Execution ──────────────────────────────────────────────────

@@ -480,6 +480,49 @@ final $typed_data.Uint8List resumeRequestDescriptor = $convert.base64Decode(
     'Cg1SZXN1bWVSZXF1ZXN0Eh0KCnNlc3Npb25faWQYASABKAlSCXNlc3Npb25JZBIUCgV0b2tlbh'
     'gCIAEoCVIFdG9rZW4SHQoKY29tbWFuZF9pZBgDIAEoCVIJY29tbWFuZElk');
 
+@$core.Deprecated('Use updatePatchConfigRequestDescriptor instead')
+const UpdatePatchConfigRequest$json = {
+  '1': 'UpdatePatchConfigRequest',
+  '2': [
+    {'1': 'session_id', '3': 1, '4': 1, '5': 9, '10': 'sessionId'},
+    {'1': 'token', '3': 2, '4': 1, '5': 9, '10': 'token'},
+    {
+      '1': 'patch_config',
+      '3': 3,
+      '4': 1,
+      '5': 11,
+      '6': '.stagesync.v1.PatchConfig',
+      '10': 'patchConfig'
+    },
+  ],
+};
+
+/// Descriptor for `UpdatePatchConfigRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List updatePatchConfigRequestDescriptor = $convert.base64Decode(
+    'ChhVcGRhdGVQYXRjaENvbmZpZ1JlcXVlc3QSHQoKc2Vzc2lvbl9pZBgBIAEoCVIJc2Vzc2lvbk'
+    'lkEhQKBXRva2VuGAIgASgJUgV0b2tlbhI8CgxwYXRjaF9jb25maWcYAyABKAsyGS5zdGFnZXN5'
+    'bmMudjEuUGF0Y2hDb25maWdSC3BhdGNoQ29uZmln');
+
+@$core.Deprecated('Use patchConfigResponseDescriptor instead')
+const PatchConfigResponse$json = {
+  '1': 'PatchConfigResponse',
+  '2': [
+    {
+      '1': 'patch_config',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.stagesync.v1.PatchConfig',
+      '10': 'patchConfig'
+    },
+  ],
+};
+
+/// Descriptor for `PatchConfigResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List patchConfigResponseDescriptor = $convert.base64Decode(
+    'ChNQYXRjaENvbmZpZ1Jlc3BvbnNlEjwKDHBhdGNoX2NvbmZpZxgBIAEoCzIZLnN0YWdlc3luYy'
+    '52MS5QYXRjaENvbmZpZ1ILcGF0Y2hDb25maWc=');
+
 @$core.Deprecated('Use watchShowDefinitionRequestDescriptor instead')
 const WatchShowDefinitionRequest$json = {
   '1': 'WatchShowDefinitionRequest',
@@ -525,6 +568,14 @@ const ShowDefinitionEvent$json = {
       '6': '.stagesync.v1.CueList',
       '10': 'cueList'
     },
+    {
+      '1': 'patch_config',
+      '3': 11,
+      '4': 1,
+      '5': 11,
+      '6': '.stagesync.v1.PatchConfig',
+      '10': 'patchConfig'
+    },
   ],
   '4': [ShowDefinitionEvent_DefinitionEventType$json],
 };
@@ -535,6 +586,7 @@ const ShowDefinitionEvent_DefinitionEventType$json = {
   '2': [
     {'1': 'DEFINITION_SNAPSHOT', '2': 0},
     {'1': 'CUE_LIST_CHANGED', '2': 1},
+    {'1': 'PATCH_CONFIG_CHANGED', '2': 2},
   ],
 };
 
@@ -544,8 +596,93 @@ final $typed_data.Uint8List showDefinitionEventDescriptor = $convert.base64Decod
     '5zdGFnZXN5bmMudjEuU2hvd0RlZmluaXRpb25FdmVudC5EZWZpbml0aW9uRXZlbnRUeXBlUgR0'
     'eXBlEjgKC29jY3VycmVkX2F0GAMgASgLMhcuc3RhZ2VzeW5jLnYxLlRpbWVzdGFtcFIKb2NjdX'
     'JyZWRBdBIwCghjdWVfbGlzdBgKIAEoCzIVLnN0YWdlc3luYy52MS5DdWVMaXN0UgdjdWVMaXN0'
-    'IkQKE0RlZmluaXRpb25FdmVudFR5cGUSFwoTREVGSU5JVElPTl9TTkFQU0hPVBAAEhQKEENVRV'
-    '9MSVNUX0NIQU5HRUQQAQ==');
+    'EjwKDHBhdGNoX2NvbmZpZxgLIAEoCzIZLnN0YWdlc3luYy52MS5QYXRjaENvbmZpZ1ILcGF0Y2'
+    'hDb25maWciXgoTRGVmaW5pdGlvbkV2ZW50VHlwZRIXChNERUZJTklUSU9OX1NOQVBTSE9UEAAS'
+    'FAoQQ1VFX0xJU1RfQ0hBTkdFRBABEhgKFFBBVENIX0NPTkZJR19DSEFOR0VEEAI=');
+
+@$core.Deprecated('Use patchConfigDescriptor instead')
+const PatchConfig$json = {
+  '1': 'PatchConfig',
+  '2': [
+    {
+      '1': 'logical_outputs',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.stagesync.v1.PatchLogicalOutput',
+      '10': 'logicalOutputs'
+    },
+    {
+      '1': 'node_assigns',
+      '3': 2,
+      '4': 3,
+      '5': 11,
+      '6': '.stagesync.v1.PatchNodeAssign',
+      '10': 'nodeAssigns'
+    },
+    {
+      '1': 'device_assigns',
+      '3': 3,
+      '4': 3,
+      '5': 11,
+      '6': '.stagesync.v1.PatchDeviceAssign',
+      '10': 'deviceAssigns'
+    },
+  ],
+};
+
+/// Descriptor for `PatchConfig`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List patchConfigDescriptor = $convert.base64Decode(
+    'CgtQYXRjaENvbmZpZxJJCg9sb2dpY2FsX291dHB1dHMYASADKAsyIC5zdGFnZXN5bmMudjEuUG'
+    'F0Y2hMb2dpY2FsT3V0cHV0Ug5sb2dpY2FsT3V0cHV0cxJACgxub2RlX2Fzc2lnbnMYAiADKAsy'
+    'HS5zdGFnZXN5bmMudjEuUGF0Y2hOb2RlQXNzaWduUgtub2RlQXNzaWducxJGCg5kZXZpY2VfYX'
+    'NzaWducxgDIAMoCzIfLnN0YWdlc3luYy52MS5QYXRjaERldmljZUFzc2lnblINZGV2aWNlQXNz'
+    'aWducw==');
+
+@$core.Deprecated('Use patchLogicalOutputDescriptor instead')
+const PatchLogicalOutput$json = {
+  '1': 'PatchLogicalOutput',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 9, '10': 'id'},
+    {'1': 'name', '3': 2, '4': 1, '5': 9, '10': 'name'},
+  ],
+};
+
+/// Descriptor for `PatchLogicalOutput`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List patchLogicalOutputDescriptor = $convert.base64Decode(
+    'ChJQYXRjaExvZ2ljYWxPdXRwdXQSDgoCaWQYASABKAlSAmlkEhIKBG5hbWUYAiABKAlSBG5hbW'
+    'U=');
+
+@$core.Deprecated('Use patchNodeAssignDescriptor instead')
+const PatchNodeAssign$json = {
+  '1': 'PatchNodeAssign',
+  '2': [
+    {'1': 'logical_output_id', '3': 1, '4': 1, '5': 9, '10': 'logicalOutputId'},
+    {'1': 'node_ids', '3': 2, '4': 3, '5': 9, '10': 'nodeIds'},
+  ],
+};
+
+/// Descriptor for `PatchNodeAssign`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List patchNodeAssignDescriptor = $convert.base64Decode(
+    'Cg9QYXRjaE5vZGVBc3NpZ24SKgoRbG9naWNhbF9vdXRwdXRfaWQYASABKAlSD2xvZ2ljYWxPdX'
+    'RwdXRJZBIZCghub2RlX2lkcxgCIAMoCVIHbm9kZUlkcw==');
+
+@$core.Deprecated('Use patchDeviceAssignDescriptor instead')
+const PatchDeviceAssign$json = {
+  '1': 'PatchDeviceAssign',
+  '2': [
+    {'1': 'logical_output_id', '3': 1, '4': 1, '5': 9, '10': 'logicalOutputId'},
+    {'1': 'node_id', '3': 2, '4': 1, '5': 9, '10': 'nodeId'},
+    {'1': 'device_index', '3': 3, '4': 1, '5': 5, '10': 'deviceIndex'},
+    {'1': 'device_name', '3': 4, '4': 1, '5': 9, '10': 'deviceName'},
+  ],
+};
+
+/// Descriptor for `PatchDeviceAssign`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List patchDeviceAssignDescriptor = $convert.base64Decode(
+    'ChFQYXRjaERldmljZUFzc2lnbhIqChFsb2dpY2FsX291dHB1dF9pZBgBIAEoCVIPbG9naWNhbE'
+    '91dHB1dElkEhcKB25vZGVfaWQYAiABKAlSBm5vZGVJZBIhCgxkZXZpY2VfaW5kZXgYAyABKAVS'
+    'C2RldmljZUluZGV4Eh8KC2RldmljZV9uYW1lGAQgASgJUgpkZXZpY2VOYW1l');
 
 @$core.Deprecated('Use watchShowExecutionRequestDescriptor instead')
 const WatchShowExecutionRequest$json = {

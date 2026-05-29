@@ -5,6 +5,7 @@ import '../../grpc/generated/stagesync/v1/common.pb.dart' as pb_common;
 import '../../domain/show.dart';
 import '../../domain/cue_params.dart';
 import '../../domain/node_status.dart';
+import '../../domain/patch_config.dart';
 
 /// Maps protobuf transport types to immutable domain models.
 ///
@@ -134,6 +135,52 @@ class ShowControlRepository {
           5 => 'ma_osc',
           _ => 'unknown',
         }).toList();
+  }
+
+  // ── PatchConfig ───────────────────────────────────────────────────────────
+
+  static PatchConfig patchConfigFromProto(pb.PatchConfig proto) {
+    return PatchConfig(
+      logicalOutputs: proto.logicalOutputs
+          .map((o) => LogicalOutput(id: o.id, name: o.name))
+          .toList(),
+      nodePatches: proto.nodeAssigns
+          .map((a) => NodePatch(
+                logicalOutputId: a.logicalOutputId,
+                nodeIds: a.nodeIds.toList(),
+              ))
+          .toList(),
+      devicePatches: proto.deviceAssigns
+          .map((a) => DevicePatch(
+                logicalOutputId: a.logicalOutputId,
+                nodeId: a.nodeId,
+                deviceIndex: a.deviceIndex,
+                deviceName: a.deviceName,
+              ))
+          .toList(),
+    );
+  }
+
+  static pb.PatchConfig patchConfigToProto(PatchConfig domain) {
+    return pb.PatchConfig(
+      logicalOutputs: domain.logicalOutputs
+          .map((o) => pb.PatchLogicalOutput(id: o.id, name: o.name))
+          .toList(),
+      nodeAssigns: domain.nodePatches
+          .map((p) => pb.PatchNodeAssign(
+                logicalOutputId: p.logicalOutputId,
+                nodeIds: p.nodeIds,
+              ))
+          .toList(),
+      deviceAssigns: domain.devicePatches
+          .map((p) => pb.PatchDeviceAssign(
+                logicalOutputId: p.logicalOutputId,
+                nodeId: p.nodeId,
+                deviceIndex: p.deviceIndex,
+                deviceName: p.deviceName,
+              ))
+          .toList(),
+    );
   }
 
   // ── Domain → Proto (write path from Inspector) ────────────────────────────

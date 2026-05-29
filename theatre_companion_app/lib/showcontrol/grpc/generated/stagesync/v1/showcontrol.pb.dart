@@ -1730,6 +1730,145 @@ class ResumeRequest extends $pb.GeneratedMessage {
   void clearCommandId() => $_clearField(3);
 }
 
+class UpdatePatchConfigRequest extends $pb.GeneratedMessage {
+  factory UpdatePatchConfigRequest({
+    $core.String? sessionId,
+    $core.String? token,
+    PatchConfig? patchConfig,
+  }) {
+    final result = create();
+    if (sessionId != null) result.sessionId = sessionId;
+    if (token != null) result.token = token;
+    if (patchConfig != null) result.patchConfig = patchConfig;
+    return result;
+  }
+
+  UpdatePatchConfigRequest._();
+
+  factory UpdatePatchConfigRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory UpdatePatchConfigRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'UpdatePatchConfigRequest',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'sessionId')
+    ..aOS(2, _omitFieldNames ? '' : 'token')
+    ..aOM<PatchConfig>(3, _omitFieldNames ? '' : 'patchConfig',
+        subBuilder: PatchConfig.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UpdatePatchConfigRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UpdatePatchConfigRequest copyWith(
+          void Function(UpdatePatchConfigRequest) updates) =>
+      super.copyWith((message) => updates(message as UpdatePatchConfigRequest))
+          as UpdatePatchConfigRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static UpdatePatchConfigRequest create() => UpdatePatchConfigRequest._();
+  @$core.override
+  UpdatePatchConfigRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static UpdatePatchConfigRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<UpdatePatchConfigRequest>(create);
+  static UpdatePatchConfigRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get sessionId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set sessionId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasSessionId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearSessionId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get token => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set token($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasToken() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearToken() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  PatchConfig get patchConfig => $_getN(2);
+  @$pb.TagNumber(3)
+  set patchConfig(PatchConfig value) => $_setField(3, value);
+  @$pb.TagNumber(3)
+  $core.bool hasPatchConfig() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearPatchConfig() => $_clearField(3);
+  @$pb.TagNumber(3)
+  PatchConfig ensurePatchConfig() => $_ensure(2);
+}
+
+class PatchConfigResponse extends $pb.GeneratedMessage {
+  factory PatchConfigResponse({
+    PatchConfig? patchConfig,
+  }) {
+    final result = create();
+    if (patchConfig != null) result.patchConfig = patchConfig;
+    return result;
+  }
+
+  PatchConfigResponse._();
+
+  factory PatchConfigResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory PatchConfigResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'PatchConfigResponse',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
+      createEmptyInstance: create)
+    ..aOM<PatchConfig>(1, _omitFieldNames ? '' : 'patchConfig',
+        subBuilder: PatchConfig.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  PatchConfigResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  PatchConfigResponse copyWith(void Function(PatchConfigResponse) updates) =>
+      super.copyWith((message) => updates(message as PatchConfigResponse))
+          as PatchConfigResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static PatchConfigResponse create() => PatchConfigResponse._();
+  @$core.override
+  PatchConfigResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static PatchConfigResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<PatchConfigResponse>(create);
+  static PatchConfigResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  PatchConfig get patchConfig => $_getN(0);
+  @$pb.TagNumber(1)
+  set patchConfig(PatchConfig value) => $_setField(1, value);
+  @$pb.TagNumber(1)
+  $core.bool hasPatchConfig() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearPatchConfig() => $_clearField(1);
+  @$pb.TagNumber(1)
+  PatchConfig ensurePatchConfig() => $_ensure(0);
+}
+
 class WatchShowDefinitionRequest extends $pb.GeneratedMessage {
   factory WatchShowDefinitionRequest({
     $core.String? sessionId,
@@ -1816,12 +1955,14 @@ class ShowDefinitionEvent extends $pb.GeneratedMessage {
     ShowDefinitionEvent_DefinitionEventType? type,
     $2.Timestamp? occurredAt,
     CueList? cueList,
+    PatchConfig? patchConfig,
   }) {
     final result = create();
     if (seq != null) result.seq = seq;
     if (type != null) result.type = type;
     if (occurredAt != null) result.occurredAt = occurredAt;
     if (cueList != null) result.cueList = cueList;
+    if (patchConfig != null) result.patchConfig = patchConfig;
     return result;
   }
 
@@ -1846,6 +1987,8 @@ class ShowDefinitionEvent extends $pb.GeneratedMessage {
         subBuilder: $2.Timestamp.create)
     ..aOM<CueList>(10, _omitFieldNames ? '' : 'cueList',
         subBuilder: CueList.create)
+    ..aOM<PatchConfig>(11, _omitFieldNames ? '' : 'patchConfig',
+        subBuilder: PatchConfig.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1907,6 +2050,299 @@ class ShowDefinitionEvent extends $pb.GeneratedMessage {
   void clearCueList() => $_clearField(10);
   @$pb.TagNumber(10)
   CueList ensureCueList() => $_ensure(3);
+
+  @$pb.TagNumber(11)
+  PatchConfig get patchConfig => $_getN(4);
+  @$pb.TagNumber(11)
+  set patchConfig(PatchConfig value) => $_setField(11, value);
+  @$pb.TagNumber(11)
+  $core.bool hasPatchConfig() => $_has(4);
+  @$pb.TagNumber(11)
+  void clearPatchConfig() => $_clearField(11);
+  @$pb.TagNumber(11)
+  PatchConfig ensurePatchConfig() => $_ensure(4);
+}
+
+class PatchConfig extends $pb.GeneratedMessage {
+  factory PatchConfig({
+    $core.Iterable<PatchLogicalOutput>? logicalOutputs,
+    $core.Iterable<PatchNodeAssign>? nodeAssigns,
+    $core.Iterable<PatchDeviceAssign>? deviceAssigns,
+  }) {
+    final result = create();
+    if (logicalOutputs != null) result.logicalOutputs.addAll(logicalOutputs);
+    if (nodeAssigns != null) result.nodeAssigns.addAll(nodeAssigns);
+    if (deviceAssigns != null) result.deviceAssigns.addAll(deviceAssigns);
+    return result;
+  }
+
+  PatchConfig._();
+
+  factory PatchConfig.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory PatchConfig.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'PatchConfig',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
+      createEmptyInstance: create)
+    ..pPM<PatchLogicalOutput>(1, _omitFieldNames ? '' : 'logicalOutputs',
+        subBuilder: PatchLogicalOutput.create)
+    ..pPM<PatchNodeAssign>(2, _omitFieldNames ? '' : 'nodeAssigns',
+        subBuilder: PatchNodeAssign.create)
+    ..pPM<PatchDeviceAssign>(3, _omitFieldNames ? '' : 'deviceAssigns',
+        subBuilder: PatchDeviceAssign.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  PatchConfig clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  PatchConfig copyWith(void Function(PatchConfig) updates) =>
+      super.copyWith((message) => updates(message as PatchConfig))
+          as PatchConfig;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static PatchConfig create() => PatchConfig._();
+  @$core.override
+  PatchConfig createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static PatchConfig getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<PatchConfig>(create);
+  static PatchConfig? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<PatchLogicalOutput> get logicalOutputs => $_getList(0);
+
+  @$pb.TagNumber(2)
+  $pb.PbList<PatchNodeAssign> get nodeAssigns => $_getList(1);
+
+  @$pb.TagNumber(3)
+  $pb.PbList<PatchDeviceAssign> get deviceAssigns => $_getList(2);
+}
+
+/// Layer 1: ein benannter logischer Ausgang (z.B. "Main L/R", "Monitor").
+class PatchLogicalOutput extends $pb.GeneratedMessage {
+  factory PatchLogicalOutput({
+    $core.String? id,
+    $core.String? name,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (name != null) result.name = name;
+    return result;
+  }
+
+  PatchLogicalOutput._();
+
+  factory PatchLogicalOutput.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory PatchLogicalOutput.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'PatchLogicalOutput',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'id')
+    ..aOS(2, _omitFieldNames ? '' : 'name')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  PatchLogicalOutput clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  PatchLogicalOutput copyWith(void Function(PatchLogicalOutput) updates) =>
+      super.copyWith((message) => updates(message as PatchLogicalOutput))
+          as PatchLogicalOutput;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static PatchLogicalOutput create() => PatchLogicalOutput._();
+  @$core.override
+  PatchLogicalOutput createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static PatchLogicalOutput getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<PatchLogicalOutput>(create);
+  static PatchLogicalOutput? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get id => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set id($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get name => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set name($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasName() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearName() => $_clearField(2);
+}
+
+/// Layer 2: logischer Ausgang → eine oder mehrere Node-IDs.
+class PatchNodeAssign extends $pb.GeneratedMessage {
+  factory PatchNodeAssign({
+    $core.String? logicalOutputId,
+    $core.Iterable<$core.String>? nodeIds,
+  }) {
+    final result = create();
+    if (logicalOutputId != null) result.logicalOutputId = logicalOutputId;
+    if (nodeIds != null) result.nodeIds.addAll(nodeIds);
+    return result;
+  }
+
+  PatchNodeAssign._();
+
+  factory PatchNodeAssign.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory PatchNodeAssign.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'PatchNodeAssign',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'logicalOutputId')
+    ..pPS(2, _omitFieldNames ? '' : 'nodeIds')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  PatchNodeAssign clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  PatchNodeAssign copyWith(void Function(PatchNodeAssign) updates) =>
+      super.copyWith((message) => updates(message as PatchNodeAssign))
+          as PatchNodeAssign;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static PatchNodeAssign create() => PatchNodeAssign._();
+  @$core.override
+  PatchNodeAssign createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static PatchNodeAssign getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<PatchNodeAssign>(create);
+  static PatchNodeAssign? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get logicalOutputId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set logicalOutputId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasLogicalOutputId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearLogicalOutputId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $pb.PbList<$core.String> get nodeIds => $_getList(1);
+}
+
+/// Layer 3: node-lokale Device-Zuordnung (vom Node gemeldet, Server speichert).
+class PatchDeviceAssign extends $pb.GeneratedMessage {
+  factory PatchDeviceAssign({
+    $core.String? logicalOutputId,
+    $core.String? nodeId,
+    $core.int? deviceIndex,
+    $core.String? deviceName,
+  }) {
+    final result = create();
+    if (logicalOutputId != null) result.logicalOutputId = logicalOutputId;
+    if (nodeId != null) result.nodeId = nodeId;
+    if (deviceIndex != null) result.deviceIndex = deviceIndex;
+    if (deviceName != null) result.deviceName = deviceName;
+    return result;
+  }
+
+  PatchDeviceAssign._();
+
+  factory PatchDeviceAssign.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory PatchDeviceAssign.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'PatchDeviceAssign',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'logicalOutputId')
+    ..aOS(2, _omitFieldNames ? '' : 'nodeId')
+    ..aI(3, _omitFieldNames ? '' : 'deviceIndex')
+    ..aOS(4, _omitFieldNames ? '' : 'deviceName')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  PatchDeviceAssign clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  PatchDeviceAssign copyWith(void Function(PatchDeviceAssign) updates) =>
+      super.copyWith((message) => updates(message as PatchDeviceAssign))
+          as PatchDeviceAssign;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static PatchDeviceAssign create() => PatchDeviceAssign._();
+  @$core.override
+  PatchDeviceAssign createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static PatchDeviceAssign getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<PatchDeviceAssign>(create);
+  static PatchDeviceAssign? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get logicalOutputId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set logicalOutputId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasLogicalOutputId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearLogicalOutputId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get nodeId => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set nodeId($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasNodeId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearNodeId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.int get deviceIndex => $_getIZ(2);
+  @$pb.TagNumber(3)
+  set deviceIndex($core.int value) => $_setSignedInt32(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasDeviceIndex() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearDeviceIndex() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get deviceName => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set deviceName($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasDeviceName() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearDeviceName() => $_clearField(4);
 }
 
 class WatchShowExecutionRequest extends $pb.GeneratedMessage {

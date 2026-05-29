@@ -22,6 +22,7 @@ import '../design_system/domain_components/active_cue_monitor.dart';
 import '../design_system/domain_components/node_status_badge.dart';
 import '../design_system/domain_components/audio_cue_minibar.dart';
 import '../screens/nodes/node_management_panel.dart';
+import '../design_system/domain_components/patch_matrix.dart';
 import '../../domain/show.dart';
 import '../../domain/cue_params.dart';
 import '../../domain/playhead.dart';
@@ -922,35 +923,27 @@ class _MonitoringPanel extends StatelessWidget {
 
 // ── Bottom Tab Panel (expandable content) ────────────────────────────────────
 
-class _BottomTabPanel extends StatelessWidget {
+class _BottomTabPanel extends ConsumerWidget {
   final TabController controller;
   const _BottomTabPanel({required this.controller});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final domainState = ref.watch(showControlDomainProvider);
+    final notifier    = ref.read(showControlProvider.notifier);
+
     return TabBarView(
       controller: controller,
-      // Swipe disabled — tabs are toggled via the tab bar buttons.
       physics: const NeverScrollableScrollPhysics(),
-      children: const [
-        _PatchPlaceholder(),
-        _MediaPlaceholder(),
-        NodeManagementPanel(),
+      children: [
+        PatchMatrix(
+          config: domainState.patchConfig,
+          nodes: domainState.nodes,
+          onChanged: (updated) => notifier.updatePatchConfig(updated),
+        ),
+        const _MediaPlaceholder(),
+        const NodeManagementPanel(),
       ],
-    );
-  }
-}
-
-class _PatchPlaceholder extends StatelessWidget {
-  const _PatchPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Text(
-        'Patch-Matrix — Phase 4',
-        style: TextStyle(color: ScColors.textDim),
-      ),
     );
   }
 }

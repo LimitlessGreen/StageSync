@@ -4,10 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
 
 import '../grpc/stage_sync_client.dart';
-import '../grpc/generated/stagesync/v1/showcontrol.pb.dart';
+import '../grpc/generated/stagesync/v1/showcontrol.pb.dart' hide PatchConfig;
 import '../infrastructure/grpc/show_control_repository.dart' as repo;
 import '../domain/show.dart' as domain;
 import '../domain/node_status.dart';
+import '../domain/patch_config.dart';
 import '../session/clock_sync.dart';
 import 'session_provider.dart';
 
@@ -37,8 +38,10 @@ class ShowControlState {
   final Set<String> runningCueIds;
 
   /// Alle Nodes der Session mit aktuellem Health-Status.
-  /// Wird über den WatchNodeHealth-Stream befüllt.
   final List<NodeStatus> nodeStatuses;
+
+  /// Aktuelle Patch-Konfiguration (aus WatchShowDefinition-Stream).
+  final PatchConfig patchConfig;
 
   const ShowControlState({
     this.cueList,
@@ -51,6 +54,7 @@ class ShowControlState {
     this.pausedAtServerMs,
     this.runningCueIds = const {},
     this.nodeStatuses = const [],
+    this.patchConfig = PatchConfig.empty,
   });
 
   ShowControlState copyWith({
@@ -60,6 +64,7 @@ class ShowControlState {
     String? error,
     Set<String>? runningCueIds,
     List<NodeStatus>? nodeStatuses,
+    PatchConfig? patchConfig,
     Object? activeCue = _unset,
     Object? nextCue = _unset,
     Object? activeCueStartedServerMs = _unset,
@@ -74,6 +79,7 @@ class ShowControlState {
         error: error,
         runningCueIds: runningCueIds ?? this.runningCueIds,
         nodeStatuses: nodeStatuses ?? this.nodeStatuses,
+        patchConfig: patchConfig ?? this.patchConfig,
         activeCueStartedServerMs: identical(activeCueStartedServerMs, _unset)
             ? this.activeCueStartedServerMs
             : activeCueStartedServerMs as int?,
@@ -266,6 +272,18 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
     await initialize();
   }
 
+  /// Patch-Konfiguration auf dem Server aktualisieren.
+  Future<void> updatePatchConfig(PatchConfig config) async {
+    if (!_session.isInSession) return;
+    final req = UpdatePatchConfigRequest()
+      ..sessionId = _sessionId
+      ..token = _token
+      ..patchConfig = repo.ShowControlRepository.patchConfigToProto(config);
+    await StageSyncClient.instance.showControl.updatePatchConfig(req);
+    // Optimistic: Update kommt auch per WatchShowDefinition zurück.
+    state = state.copyWith(patchConfig: config);
+  }
+
   Future<void> updateCueList(CueList updated) async {
     if (!_session.isInSession) return;
     final req = UpdateCueListRequest()
@@ -296,10 +314,16 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
     if (seq != 0 && seq < _lastDefSeq) return;
     if (seq > _lastDefSeq) _lastDefSeq = seq;
 
-    // Beide Event-Typen (SNAPSHOT + CUE_LIST_CHANGED) liefern die neue CueList.
+    var newState = state;
     if (event.hasCueList()) {
-      state = state.copyWith(cueList: event.cueList);
+      newState = newState.copyWith(cueList: event.cueList);
     }
+    if (event.hasPatchConfig()) {
+      newState = newState.copyWith(
+        patchConfig: repo.ShowControlRepository.patchConfigFromProto(event.patchConfig),
+      );
+    }
+    if (newState != state) state = newState;
   }
 
   // ── Stream 2: Show-Execution ────────────────────────────────────────────────

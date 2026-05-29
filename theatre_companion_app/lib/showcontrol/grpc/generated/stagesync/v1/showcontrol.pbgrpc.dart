@@ -96,6 +96,14 @@ class ShowControlServiceClient extends $grpc.Client {
     return $createUnaryCall(_$resume, request, options: options);
   }
 
+  /// PatchConfig setzen (Master/Editor erforderlich)
+  $grpc.ResponseFuture<$0.PatchConfigResponse> updatePatchConfig(
+    $0.UpdatePatchConfigRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$updatePatchConfig, request, options: options);
+  }
+
   /// ── 4-Stream EventBus ────────────────────────────────────────────────────
   /// Stream 1: Show-Definition (CueList, Patch, Assets)
   $grpc.ResponseStream<$0.ShowDefinitionEvent> watchShowDefinition(
@@ -174,6 +182,11 @@ class ShowControlServiceClient extends $grpc.Client {
       '/stagesync.v1.ShowControlService/Resume',
       ($0.ResumeRequest value) => value.writeToBuffer(),
       $1.Empty.fromBuffer);
+  static final _$updatePatchConfig =
+      $grpc.ClientMethod<$0.UpdatePatchConfigRequest, $0.PatchConfigResponse>(
+          '/stagesync.v1.ShowControlService/UpdatePatchConfig',
+          ($0.UpdatePatchConfigRequest value) => value.writeToBuffer(),
+          $0.PatchConfigResponse.fromBuffer);
   static final _$watchShowDefinition =
       $grpc.ClientMethod<$0.WatchShowDefinitionRequest, $0.ShowDefinitionEvent>(
           '/stagesync.v1.ShowControlService/WatchShowDefinition',
@@ -258,6 +271,15 @@ abstract class ShowControlServiceBase extends $grpc.Service {
         false,
         ($core.List<$core.int> value) => $0.ResumeRequest.fromBuffer(value),
         ($1.Empty value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.UpdatePatchConfigRequest,
+            $0.PatchConfigResponse>(
+        'UpdatePatchConfig',
+        updatePatchConfig_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.UpdatePatchConfigRequest.fromBuffer(value),
+        ($0.PatchConfigResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.WatchShowDefinitionRequest,
             $0.ShowDefinitionEvent>(
         'WatchShowDefinition',
@@ -356,6 +378,15 @@ abstract class ShowControlServiceBase extends $grpc.Service {
 
   $async.Future<$1.Empty> resume(
       $grpc.ServiceCall call, $0.ResumeRequest request);
+
+  $async.Future<$0.PatchConfigResponse> updatePatchConfig_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.UpdatePatchConfigRequest> $request) async {
+    return updatePatchConfig($call, await $request);
+  }
+
+  $async.Future<$0.PatchConfigResponse> updatePatchConfig(
+      $grpc.ServiceCall call, $0.UpdatePatchConfigRequest request);
 
   $async.Stream<$0.ShowDefinitionEvent> watchShowDefinition_Pre(
       $grpc.ServiceCall $call,

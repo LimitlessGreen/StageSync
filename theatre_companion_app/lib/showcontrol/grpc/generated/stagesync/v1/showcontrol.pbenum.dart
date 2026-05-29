@@ -50,15 +50,19 @@ class ShowDefinitionEvent_DefinitionEventType extends $pb.ProtobufEnum {
   static const ShowDefinitionEvent_DefinitionEventType CUE_LIST_CHANGED =
       ShowDefinitionEvent_DefinitionEventType._(
           1, _omitEnumNames ? '' : 'CUE_LIST_CHANGED');
+  static const ShowDefinitionEvent_DefinitionEventType PATCH_CONFIG_CHANGED =
+      ShowDefinitionEvent_DefinitionEventType._(
+          2, _omitEnumNames ? '' : 'PATCH_CONFIG_CHANGED');
 
   static const $core.List<ShowDefinitionEvent_DefinitionEventType> values =
       <ShowDefinitionEvent_DefinitionEventType>[
     DEFINITION_SNAPSHOT,
     CUE_LIST_CHANGED,
+    PATCH_CONFIG_CHANGED,
   ];
 
   static final $core.List<ShowDefinitionEvent_DefinitionEventType?> _byValue =
-      $pb.ProtobufEnum.$_initByValueList(values, 1);
+      $pb.ProtobufEnum.$_initByValueList(values, 2);
   static ShowDefinitionEvent_DefinitionEventType? valueOf($core.int value) =>
       value < 0 || value >= _byValue.length ? null : _byValue[value];
 

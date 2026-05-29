@@ -11,9 +11,10 @@ import (
 
 // Store hält alle CueLists einer Session und die 4 Event-Broadcast-Kanäle.
 type Store struct {
-	mu       sync.RWMutex
-	cueLists map[string]*CueList // cueListID → CueList
-	activeID string
+	mu          sync.RWMutex
+	cueLists    map[string]*CueList // cueListID → CueList
+	activeID    string
+	patchConfig *pb.PatchConfig    // aktuelle Patch-Konfiguration
 
 	// Stream 1: Show-Definition (CueList-Änderungen)
 	defMu   sync.Mutex
@@ -166,6 +167,29 @@ func (s *Store) DeleteCue(cueListID, cueID string) bool {
 		OccurredAt: nowProto(),
 	})
 	return true
+}
+
+// ── PatchConfig ───────────────────────────────────────────────────────────────
+
+func (s *Store) GetPatchConfig() *pb.PatchConfig {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.patchConfig == nil {
+		return &pb.PatchConfig{}
+	}
+	return proto.Clone(s.patchConfig).(*pb.PatchConfig)
+}
+
+func (s *Store) SetPatchConfig(cfg *pb.PatchConfig) {
+	s.mu.Lock()
+	s.patchConfig = proto.Clone(cfg).(*pb.PatchConfig)
+	s.mu.Unlock()
+
+	s.broadcastDef(&pb.ShowDefinitionEvent{
+		Type:        pb.ShowDefinitionEvent_PATCH_CONFIG_CHANGED,
+		PatchConfig: proto.Clone(cfg).(*pb.PatchConfig),
+		OccurredAt:  nowProto(),
+	})
 }
 
 // ── Position Tracking ─────────────────────────────────────────────────────────

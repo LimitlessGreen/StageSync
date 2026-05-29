@@ -244,6 +244,18 @@ func (h *ShowControlHandler) Resume(ctx context.Context, req *pb.ResumeRequest) 
 	return &emptypb.Empty{}, nil
 }
 
+// ── PatchConfig RPC ───────────────────────────────────────────────────────────
+
+func (h *ShowControlHandler) UpdatePatchConfig(ctx context.Context, req *pb.UpdatePatchConfigRequest) (*pb.PatchConfigResponse, error) {
+	if err := h.authWrite(req.SessionId, req.Token); err != nil {
+		return nil, err
+	}
+	store := h.getOrCreateStore(req.SessionId)
+	store.SetPatchConfig(req.PatchConfig)
+	h.persistence.Save(req.SessionId, store)
+	return &pb.PatchConfigResponse{PatchConfig: store.GetPatchConfig()}, nil
+}
+
 // ── Stream 1: WatchShowDefinition ─────────────────────────────────────────────
 
 func (h *ShowControlHandler) WatchShowDefinition(req *pb.WatchShowDefinitionRequest, stream pb.ShowControlService_WatchShowDefinitionServer) error {
@@ -256,16 +268,18 @@ func (h *ShowControlHandler) WatchShowDefinition(req *pb.WatchShowDefinitionRequ
 	ch := store.SubscribeDef()
 	defer store.UnsubscribeDef(ch)
 
-	// Snapshot: aktuelle CueList senden.
+	// Snapshot: CueList + PatchConfig senden.
+	snap := &pb.ShowDefinitionEvent{
+		Type:        pb.ShowDefinitionEvent_DEFINITION_SNAPSHOT,
+		PatchConfig: store.GetPatchConfig(),
+		OccurredAt:  nowProto(),
+		Seq:         store.CurrentDefSeq(),
+	}
 	if cl, ok := store.GetCueList(""); ok {
-		if err := stream.Send(&pb.ShowDefinitionEvent{
-			Type:       pb.ShowDefinitionEvent_DEFINITION_SNAPSHOT,
-			CueList:    cl,
-			OccurredAt: nowProto(),
-			Seq:        store.CurrentDefSeq(),
-		}); err != nil {
-			return err
-		}
+		snap.CueList = cl
+	}
+	if err := stream.Send(snap); err != nil {
+		return err
 	}
 
 	for {
