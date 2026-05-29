@@ -611,12 +611,16 @@ Fester Master statt Leader-Election: Der Go-Server **ist** der Master. Geräte m
 - Test-Signal senden (bereits implementiert via `AudioTestSignalCommand`)
 - Node-Capabilities einsehen (bereits via `WatchNodes` / `NodeEvent.TYPE_CAPS_UPDATED`)
 
-**Optionaler Server-Audio-Node** (`--audio-node` Flag):
-- Go-Server startet internen AudioNode (via `oto`-Library oder CGO/miniaudio)
-- Direktzugriff auf MediaStore (kein HTTP/MediaSync nötig)
-- Registriert sich selbst als `NODE_TASK_AUDIO_OUTPUT` im internen Dispatcher
-- Geeignet für: Einzelplatz-Setups, Probe, kein ASIO-Bedarf
-- Für professionelle Multi-Output-Setups: weiterhin Flutter Audio Node empfohlen
+**Server-Audio-Node** (`--audio-node` Flag) — für **professionelle Shared-Setups**:
+- Go-Server startet internen AudioNode via `malgo` (Go-Bindings für miniaudio/CGO)
+- **ASIO Pflicht**: miniaudio unterstützt ASIO (Windows), CoreAudio (macOS), ALSA (Linux) — kein proprietäres SDK nötig; auf Windows WASAPI Exclusive Mode als ASIO-äquivalente Alternative
+- Direktzugriff auf MediaStore (kein HTTP/MediaSync nötig — Dateien liegen direkt auf dem Server)
+- Registriert sich als `NODE_TASK_AUDIO_OUTPUT` im internen Dispatcher
+- Software-Mixer: mehrere gleichzeitige Cues (Group-Cues) werden per Sample gemischt
+- **Remote Device-Wechsel**: Master kann `NodeConfigCommand.audio_device_index` senden → Engine wechselt Ausgabegerät live ohne Neustart
+- Device-Enumeration: Server gibt verfügbare Geräte via `NodeCapabilities.audio_devices` zurück
+- Server-Timestamp-Synchronisation: PLAY-Command enthält `start_unix_millis` → Engine berechnet Sample-Offset für frame-genauen Einsatz
+- **Typischer Einsatz**: Shared-Setup auf einem dedizierten Audio-Rechner im Netzwerk (kein separater Flutter-Client nötig); professionelle Theater-Installation mit festem ASIO-Interface
 
 **Risiken**: Rollenprüfung erfordert Token→NodeTask-Lookup in jedem Handler  
 **Nächste Schritte**: `NodeConfigCommand` ins Proto, Rollenprüfung in `showcontrol_handler.go`, Flutter-Handler
@@ -1160,6 +1164,20 @@ Jedes neue Feature und jeder bedeutende Refactoring-Schritt **muss** Tests mitli
 - Mock-Repositories mit mocktail; kein echter gRPC-Aufruf in Flutter-Unit-Tests.
 - Widget-Tests prüfen Zustände und Callbacks, nicht Pixel-Layouts.
 - Coverage-Ziel: Domain- und Infrastructure-Layer >80%; UI-Primitive >60%.
+
+---
+
+## Audio-Backend: Miniaudio (Stand 2026-05)
+
+Das Flutter-Audio-Backend wurde von `flutter_soloud` auf **miniaudio** via dart:ffi umgestellt:
+
+- **`MiniaudioEngine`** (`nodes/audio_node/miniaudio_engine.dart`): primäre Implementierung, plattformübergreifend (Windows WASAPI/ASIO, Android AAudio/OpenSL ES, Linux ALSA/PulseAudio, macOS/iOS CoreAudio).
+- **`AudioEngine`** (SoLoud): bleibt als Fallback im Codebase, wird nicht mehr aktiv genutzt.
+- **Native Wrapper**: `native/miniaudio_wrapper.c` + `native/miniaudio_wrapper.h` + `native/CMakeLists.txt`; Android unter `android/app/src/main/cpp/CMakeLists.txt`.
+- **`AbstractAudioEngine`**: gemeinsames Interface, macht AudioNodeService unit-testbar (kein echter Miniaudio-Call in Tests).
+- **ASIO**: optionales Compile-Flag `MA_ENABLE_ASIO` im CMake; Standard ist WASAPI Exclusive Mode auf Windows.
+
+**Konsequenz für den Plan**: Phase 4 (Audition-Capability, `auditionPlay()`) baut auf `AbstractAudioEngine.playWavBytesLocally()` — das Interface existiert, Miniaudio-Implementierung muss `audition_`-Handle-Präfix unterstützen (bereits spezifiziert, noch nicht verifiziert).
 
 ---
 
