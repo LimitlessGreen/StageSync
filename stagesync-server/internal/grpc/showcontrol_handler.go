@@ -16,12 +16,56 @@ import (
 	"stagesync-server/internal/showcontrol"
 )
 
+// commandDedup verhindert dass dasselbe Command (identische commandId) doppelt
+// ausgeführt wird. TTL = 60 s — nach Ablauf ist eine Re-Execution erlaubt.
+type commandDedup struct {
+	mu      sync.Mutex
+	seen    map[string]time.Time // commandId → Zeit des ersten Empfangs
+}
+
+func newCommandDedup() *commandDedup {
+	d := &commandDedup{seen: make(map[string]time.Time)}
+	go d.cleanupLoop()
+	return d
+}
+
+// checkAndMark gibt true zurück wenn das commandId BEREITS gesehen wurde (Duplikat).
+// Registriert das commandId beim ersten Aufruf.
+func (d *commandDedup) checkAndMark(commandID string) bool {
+	if commandID == "" {
+		return false // kein commandId → keine Dedup
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if _, exists := d.seen[commandID]; exists {
+		return true // Duplikat
+	}
+	d.seen[commandID] = time.Now()
+	return false
+}
+
+func (d *commandDedup) cleanupLoop() {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		d.mu.Lock()
+		cutoff := time.Now().Add(-60 * time.Second)
+		for id, t := range d.seen {
+			if t.Before(cutoff) {
+				delete(d.seen, id)
+			}
+		}
+		d.mu.Unlock()
+	}
+}
+
 // ShowControlHandler verwaltet CueLists und die ShowEngine pro Session.
 type ShowControlHandler struct {
 	pb.UnimplementedShowControlServiceServer
 	sessionMgr  *session.Manager
 	dispatcher  *node.Dispatcher
 	persistence *showcontrol.Persistence
+	dedup       *commandDedup
 
 	mu      sync.RWMutex
 	stores  map[string]*showcontrol.Store  // sessionID → Store
@@ -33,6 +77,7 @@ func NewShowControlHandler(mgr *session.Manager, disp *node.Dispatcher, persist 
 		sessionMgr:  mgr,
 		dispatcher:  disp,
 		persistence: persist,
+		dedup:       newCommandDedup(),
 		stores:      make(map[string]*showcontrol.Store),
 		engines:     make(map[string]*showcontrol.Engine),
 	}
@@ -68,6 +113,25 @@ func (h *ShowControlHandler) auth(sessionID, token string) error {
 	return nil
 }
 
+// authWrite prüft Authentifizierung UND dass die Node MASTER- oder EDITOR-Rechte hat.
+// Nur Nodes mit diesen Tasks dürfen Transport-Commands (GO/STOP/PAUSE) senden.
+func (h *ShowControlHandler) authWrite(sessionID, token string) error {
+	sess, nodeID, err := h.sessionMgr.ValidateToken(sessionID, token)
+	if err != nil {
+		return status.Error(codes.Unauthenticated, err.Error())
+	}
+	node, ok := sess.GetNode(nodeID)
+	if !ok {
+		return status.Error(codes.Unauthenticated, "node not found in session")
+	}
+	for _, t := range node.Info.Tasks {
+		if t == pb.NodeTask_NODE_TASK_MASTER || t == pb.NodeTask_NODE_TASK_EDITOR {
+			return nil
+		}
+	}
+	return status.Error(codes.PermissionDenied, "only MASTER or EDITOR nodes may send transport commands")
+}
+
 func (h *ShowControlHandler) GetCueList(ctx context.Context, req *pb.GetCueListRequest) (*pb.CueListResponse, error) {
 	if err := h.auth(req.SessionId, req.Token); err != nil {
 		return nil, err
@@ -81,7 +145,7 @@ func (h *ShowControlHandler) GetCueList(ctx context.Context, req *pb.GetCueListR
 }
 
 func (h *ShowControlHandler) UpdateCueList(ctx context.Context, req *pb.UpdateCueListRequest) (*pb.CueListResponse, error) {
-	if err := h.auth(req.SessionId, req.Token); err != nil {
+	if err := h.authWrite(req.SessionId, req.Token); err != nil {
 		return nil, err
 	}
 	store := h.getOrCreateStore(req.SessionId)
@@ -91,7 +155,7 @@ func (h *ShowControlHandler) UpdateCueList(ctx context.Context, req *pb.UpdateCu
 }
 
 func (h *ShowControlHandler) UpsertCue(ctx context.Context, req *pb.UpsertCueRequest) (*pb.CueResponse, error) {
-	if err := h.auth(req.SessionId, req.Token); err != nil {
+	if err := h.authWrite(req.SessionId, req.Token); err != nil {
 		return nil, err
 	}
 	store := h.getOrCreateStore(req.SessionId)
@@ -104,7 +168,7 @@ func (h *ShowControlHandler) UpsertCue(ctx context.Context, req *pb.UpsertCueReq
 }
 
 func (h *ShowControlHandler) DeleteCue(ctx context.Context, req *pb.DeleteCueRequest) (*emptypb.Empty, error) {
-	if err := h.auth(req.SessionId, req.Token); err != nil {
+	if err := h.authWrite(req.SessionId, req.Token); err != nil {
 		return nil, err
 	}
 	store := h.getOrCreateStore(req.SessionId)
@@ -116,8 +180,12 @@ func (h *ShowControlHandler) DeleteCue(ctx context.Context, req *pb.DeleteCueReq
 }
 
 func (h *ShowControlHandler) Go(ctx context.Context, req *pb.GoRequest) (*pb.GoResponse, error) {
-	if err := h.auth(req.SessionId, req.Token); err != nil {
+	if err := h.authWrite(req.SessionId, req.Token); err != nil {
 		return nil, err
+	}
+	if h.dedup.checkAndMark(req.CommandId) {
+		// Duplikat: selbes Command bereits verarbeitet → idempotente Antwort
+		return &pb.GoResponse{}, nil
 	}
 	h.getOrCreateStore(req.SessionId)
 	engine, ok := h.getEngine(req.SessionId)
@@ -136,8 +204,11 @@ func (h *ShowControlHandler) Go(ctx context.Context, req *pb.GoRequest) (*pb.GoR
 }
 
 func (h *ShowControlHandler) Stop(ctx context.Context, req *pb.StopRequest) (*emptypb.Empty, error) {
-	if err := h.auth(req.SessionId, req.Token); err != nil {
+	if err := h.authWrite(req.SessionId, req.Token); err != nil {
 		return nil, err
+	}
+	if h.dedup.checkAndMark(req.CommandId) {
+		return &emptypb.Empty{}, nil
 	}
 	if engine, ok := h.getEngine(req.SessionId); ok {
 		_ = engine.Stop(ctx)
@@ -146,8 +217,11 @@ func (h *ShowControlHandler) Stop(ctx context.Context, req *pb.StopRequest) (*em
 }
 
 func (h *ShowControlHandler) Pause(ctx context.Context, req *pb.PauseRequest) (*emptypb.Empty, error) {
-	if err := h.auth(req.SessionId, req.Token); err != nil {
+	if err := h.authWrite(req.SessionId, req.Token); err != nil {
 		return nil, err
+	}
+	if h.dedup.checkAndMark(req.CommandId) {
+		return &emptypb.Empty{}, nil
 	}
 	if engine, ok := h.getEngine(req.SessionId); ok {
 		_ = engine.Pause(ctx)
@@ -156,8 +230,11 @@ func (h *ShowControlHandler) Pause(ctx context.Context, req *pb.PauseRequest) (*
 }
 
 func (h *ShowControlHandler) Resume(ctx context.Context, req *pb.ResumeRequest) (*emptypb.Empty, error) {
-	if err := h.auth(req.SessionId, req.Token); err != nil {
+	if err := h.authWrite(req.SessionId, req.Token); err != nil {
 		return nil, err
+	}
+	if h.dedup.checkAndMark(req.CommandId) {
+		return &emptypb.Empty{}, nil
 	}
 	if engine, ok := h.getEngine(req.SessionId); ok {
 		_ = engine.Resume(ctx)
@@ -222,12 +299,13 @@ func (h *ShowControlHandler) snapshotEvents(store *showcontrol.Store, engine *sh
 		ts := engine.TransportSnapshot()
 		if ts.Running && ts.ActiveCue != nil {
 			out = append(out, &pb.ShowStateEvent{
-				Type:        pb.ShowStateEvent_TYPE_CUE_STARTED,
-				AffectedCue: ts.ActiveCue,
-				NodeId:      nodeID,
-				OccurredAt:  &pb.Timestamp{UnixMillis: ts.CueStartedAtMs},
-				IsPaused:    ts.Paused,
-				Seq:         seq,
+				Type:           pb.ShowStateEvent_TYPE_CUE_STARTED,
+				AffectedCue:    ts.ActiveCue,
+				NodeId:         nodeID,
+				OccurredAt:     &pb.Timestamp{UnixMillis: ts.CueStartedAtMs},
+				CueStartedAtMs: ts.CueStartedAtMs,
+				IsPaused:       ts.Paused,
+				Seq:            seq,
 			})
 			if ts.Paused {
 				out = append(out, &pb.ShowStateEvent{

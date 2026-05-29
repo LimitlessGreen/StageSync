@@ -37,6 +37,7 @@ type Engine struct {
 	// Transport-Tracking für konsistente verstrichene Zeit über alle Geräte.
 	cueStartedAt  time.Time     // Serverzeit, zu der die aktive Cue gestartet ist
 	pausedElapsed time.Duration // bei Pause: bereits verstrichene Zeit
+	pausedAt      time.Time     // absoluter Pausezeitpunkt (für genauen Snapshot)
 }
 
 func NewEngine(sessionID, cueListID string, store *Store, dispatcher NodeDispatcher) *Engine {
@@ -67,10 +68,10 @@ func (e *Engine) TransportSnapshot() TransportSnapshot {
 		Running:   e.running,
 		Paused:    e.paused,
 	}
-	now := time.Now()
 	if e.paused {
-		ts.CueStartedAtMs = now.Add(-e.pausedElapsed).UnixMilli()
-		ts.PausedAtMs = now.UnixMilli()
+		// Effektive Startzeit = Pausezeitpunkt minus bereits vergangene Zeit.
+		ts.CueStartedAtMs = e.pausedAt.Add(-e.pausedElapsed).UnixMilli()
+		ts.PausedAtMs = e.pausedAt.UnixMilli()
 	} else if !e.cueStartedAt.IsZero() {
 		ts.CueStartedAtMs = e.cueStartedAt.UnixMilli()
 	}
@@ -147,18 +148,23 @@ func (e *Engine) Stop(ctx context.Context) error {
 	}
 	e.running = false
 	e.paused = false
+	e.cueStartedAt = time.Time{}
+	e.pausedElapsed = 0
+	e.pausedAt = time.Time{}
 	activeCue := e.store.GetActiveCue(e.cueListID)
+	// Aktive Cue in Store löschen, damit Reconnect-Snapshots korrekt sind.
+	e.store.SetActiveCue(e.cueListID, "")
 	e.mu.Unlock()
 
-	// AudioStop an alle Audio-Nodes senden
-	if activeCue != nil && e.dispatcher != nil {
+	// AudioStop an alle Audio-Nodes senden (leere CueId = alle stoppen).
+	if e.dispatcher != nil {
 		stopCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 		_ = e.dispatcher.DispatchToTask(stopCtx, pb.NodeTask_NODE_TASK_AUDIO_OUTPUT, &pb.NodeCommandRequest{
 			SessionId: e.sessionID,
 			Command: &pb.NodeCommandRequest_AudioStop{
 				AudioStop: &pb.AudioStopCommand{
-					CueId:     activeCue.CueId,
+					CueId:     "",
 					FadeOutMs: 300,
 				},
 			},
@@ -166,8 +172,9 @@ func (e *Engine) Stop(ctx context.Context) error {
 	}
 
 	e.store.broadcast(&pb.ShowStateEvent{
-		Type:       pb.ShowStateEvent_TYPE_CUE_STOPPED,
-		OccurredAt: nowProto(),
+		Type:        pb.ShowStateEvent_TYPE_CUE_STOPPED,
+		AffectedCue: activeCue, // nil-safe: proto omits nil fields
+		OccurredAt:  nowProto(),
 	})
 	return nil
 }
@@ -191,11 +198,13 @@ func (e *Engine) Pause(ctx context.Context) error {
 		e.cancelFn = nil
 	}
 	e.paused = true
+	e.pausedAt = time.Now()
 	// Bereits verstrichene Zeit festhalten, damit Resume korrekt fortsetzt.
 	if !e.cueStartedAt.IsZero() {
 		e.pausedElapsed = time.Since(e.cueStartedAt)
 	}
 	activeCue := e.store.GetActiveCue(e.cueListID)
+	pausedAt := e.pausedAt
 	e.mu.Unlock()
 
 	// Audio auf allen Nodes anhalten (nicht stoppen) — mit kurzem Fade.
@@ -214,8 +223,9 @@ func (e *Engine) Pause(ctx context.Context) error {
 	}
 
 	e.store.broadcast(&pb.ShowStateEvent{
-		Type:       pb.ShowStateEvent_TYPE_CUE_PAUSED,
-		OccurredAt: nowProto(),
+		Type:        pb.ShowStateEvent_TYPE_CUE_PAUSED,
+		AffectedCue: activeCue,
+		OccurredAt:  &pb.Timestamp{UnixMillis: pausedAt.UnixMilli()},
 	})
 	return nil
 }
@@ -284,11 +294,13 @@ func (e *Engine) dispatchCue(ctx context.Context, cue *pb.Cue) {
 	e.mu.Lock()
 	e.cueStartedAt = startedAt
 	e.pausedElapsed = 0
+	e.pausedAt = time.Time{}
 	e.mu.Unlock()
 	e.store.broadcast(&pb.ShowStateEvent{
-		Type:        pb.ShowStateEvent_TYPE_CUE_STARTED,
-		AffectedCue: cue,
-		OccurredAt:  &pb.Timestamp{UnixMillis: startedAt.UnixMilli()},
+		Type:             pb.ShowStateEvent_TYPE_CUE_STARTED,
+		AffectedCue:      cue,
+		OccurredAt:       &pb.Timestamp{UnixMillis: startedAt.UnixMilli()},
+		CueStartedAtMs:   startedAt.UnixMilli(),
 	})
 
 	switch cue.CueType {
@@ -332,8 +344,6 @@ func (e *Engine) dispatchCue(ctx context.Context, cue *pb.Cue) {
 				return
 			}
 		}
-		e.mu.Lock()
-		e.mu.Unlock()
 		_, _, _ = e.Go(ctx, "")
 	}
 }
@@ -370,18 +380,26 @@ func (e *Engine) dispatchAudio(ctx context.Context, cue *pb.Cue) error {
 		})
 	}
 
-	// 2. Sofort feuern: StartUnixMillis = 0 → der Node spielt unmittelbar bei
-	// Empfang ab (kein Zeitstempel-Warten). Niedrigste Latenz, QLab-artig.
-	// Mehrere Nodes erhalten das Signal quasi gleichzeitig (LAN-Zustellung).
+	// 2. Play mit Server-Startzeit: Node berechnet via ClockSync ob er leicht
+	// überspringen muss (Netzwerklatenz-Kompensation). StartUnixMillis = 0
+	// wäre sofort, aber für Mehrfach-Node-Sync brauchen alle denselben Anker.
+	e.mu.Lock()
+	startMs := e.cueStartedAt.UnixMilli()
+	e.mu.Unlock()
+
 	return dispatch(&pb.NodeCommandRequest{
 		SessionId:    e.sessionID,
 		TargetNodeId: cue.TargetNodeId,
 		Command: &pb.NodeCommandRequest_AudioPlay{
 			AudioPlay: &pb.AudioPlayCommand{
 				CueId:           cue.CueId,
-				StartUnixMillis: 0,
+				StartUnixMillis: startMs,
 				VolumeDb:        params.Audio.VolumeDb,
 				FadeInMs:        params.Audio.FadeInMs,
+				FadeOutMs:       params.Audio.FadeOutMs,
+				Loop:            params.Audio.Loop,
+				StartTimeMs:     params.Audio.StartTimeMs,
+				EndTimeMs:       params.Audio.EndTimeMs,
 			},
 		},
 	})

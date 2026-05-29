@@ -156,6 +156,7 @@ message GoRequest {
   string session_id  = 1;
   string token       = 2;
   string cue_id      = 3; // leer = nächste Cue
+  string command_id  = 4; // UUID — Server dedupliziert für 60 s
 }
 
 message GoResponse {
@@ -166,16 +167,19 @@ message GoResponse {
 message StopRequest {
   string session_id = 1;
   string token      = 2;
+  string command_id = 3;
 }
 
 message PauseRequest {
   string session_id = 1;
   string token      = 2;
+  string command_id = 3;
 }
 
 message ResumeRequest {
   string session_id = 1;
   string token      = 2;
+  string command_id = 3;
 }
 
 message WatchShowStateRequest {
@@ -186,21 +190,25 @@ message WatchShowStateRequest {
 
 message ShowStateEvent {
   enum Type {
-    TYPE_UNSPECIFIED   = 0;
-    TYPE_CUE_STARTED   = 1;
-    TYPE_CUE_STOPPED   = 2;
-    TYPE_CUE_PAUSED    = 3;
-    TYPE_CUE_DONE      = 4;
-    TYPE_CUE_ERROR     = 5;
-    TYPE_LIST_UPDATED  = 6;
+    TYPE_UNSPECIFIED      = 0;
+    TYPE_CUE_STARTED      = 1;
+    TYPE_CUE_STOPPED      = 2;
+    TYPE_CUE_PAUSED       = 3;
+    TYPE_CUE_DONE         = 4;
+    TYPE_CUE_ERROR        = 5;
+    TYPE_LIST_UPDATED     = 6;
     TYPE_POSITION_CHANGED = 7;
   }
-  Type      type         = 1;
-  CueList   cue_list     = 2;
-  Cue       affected_cue = 3;
-  string    node_id      = 4; // welcher Node meldet
-  Timestamp occurred_at  = 5;
-  string    error_msg    = 6;
-  int64     seq          = 7; // monoton steigend pro Session → Reihenfolge/Stale-Erkennung
-  bool      is_paused    = 8; // Transport-Status im Snapshot
+  Type      type              = 1;
+  CueList   cue_list          = 2;
+  Cue       affected_cue      = 3;
+  string    node_id           = 4; // welcher Node meldet
+  Timestamp occurred_at       = 5;
+  string    error_msg         = 6;
+  int64     seq               = 7; // monoton steigend pro Session
+  bool      is_paused         = 8; // Transport-Status im Snapshot
+  // Explizite Startzeit der aktiven Cue in Server-Unix-Millis.
+  // Bei TYPE_CUE_STARTED und Snapshot-Events gesetzt.
+  // Clients nutzen diesen Wert + ClockSync für korrekte Elapsed-Berechnung.
+  int64     cue_started_at_ms = 9;
 }

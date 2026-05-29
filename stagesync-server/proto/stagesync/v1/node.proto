@@ -66,8 +66,10 @@ message MaCapabilities {
 }
 
 message NodeCapabilities {
-  AudioCapabilities audio = 1; // gesetzt wenn Node AUDIO_OUTPUT-Task hat
-  MaCapabilities    ma    = 2; // gesetzt wenn Node MA_OSC-Task hat
+  AudioCapabilities audio              = 1; // gesetzt wenn Node AUDIO_OUTPUT-Task hat
+  MaCapabilities    ma                 = 2; // gesetzt wenn Node MA_OSC-Task hat
+  bool              audition_supported = 3; // Node kann lokalen Audition-Preview
+  string            audition_device    = 4; // Name des Audition-Geräts (z.B. "Headphones")
 }
 
 // ── Messages ──────────────────────────────────────────────────────────────────
@@ -141,14 +143,27 @@ message NodeCommandRequest {
   string   target_node_id = 3; // direkte NodeID (leer = task-basiert)
   NodeTask target_task    = 8; // task-basiertes Routing (wenn target_node_id leer)
   oneof command {
-    AudioPreloadCommand  audio_preload  = 4;
-    AudioPlayCommand     audio_play     = 5;
-    AudioStopCommand     audio_stop     = 6;
-    MaOscCommand         ma_osc         = 7;
-    AudioPauseCommand    audio_pause    = 9;  // Voice anhalten (nicht stoppen)
-    AudioResumeCommand   audio_resume   = 10; // angehaltene Voice fortsetzen
-    AudioTestSignalCommand audio_test   = 11; // Node generiert Testton/-sweep selbst
+    AudioPreloadCommand    audio_preload  = 4;
+    AudioPlayCommand       audio_play     = 5;
+    AudioStopCommand       audio_stop     = 6;
+    MaOscCommand           ma_osc         = 7;
+    AudioPauseCommand      audio_pause    = 9;
+    AudioResumeCommand     audio_resume   = 10;
+    AudioTestSignalCommand audio_test     = 11;
+    NodeConfigCommand      node_config    = 12; // Master → Node: Konfiguration ändern
   }
+}
+
+// Konfigurationsbefehl vom Master an einen Node.
+// Ermöglicht Remote-Verwaltung ohne Node neu starten zu müssen.
+message NodeConfigCommand {
+  // Audio-Ausgabegerät setzen. -1 = System-Default.
+  int32  audio_device_index = 1;
+  string audio_device_name  = 2; // nur für UI-Anzeige
+
+  // Netzwerk-Interface des Media-Servers setzen (IP-Adresse).
+  // Leer = keine Änderung.
+  string network_interface_address = 3;
 }
 
 // SendNodeCommandRequest: Master/Client sendet Command an einen Node
@@ -165,10 +180,14 @@ message AudioPreloadCommand {
 }
 
 message AudioPlayCommand {
-  string cue_id          = 1;
-  int64  start_unix_millis = 2; // Synchronisierter Startzeitpunkt
-  double volume_db        = 3;
-  double fade_in_ms       = 4;
+  string cue_id            = 1;
+  int64  start_unix_millis = 2; // Synchronisierter Startzeitpunkt (0 = sofort)
+  double volume_db         = 3;
+  double fade_in_ms        = 4;
+  double fade_out_ms       = 5; // Fade-Out beim natürlichen Ende (0 = hart)
+  bool   loop              = 6;
+  double start_time_ms     = 7; // Seek-Punkt in der Datei (0 = Anfang)
+  double end_time_ms       = 8; // 0 = bis zum Ende der Datei
 }
 
 message AudioStopCommand {
