@@ -375,10 +375,12 @@ func parseWAV(path string) *AudioInfo {
 		}
 	}
 
-	return &AudioInfo{
+	info := &AudioInfo{
 		DurationMs: durationMs,
 		Channels:   channels,
 		SampleRate: sampleRate,
 		BitDepth:   bitDepth,
 	}
+	info.LoudnessLufs = measureLoudnessWAV(path)
+	return info
 }
