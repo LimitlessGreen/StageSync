@@ -4,6 +4,7 @@ import '../domain/show.dart';
 import '../domain/playhead.dart';
 import '../domain/node_status.dart';
 import '../domain/patch_config.dart';
+import '../domain/cue_params.dart';
 import '../infrastructure/grpc/show_control_repository.dart';
 import 'show_control_provider.dart';
 import 'session_provider.dart';
@@ -84,6 +85,40 @@ final domainCueListProvider = Provider<CueList?>((ref) {
 /// Convenience: node statuses.
 final nodeStatusListProvider = Provider<List<NodeStatus>>((ref) {
   return ref.watch(showControlDomainProvider).nodes;
+});
+
+/// Set of assetIds that are fully "patched":
+/// the cue referencing the asset has a logicalOutputId that maps via PatchConfig
+/// to at least one currently online node.
+///
+/// Used by the Inspector and CueListRow to show [AssetReadiness.patched].
+/// Computed client-side — the server has all this info too, but we have it here.
+final patchedAssetIdsProvider = Provider<Set<String>>((ref) {
+  final domain = ref.watch(showControlDomainProvider);
+  final cueList = domain.cueList;
+  final patch   = domain.patchConfig;
+  final nodes   = domain.nodes;
+
+  if (cueList == null || patch.nodePatches.isEmpty) return const {};
+
+  final onlineIds = nodes.where((n) => n.isOnline).map((n) => n.nodeId).toSet();
+  final patched = <String>{};
+
+  for (final cue in cueList.cues) {
+    final params = cue.params;
+    if (params is! AudioParams) continue;
+    final assetId = params.assetId;
+    if (assetId.isEmpty) continue;
+
+    final logicalOutputId = cue.logicalOutputId;
+    if (logicalOutputId == null || logicalOutputId.isEmpty) continue;
+
+    final routed = patch.nodesForOutput(logicalOutputId);
+    if (routed.any(onlineIds.contains)) {
+      patched.add(assetId);
+    }
+  }
+  return patched;
 });
 
 // ── Private helpers ────────────────────────────────────────────────────────────

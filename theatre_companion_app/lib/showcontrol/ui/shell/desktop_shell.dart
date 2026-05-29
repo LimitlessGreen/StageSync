@@ -25,6 +25,7 @@ import '../design_system/domain_components/node_status_badge.dart';
 import '../design_system/domain_components/audio_cue_minibar.dart';
 import '../screens/nodes/node_management_panel.dart';
 import '../screens/media/media_manager_screen.dart';
+import '../screens/audio/local_audio_panel.dart';
 import '../design_system/domain_components/patch_matrix.dart';
 import '../../domain/show.dart';
 import '../../domain/cue_params.dart';
@@ -47,7 +48,7 @@ class _DesktopShellState extends ConsumerState<DesktopShell>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(showControlProvider.notifier).initialize();
       _handleAutoReconnectNodeStart();
@@ -700,7 +701,7 @@ class _AudioParamsEditor extends ConsumerWidget {
     final audioNotifier = ref.read(audioNodeProvider.notifier);
     final isAudioConnected =
         ref.watch(audioNodeProvider).state == AudioNodeState.connected;
-    final asset = ref.watch(assetLookupProvider(params.assetId));
+    final asset = ref.watch(assetWithReadinessProvider(params.assetId));
 
     return _Section(title: 'AUDIO', children: [
       // Asset-Readiness Badge
@@ -953,6 +954,7 @@ class _BottomTabPanel extends ConsumerWidget {
         ),
         const MediaManagerScreen(),
         const NodeManagementPanel(),
+        const LocalAudioPanel(),
       ],
     );
   }
@@ -984,9 +986,10 @@ class _BottomBar extends StatelessWidget {
             tabAlignment: TabAlignment.start,
             onTap: onTabTap,
             tabs: const [
-              Tab(text: 'PATCH', height: 36),
-              Tab(text: 'MEDIA', height: 36),
-              Tab(text: 'NODES', height: 36),
+              Tab(text: 'PATCH',  height: 36),
+              Tab(text: 'MEDIA',  height: 36),
+              Tab(text: 'NODES',  height: 36),
+              Tab(text: 'AUDIO',  height: 36),
             ],
           ),
           const Spacer(),

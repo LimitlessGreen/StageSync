@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/asset.dart';
 import '../media/server_media_client.dart';
+import 'show_control_domain_provider.dart';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
@@ -68,6 +69,35 @@ final mediaProvider =
 final assetLookupProvider = Provider.family<Asset?, String>((ref, idOrName) {
   final state = ref.watch(mediaProvider);
   return state.assetById(idOrName) ?? state.assetByName(idOrName);
+});
+
+/// Like [assetLookupProvider] but elevates [AssetReadiness] to [patched]
+/// when the asset's id is in [patchedAssetIdsProvider].
+/// Use this in the inspector and cue editor so the UI reflects the true status.
+final assetWithReadinessProvider =
+    Provider.family<Asset?, String>((ref, idOrName) {
+  final asset = ref.watch(assetLookupProvider(idOrName));
+  if (asset == null) return null;
+  final isPatchedId = ref.watch(patchedAssetIdsProvider).contains(asset.id);
+  if (!isPatchedId) return asset;
+  return asset.readiness == AssetReadiness.patched
+      ? asset
+      : asset.copyWith(readiness: AssetReadiness.patched);
+});
+
+/// Full asset list with [AssetReadiness] correctly elevated for patched assets.
+/// Use this in the MediaManagerScreen so the Readiness column is accurate.
+final enrichedAssetsProvider = Provider<List<Asset>>((ref) {
+  final assets  = ref.watch(mediaProvider).assets;
+  final patched = ref.watch(patchedAssetIdsProvider);
+  if (patched.isEmpty) return assets;
+  return [
+    for (final a in assets)
+      if (patched.contains(a.id) && a.readiness != AssetReadiness.patched)
+        a.copyWith(readiness: AssetReadiness.patched)
+      else
+        a,
+  ];
 });
 
 // ── Notifier ──────────────────────────────────────────────────────────────────

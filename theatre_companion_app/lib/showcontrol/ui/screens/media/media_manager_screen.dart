@@ -52,7 +52,8 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final state = ref.watch(mediaProvider);
+    final state  = ref.watch(mediaProvider);
+    final assets = ref.watch(enrichedAssetsProvider);
 
     return Column(
       children: [
@@ -71,12 +72,12 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
           _ErrorBanner(message: state.uploadError!, type: _BannerType.warn),
         // ── Content ───────────────────────────────────────────────────────
         Expanded(
-          child: state.isLoading && state.assets.isEmpty
+          child: state.isLoading && assets.isEmpty
               ? const Center(child: CircularProgressIndicator(color: ScColors.active))
-              : state.assets.isEmpty
+              : assets.isEmpty
                   ? _EmptyState(onUpload: _pickAndUpload)
                   : _AssetTable(
-                      assets: state.assets,
+                      assets: assets,
                       isUploading: state.isUploading,
                       onDelete: (name) =>
                           ref.read(mediaProvider.notifier).delete(name),
