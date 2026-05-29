@@ -3,23 +3,23 @@ import 'package:flutter/material.dart';
 import '../../../domain/cue_params.dart';
 
 /// Zeigt ein Popup-Menü zur Auswahl des Cue-Typs.
+/// [buttonBottomLeft] ist die globale Position der unteren linken Ecke des Buttons.
 /// Gibt null zurück wenn der User abbricht.
 Future<CueParams?> showCueTypePicker(
   BuildContext context,
-  Offset nearPosition,
+  Offset buttonBottomLeft,
 ) async {
-  final screenSize = MediaQuery.sizeOf(context);
+  final overlay = Navigator.of(context).overlay!.context.findRenderObject() as RenderBox;
+  final position = RelativeRect.fromRect(
+    Rect.fromLTWH(buttonBottomLeft.dx, buttonBottomLeft.dy, 0, 0),
+    Offset.zero & overlay.size,
+  );
   final result = await showMenu<String>(
     context: context,
     color: const Color(0xFF1E1E1E),
     elevation: 8,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-    position: RelativeRect.fromLTRB(
-      nearPosition.dx - 160,
-      nearPosition.dy,
-      screenSize.width - nearPosition.dx,
-      screenSize.height - nearPosition.dy,
-    ),
+    position: position,
     items: [
       cueTypeMenuItem('audio', Icons.volume_up,            'Audio', 'Audiodatei abspielen'),
       cueTypeMenuItem('wait',  Icons.timer_outlined,        'Wait',  'Pause / Timer'),
