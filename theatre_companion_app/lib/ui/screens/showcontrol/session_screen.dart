@@ -11,7 +11,6 @@ import '../../../showcontrol/providers/ma_node_provider.dart';
 import '../../../showcontrol/providers/session_provider.dart';
 import '../../../showcontrol/session/session_service.dart';
 import '../../../showcontrol/ui/shell/sc_adaptive_shell.dart';
-import 'go_screen.dart';
 
 class SessionScreen extends ConsumerStatefulWidget {
   const SessionScreen({super.key});
@@ -78,8 +77,7 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
     }
 
     if (sessionState.isInSession) {
-      final isDesktop = MediaQuery.sizeOf(context).width > 900;
-      return isDesktop ? const ScAdaptiveShell() : const GoScreen();
+      return const ScAdaptiveShell();
     }
 
     return Scaffold(
