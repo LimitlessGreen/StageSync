@@ -370,13 +370,15 @@ const GoRequest$json = {
     {'1': 'session_id', '3': 1, '4': 1, '5': 9, '10': 'sessionId'},
     {'1': 'token', '3': 2, '4': 1, '5': 9, '10': 'token'},
     {'1': 'cue_id', '3': 3, '4': 1, '5': 9, '10': 'cueId'},
+    {'1': 'command_id', '3': 4, '4': 1, '5': 9, '10': 'commandId'},
   ],
 };
 
 /// Descriptor for `GoRequest`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List goRequestDescriptor = $convert.base64Decode(
     'CglHb1JlcXVlc3QSHQoKc2Vzc2lvbl9pZBgBIAEoCVIJc2Vzc2lvbklkEhQKBXRva2VuGAIgAS'
-    'gJUgV0b2tlbhIVCgZjdWVfaWQYAyABKAlSBWN1ZUlk');
+    'gJUgV0b2tlbhIVCgZjdWVfaWQYAyABKAlSBWN1ZUlkEh0KCmNvbW1hbmRfaWQYBCABKAlSCWNv'
+    'bW1hbmRJZA==');
 
 @$core.Deprecated('Use goResponseDescriptor instead')
 const GoResponse$json = {
@@ -413,13 +415,14 @@ const StopRequest$json = {
   '2': [
     {'1': 'session_id', '3': 1, '4': 1, '5': 9, '10': 'sessionId'},
     {'1': 'token', '3': 2, '4': 1, '5': 9, '10': 'token'},
+    {'1': 'command_id', '3': 3, '4': 1, '5': 9, '10': 'commandId'},
   ],
 };
 
 /// Descriptor for `StopRequest`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List stopRequestDescriptor = $convert.base64Decode(
     'CgtTdG9wUmVxdWVzdBIdCgpzZXNzaW9uX2lkGAEgASgJUglzZXNzaW9uSWQSFAoFdG9rZW4YAi'
-    'ABKAlSBXRva2Vu');
+    'ABKAlSBXRva2VuEh0KCmNvbW1hbmRfaWQYAyABKAlSCWNvbW1hbmRJZA==');
 
 @$core.Deprecated('Use pauseRequestDescriptor instead')
 const PauseRequest$json = {
@@ -427,13 +430,14 @@ const PauseRequest$json = {
   '2': [
     {'1': 'session_id', '3': 1, '4': 1, '5': 9, '10': 'sessionId'},
     {'1': 'token', '3': 2, '4': 1, '5': 9, '10': 'token'},
+    {'1': 'command_id', '3': 3, '4': 1, '5': 9, '10': 'commandId'},
   ],
 };
 
 /// Descriptor for `PauseRequest`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List pauseRequestDescriptor = $convert.base64Decode(
     'CgxQYXVzZVJlcXVlc3QSHQoKc2Vzc2lvbl9pZBgBIAEoCVIJc2Vzc2lvbklkEhQKBXRva2VuGA'
-    'IgASgJUgV0b2tlbg==');
+    'IgASgJUgV0b2tlbhIdCgpjb21tYW5kX2lkGAMgASgJUgljb21tYW5kSWQ=');
 
 @$core.Deprecated('Use resumeRequestDescriptor instead')
 const ResumeRequest$json = {
@@ -441,13 +445,14 @@ const ResumeRequest$json = {
   '2': [
     {'1': 'session_id', '3': 1, '4': 1, '5': 9, '10': 'sessionId'},
     {'1': 'token', '3': 2, '4': 1, '5': 9, '10': 'token'},
+    {'1': 'command_id', '3': 3, '4': 1, '5': 9, '10': 'commandId'},
   ],
 };
 
 /// Descriptor for `ResumeRequest`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List resumeRequestDescriptor = $convert.base64Decode(
     'Cg1SZXN1bWVSZXF1ZXN0Eh0KCnNlc3Npb25faWQYASABKAlSCXNlc3Npb25JZBIUCgV0b2tlbh'
-    'gCIAEoCVIFdG9rZW4=');
+    'gCIAEoCVIFdG9rZW4SHQoKY29tbWFuZF9pZBgDIAEoCVIJY29tbWFuZElk');
 
 @$core.Deprecated('Use watchShowStateRequestDescriptor instead')
 const WatchShowStateRequest$json = {
@@ -504,6 +509,7 @@ const ShowStateEvent$json = {
     {'1': 'error_msg', '3': 6, '4': 1, '5': 9, '10': 'errorMsg'},
     {'1': 'seq', '3': 7, '4': 1, '5': 3, '10': 'seq'},
     {'1': 'is_paused', '3': 8, '4': 1, '5': 8, '10': 'isPaused'},
+    {'1': 'cue_started_at_ms', '3': 9, '4': 1, '5': 3, '10': 'cueStartedAtMs'},
   ],
   '4': [ShowStateEvent_Type$json],
 };
@@ -531,7 +537,8 @@ final $typed_data.Uint8List showStateEventDescriptor = $convert.base64Decode(
     'ZlY3RlZEN1ZRIXCgdub2RlX2lkGAQgASgJUgZub2RlSWQSOAoLb2NjdXJyZWRfYXQYBSABKAsy'
     'Fy5zdGFnZXN5bmMudjEuVGltZXN0YW1wUgpvY2N1cnJlZEF0EhsKCWVycm9yX21zZxgGIAEoCV'
     'IIZXJyb3JNc2cSEAoDc2VxGAcgASgDUgNzZXESGwoJaXNfcGF1c2VkGAggASgIUghpc1BhdXNl'
-    'ZCK2AQoEVHlwZRIUChBUWVBFX1VOU1BFQ0lGSUVEEAASFAoQVFlQRV9DVUVfU1RBUlRFRBABEh'
-    'QKEFRZUEVfQ1VFX1NUT1BQRUQQAhITCg9UWVBFX0NVRV9QQVVTRUQQAxIRCg1UWVBFX0NVRV9E'
-    'T05FEAQSEgoOVFlQRV9DVUVfRVJST1IQBRIVChFUWVBFX0xJU1RfVVBEQVRFRBAGEhkKFVRZUE'
-    'VfUE9TSVRJT05fQ0hBTkdFRBAH');
+    'ZBIpChFjdWVfc3RhcnRlZF9hdF9tcxgJIAEoA1IOY3VlU3RhcnRlZEF0TXMitgEKBFR5cGUSFA'
+    'oQVFlQRV9VTlNQRUNJRklFRBAAEhQKEFRZUEVfQ1VFX1NUQVJURUQQARIUChBUWVBFX0NVRV9T'
+    'VE9QUEVEEAISEwoPVFlQRV9DVUVfUEFVU0VEEAMSEQoNVFlQRV9DVUVfRE9ORRAEEhIKDlRZUE'
+    'VfQ1VFX0VSUk9SEAUSFQoRVFlQRV9MSVNUX1VQREFURUQQBhIZChVUWVBFX1BPU0lUSU9OX0NI'
+    'QU5HRUQQBw==');

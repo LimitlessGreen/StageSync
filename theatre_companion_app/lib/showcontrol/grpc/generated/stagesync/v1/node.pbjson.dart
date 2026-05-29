@@ -130,6 +130,14 @@ const NodeCapabilities$json = {
       '6': '.stagesync.v1.MaCapabilities',
       '10': 'ma'
     },
+    {
+      '1': 'audition_supported',
+      '3': 3,
+      '4': 1,
+      '5': 8,
+      '10': 'auditionSupported'
+    },
+    {'1': 'audition_device', '3': 4, '4': 1, '5': 9, '10': 'auditionDevice'},
   ],
 };
 
@@ -137,7 +145,8 @@ const NodeCapabilities$json = {
 final $typed_data.Uint8List nodeCapabilitiesDescriptor = $convert.base64Decode(
     'ChBOb2RlQ2FwYWJpbGl0aWVzEjUKBWF1ZGlvGAEgASgLMh8uc3RhZ2VzeW5jLnYxLkF1ZGlvQ2'
     'FwYWJpbGl0aWVzUgVhdWRpbxIsCgJtYRgCIAEoCzIcLnN0YWdlc3luYy52MS5NYUNhcGFiaWxp'
-    'dGllc1ICbWE=');
+    'dGllc1ICbWESLQoSYXVkaXRpb25fc3VwcG9ydGVkGAMgASgIUhFhdWRpdGlvblN1cHBvcnRlZB'
+    'InCg9hdWRpdGlvbl9kZXZpY2UYBCABKAlSDmF1ZGl0aW9uRGV2aWNl');
 
 @$core.Deprecated('Use registerNodeRequestDescriptor instead')
 const RegisterNodeRequest$json = {
@@ -428,6 +437,15 @@ const NodeCommandRequest$json = {
       '9': 0,
       '10': 'audioTest'
     },
+    {
+      '1': 'node_config',
+      '3': 12,
+      '4': 1,
+      '5': 11,
+      '6': '.stagesync.v1.NodeConfigCommand',
+      '9': 0,
+      '10': 'nodeConfig'
+    },
   ],
   '8': [
     {'1': 'command'},
@@ -447,7 +465,38 @@ final $typed_data.Uint8List nodeCommandRequestDescriptor = $convert.base64Decode
     'cGF1c2UYCSABKAsyHy5zdGFnZXN5bmMudjEuQXVkaW9QYXVzZUNvbW1hbmRIAFIKYXVkaW9QYX'
     'VzZRJFCgxhdWRpb19yZXN1bWUYCiABKAsyIC5zdGFnZXN5bmMudjEuQXVkaW9SZXN1bWVDb21t'
     'YW5kSABSC2F1ZGlvUmVzdW1lEkUKCmF1ZGlvX3Rlc3QYCyABKAsyJC5zdGFnZXN5bmMudjEuQX'
-    'VkaW9UZXN0U2lnbmFsQ29tbWFuZEgAUglhdWRpb1Rlc3RCCQoHY29tbWFuZA==');
+    'VkaW9UZXN0U2lnbmFsQ29tbWFuZEgAUglhdWRpb1Rlc3QSQgoLbm9kZV9jb25maWcYDCABKAsy'
+    'Hy5zdGFnZXN5bmMudjEuTm9kZUNvbmZpZ0NvbW1hbmRIAFIKbm9kZUNvbmZpZ0IJCgdjb21tYW'
+    '5k');
+
+@$core.Deprecated('Use nodeConfigCommandDescriptor instead')
+const NodeConfigCommand$json = {
+  '1': 'NodeConfigCommand',
+  '2': [
+    {
+      '1': 'audio_device_index',
+      '3': 1,
+      '4': 1,
+      '5': 5,
+      '10': 'audioDeviceIndex'
+    },
+    {'1': 'audio_device_name', '3': 2, '4': 1, '5': 9, '10': 'audioDeviceName'},
+    {
+      '1': 'network_interface_address',
+      '3': 3,
+      '4': 1,
+      '5': 9,
+      '10': 'networkInterfaceAddress'
+    },
+  ],
+};
+
+/// Descriptor for `NodeConfigCommand`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List nodeConfigCommandDescriptor = $convert.base64Decode(
+    'ChFOb2RlQ29uZmlnQ29tbWFuZBIsChJhdWRpb19kZXZpY2VfaW5kZXgYASABKAVSEGF1ZGlvRG'
+    'V2aWNlSW5kZXgSKgoRYXVkaW9fZGV2aWNlX25hbWUYAiABKAlSD2F1ZGlvRGV2aWNlTmFtZRI6'
+    'ChluZXR3b3JrX2ludGVyZmFjZV9hZGRyZXNzGAMgASgJUhduZXR3b3JrSW50ZXJmYWNlQWRkcm'
+    'Vzcw==');
 
 @$core.Deprecated('Use sendNodeCommandRequestDescriptor instead')
 const SendNodeCommandRequest$json = {
@@ -496,6 +545,10 @@ const AudioPlayCommand$json = {
     {'1': 'start_unix_millis', '3': 2, '4': 1, '5': 3, '10': 'startUnixMillis'},
     {'1': 'volume_db', '3': 3, '4': 1, '5': 1, '10': 'volumeDb'},
     {'1': 'fade_in_ms', '3': 4, '4': 1, '5': 1, '10': 'fadeInMs'},
+    {'1': 'fade_out_ms', '3': 5, '4': 1, '5': 1, '10': 'fadeOutMs'},
+    {'1': 'loop', '3': 6, '4': 1, '5': 8, '10': 'loop'},
+    {'1': 'start_time_ms', '3': 7, '4': 1, '5': 1, '10': 'startTimeMs'},
+    {'1': 'end_time_ms', '3': 8, '4': 1, '5': 1, '10': 'endTimeMs'},
   ],
 };
 
@@ -503,7 +556,9 @@ const AudioPlayCommand$json = {
 final $typed_data.Uint8List audioPlayCommandDescriptor = $convert.base64Decode(
     'ChBBdWRpb1BsYXlDb21tYW5kEhUKBmN1ZV9pZBgBIAEoCVIFY3VlSWQSKgoRc3RhcnRfdW5peF'
     '9taWxsaXMYAiABKANSD3N0YXJ0VW5peE1pbGxpcxIbCgl2b2x1bWVfZGIYAyABKAFSCHZvbHVt'
-    'ZURiEhwKCmZhZGVfaW5fbXMYBCABKAFSCGZhZGVJbk1z');
+    'ZURiEhwKCmZhZGVfaW5fbXMYBCABKAFSCGZhZGVJbk1zEh4KC2ZhZGVfb3V0X21zGAUgASgBUg'
+    'lmYWRlT3V0TXMSEgoEbG9vcBgGIAEoCFIEbG9vcBIiCg1zdGFydF90aW1lX21zGAcgASgBUgtz'
+    'dGFydFRpbWVNcxIeCgtlbmRfdGltZV9tcxgIIAEoAVIJZW5kVGltZU1z');
 
 @$core.Deprecated('Use audioStopCommandDescriptor instead')
 const AudioStopCommand$json = {

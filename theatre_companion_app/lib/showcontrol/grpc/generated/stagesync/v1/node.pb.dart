@@ -410,10 +410,14 @@ class NodeCapabilities extends $pb.GeneratedMessage {
   factory NodeCapabilities({
     AudioCapabilities? audio,
     MaCapabilities? ma,
+    $core.bool? auditionSupported,
+    $core.String? auditionDevice,
   }) {
     final result = create();
     if (audio != null) result.audio = audio;
     if (ma != null) result.ma = ma;
+    if (auditionSupported != null) result.auditionSupported = auditionSupported;
+    if (auditionDevice != null) result.auditionDevice = auditionDevice;
     return result;
   }
 
@@ -434,6 +438,8 @@ class NodeCapabilities extends $pb.GeneratedMessage {
         subBuilder: AudioCapabilities.create)
     ..aOM<MaCapabilities>(2, _omitFieldNames ? '' : 'ma',
         subBuilder: MaCapabilities.create)
+    ..aOB(3, _omitFieldNames ? '' : 'auditionSupported')
+    ..aOS(4, _omitFieldNames ? '' : 'auditionDevice')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -476,6 +482,24 @@ class NodeCapabilities extends $pb.GeneratedMessage {
   void clearMa() => $_clearField(2);
   @$pb.TagNumber(2)
   MaCapabilities ensureMa() => $_ensure(1);
+
+  @$pb.TagNumber(3)
+  $core.bool get auditionSupported => $_getBF(2);
+  @$pb.TagNumber(3)
+  set auditionSupported($core.bool value) => $_setBool(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasAuditionSupported() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearAuditionSupported() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get auditionDevice => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set auditionDevice($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasAuditionDevice() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearAuditionDevice() => $_clearField(4);
 }
 
 class RegisterNodeRequest extends $pb.GeneratedMessage {
@@ -1169,6 +1193,7 @@ enum NodeCommandRequest_Command {
   audioPause,
   audioResume,
   audioTest,
+  nodeConfig,
   notSet
 }
 
@@ -1186,6 +1211,7 @@ class NodeCommandRequest extends $pb.GeneratedMessage {
     AudioPauseCommand? audioPause,
     AudioResumeCommand? audioResume,
     AudioTestSignalCommand? audioTest,
+    NodeConfigCommand? nodeConfig,
   }) {
     final result = create();
     if (sessionId != null) result.sessionId = sessionId;
@@ -1199,6 +1225,7 @@ class NodeCommandRequest extends $pb.GeneratedMessage {
     if (audioPause != null) result.audioPause = audioPause;
     if (audioResume != null) result.audioResume = audioResume;
     if (audioTest != null) result.audioTest = audioTest;
+    if (nodeConfig != null) result.nodeConfig = nodeConfig;
     return result;
   }
 
@@ -1220,13 +1247,14 @@ class NodeCommandRequest extends $pb.GeneratedMessage {
     9: NodeCommandRequest_Command.audioPause,
     10: NodeCommandRequest_Command.audioResume,
     11: NodeCommandRequest_Command.audioTest,
+    12: NodeCommandRequest_Command.nodeConfig,
     0: NodeCommandRequest_Command.notSet
   };
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(
       _omitMessageNames ? '' : 'NodeCommandRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
       createEmptyInstance: create)
-    ..oo(0, [4, 5, 6, 7, 9, 10, 11])
+    ..oo(0, [4, 5, 6, 7, 9, 10, 11, 12])
     ..aOS(1, _omitFieldNames ? '' : 'sessionId')
     ..aOS(2, _omitFieldNames ? '' : 'commandId')
     ..aOS(3, _omitFieldNames ? '' : 'targetNodeId')
@@ -1246,6 +1274,8 @@ class NodeCommandRequest extends $pb.GeneratedMessage {
         subBuilder: AudioResumeCommand.create)
     ..aOM<AudioTestSignalCommand>(11, _omitFieldNames ? '' : 'audioTest',
         subBuilder: AudioTestSignalCommand.create)
+    ..aOM<NodeConfigCommand>(12, _omitFieldNames ? '' : 'nodeConfig',
+        subBuilder: NodeConfigCommand.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1274,6 +1304,7 @@ class NodeCommandRequest extends $pb.GeneratedMessage {
   @$pb.TagNumber(9)
   @$pb.TagNumber(10)
   @$pb.TagNumber(11)
+  @$pb.TagNumber(12)
   NodeCommandRequest_Command whichCommand() =>
       _NodeCommandRequest_CommandByTag[$_whichOneof(0)]!;
   @$pb.TagNumber(4)
@@ -1283,6 +1314,7 @@ class NodeCommandRequest extends $pb.GeneratedMessage {
   @$pb.TagNumber(9)
   @$pb.TagNumber(10)
   @$pb.TagNumber(11)
+  @$pb.TagNumber(12)
   void clearCommand() => $_clearField($_whichOneof(0));
 
   @$pb.TagNumber(1)
@@ -1397,6 +1429,101 @@ class NodeCommandRequest extends $pb.GeneratedMessage {
   void clearAudioTest() => $_clearField(11);
   @$pb.TagNumber(11)
   AudioTestSignalCommand ensureAudioTest() => $_ensure(10);
+
+  @$pb.TagNumber(12)
+  NodeConfigCommand get nodeConfig => $_getN(11);
+  @$pb.TagNumber(12)
+  set nodeConfig(NodeConfigCommand value) => $_setField(12, value);
+  @$pb.TagNumber(12)
+  $core.bool hasNodeConfig() => $_has(11);
+  @$pb.TagNumber(12)
+  void clearNodeConfig() => $_clearField(12);
+  @$pb.TagNumber(12)
+  NodeConfigCommand ensureNodeConfig() => $_ensure(11);
+}
+
+/// Konfigurationsbefehl vom Master an einen Node.
+/// Ermöglicht Remote-Verwaltung ohne Node neu starten zu müssen.
+class NodeConfigCommand extends $pb.GeneratedMessage {
+  factory NodeConfigCommand({
+    $core.int? audioDeviceIndex,
+    $core.String? audioDeviceName,
+    $core.String? networkInterfaceAddress,
+  }) {
+    final result = create();
+    if (audioDeviceIndex != null) result.audioDeviceIndex = audioDeviceIndex;
+    if (audioDeviceName != null) result.audioDeviceName = audioDeviceName;
+    if (networkInterfaceAddress != null)
+      result.networkInterfaceAddress = networkInterfaceAddress;
+    return result;
+  }
+
+  NodeConfigCommand._();
+
+  factory NodeConfigCommand.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory NodeConfigCommand.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'NodeConfigCommand',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'audioDeviceIndex')
+    ..aOS(2, _omitFieldNames ? '' : 'audioDeviceName')
+    ..aOS(3, _omitFieldNames ? '' : 'networkInterfaceAddress')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  NodeConfigCommand clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  NodeConfigCommand copyWith(void Function(NodeConfigCommand) updates) =>
+      super.copyWith((message) => updates(message as NodeConfigCommand))
+          as NodeConfigCommand;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static NodeConfigCommand create() => NodeConfigCommand._();
+  @$core.override
+  NodeConfigCommand createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static NodeConfigCommand getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<NodeConfigCommand>(create);
+  static NodeConfigCommand? _defaultInstance;
+
+  /// Audio-Ausgabegerät setzen. -1 = System-Default.
+  @$pb.TagNumber(1)
+  $core.int get audioDeviceIndex => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set audioDeviceIndex($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasAudioDeviceIndex() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearAudioDeviceIndex() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get audioDeviceName => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set audioDeviceName($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasAudioDeviceName() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearAudioDeviceName() => $_clearField(2);
+
+  /// Netzwerk-Interface des Media-Servers setzen (IP-Adresse).
+  /// Leer = keine Änderung.
+  @$pb.TagNumber(3)
+  $core.String get networkInterfaceAddress => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set networkInterfaceAddress($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasNetworkInterfaceAddress() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearNetworkInterfaceAddress() => $_clearField(3);
 }
 
 /// SendNodeCommandRequest: Master/Client sendet Command an einen Node
@@ -1566,12 +1693,20 @@ class AudioPlayCommand extends $pb.GeneratedMessage {
     $fixnum.Int64? startUnixMillis,
     $core.double? volumeDb,
     $core.double? fadeInMs,
+    $core.double? fadeOutMs,
+    $core.bool? loop,
+    $core.double? startTimeMs,
+    $core.double? endTimeMs,
   }) {
     final result = create();
     if (cueId != null) result.cueId = cueId;
     if (startUnixMillis != null) result.startUnixMillis = startUnixMillis;
     if (volumeDb != null) result.volumeDb = volumeDb;
     if (fadeInMs != null) result.fadeInMs = fadeInMs;
+    if (fadeOutMs != null) result.fadeOutMs = fadeOutMs;
+    if (loop != null) result.loop = loop;
+    if (startTimeMs != null) result.startTimeMs = startTimeMs;
+    if (endTimeMs != null) result.endTimeMs = endTimeMs;
     return result;
   }
 
@@ -1592,6 +1727,10 @@ class AudioPlayCommand extends $pb.GeneratedMessage {
     ..aInt64(2, _omitFieldNames ? '' : 'startUnixMillis')
     ..aD(3, _omitFieldNames ? '' : 'volumeDb')
     ..aD(4, _omitFieldNames ? '' : 'fadeInMs')
+    ..aD(5, _omitFieldNames ? '' : 'fadeOutMs')
+    ..aOB(6, _omitFieldNames ? '' : 'loop')
+    ..aD(7, _omitFieldNames ? '' : 'startTimeMs')
+    ..aD(8, _omitFieldNames ? '' : 'endTimeMs')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1648,6 +1787,42 @@ class AudioPlayCommand extends $pb.GeneratedMessage {
   $core.bool hasFadeInMs() => $_has(3);
   @$pb.TagNumber(4)
   void clearFadeInMs() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.double get fadeOutMs => $_getN(4);
+  @$pb.TagNumber(5)
+  set fadeOutMs($core.double value) => $_setDouble(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasFadeOutMs() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearFadeOutMs() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $core.bool get loop => $_getBF(5);
+  @$pb.TagNumber(6)
+  set loop($core.bool value) => $_setBool(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasLoop() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearLoop() => $_clearField(6);
+
+  @$pb.TagNumber(7)
+  $core.double get startTimeMs => $_getN(6);
+  @$pb.TagNumber(7)
+  set startTimeMs($core.double value) => $_setDouble(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasStartTimeMs() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearStartTimeMs() => $_clearField(7);
+
+  @$pb.TagNumber(8)
+  $core.double get endTimeMs => $_getN(7);
+  @$pb.TagNumber(8)
+  set endTimeMs($core.double value) => $_setDouble(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasEndTimeMs() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearEndTimeMs() => $_clearField(8);
 }
 
 class AudioStopCommand extends $pb.GeneratedMessage {

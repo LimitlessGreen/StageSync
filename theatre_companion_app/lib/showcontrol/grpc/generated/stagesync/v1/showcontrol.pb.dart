@@ -1255,11 +1255,13 @@ class GoRequest extends $pb.GeneratedMessage {
     $core.String? sessionId,
     $core.String? token,
     $core.String? cueId,
+    $core.String? commandId,
   }) {
     final result = create();
     if (sessionId != null) result.sessionId = sessionId;
     if (token != null) result.token = token;
     if (cueId != null) result.cueId = cueId;
+    if (commandId != null) result.commandId = commandId;
     return result;
   }
 
@@ -1279,6 +1281,7 @@ class GoRequest extends $pb.GeneratedMessage {
     ..aOS(1, _omitFieldNames ? '' : 'sessionId')
     ..aOS(2, _omitFieldNames ? '' : 'token')
     ..aOS(3, _omitFieldNames ? '' : 'cueId')
+    ..aOS(4, _omitFieldNames ? '' : 'commandId')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1325,6 +1328,15 @@ class GoRequest extends $pb.GeneratedMessage {
   $core.bool hasCueId() => $_has(2);
   @$pb.TagNumber(3)
   void clearCueId() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get commandId => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set commandId($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasCommandId() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearCommandId() => $_clearField(4);
 }
 
 class GoResponse extends $pb.GeneratedMessage {
@@ -1400,10 +1412,12 @@ class StopRequest extends $pb.GeneratedMessage {
   factory StopRequest({
     $core.String? sessionId,
     $core.String? token,
+    $core.String? commandId,
   }) {
     final result = create();
     if (sessionId != null) result.sessionId = sessionId;
     if (token != null) result.token = token;
+    if (commandId != null) result.commandId = commandId;
     return result;
   }
 
@@ -1422,6 +1436,7 @@ class StopRequest extends $pb.GeneratedMessage {
       createEmptyInstance: create)
     ..aOS(1, _omitFieldNames ? '' : 'sessionId')
     ..aOS(2, _omitFieldNames ? '' : 'token')
+    ..aOS(3, _omitFieldNames ? '' : 'commandId')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1460,16 +1475,27 @@ class StopRequest extends $pb.GeneratedMessage {
   $core.bool hasToken() => $_has(1);
   @$pb.TagNumber(2)
   void clearToken() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get commandId => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set commandId($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasCommandId() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearCommandId() => $_clearField(3);
 }
 
 class PauseRequest extends $pb.GeneratedMessage {
   factory PauseRequest({
     $core.String? sessionId,
     $core.String? token,
+    $core.String? commandId,
   }) {
     final result = create();
     if (sessionId != null) result.sessionId = sessionId;
     if (token != null) result.token = token;
+    if (commandId != null) result.commandId = commandId;
     return result;
   }
 
@@ -1488,6 +1514,7 @@ class PauseRequest extends $pb.GeneratedMessage {
       createEmptyInstance: create)
     ..aOS(1, _omitFieldNames ? '' : 'sessionId')
     ..aOS(2, _omitFieldNames ? '' : 'token')
+    ..aOS(3, _omitFieldNames ? '' : 'commandId')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1526,16 +1553,27 @@ class PauseRequest extends $pb.GeneratedMessage {
   $core.bool hasToken() => $_has(1);
   @$pb.TagNumber(2)
   void clearToken() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get commandId => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set commandId($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasCommandId() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearCommandId() => $_clearField(3);
 }
 
 class ResumeRequest extends $pb.GeneratedMessage {
   factory ResumeRequest({
     $core.String? sessionId,
     $core.String? token,
+    $core.String? commandId,
   }) {
     final result = create();
     if (sessionId != null) result.sessionId = sessionId;
     if (token != null) result.token = token;
+    if (commandId != null) result.commandId = commandId;
     return result;
   }
 
@@ -1554,6 +1592,7 @@ class ResumeRequest extends $pb.GeneratedMessage {
       createEmptyInstance: create)
     ..aOS(1, _omitFieldNames ? '' : 'sessionId')
     ..aOS(2, _omitFieldNames ? '' : 'token')
+    ..aOS(3, _omitFieldNames ? '' : 'commandId')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1592,6 +1631,15 @@ class ResumeRequest extends $pb.GeneratedMessage {
   $core.bool hasToken() => $_has(1);
   @$pb.TagNumber(2)
   void clearToken() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get commandId => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set commandId($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasCommandId() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearCommandId() => $_clearField(3);
 }
 
 class WatchShowStateRequest extends $pb.GeneratedMessage {
@@ -1683,6 +1731,7 @@ class ShowStateEvent extends $pb.GeneratedMessage {
     $core.String? errorMsg,
     $fixnum.Int64? seq,
     $core.bool? isPaused,
+    $fixnum.Int64? cueStartedAtMs,
   }) {
     final result = create();
     if (type != null) result.type = type;
@@ -1693,6 +1742,7 @@ class ShowStateEvent extends $pb.GeneratedMessage {
     if (errorMsg != null) result.errorMsg = errorMsg;
     if (seq != null) result.seq = seq;
     if (isPaused != null) result.isPaused = isPaused;
+    if (cueStartedAtMs != null) result.cueStartedAtMs = cueStartedAtMs;
     return result;
   }
 
@@ -1720,6 +1770,7 @@ class ShowStateEvent extends $pb.GeneratedMessage {
     ..aOS(6, _omitFieldNames ? '' : 'errorMsg')
     ..aInt64(7, _omitFieldNames ? '' : 'seq')
     ..aOB(8, _omitFieldNames ? '' : 'isPaused')
+    ..aInt64(9, _omitFieldNames ? '' : 'cueStartedAtMs')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1818,6 +1869,18 @@ class ShowStateEvent extends $pb.GeneratedMessage {
   $core.bool hasIsPaused() => $_has(7);
   @$pb.TagNumber(8)
   void clearIsPaused() => $_clearField(8);
+
+  /// Explizite Startzeit der aktiven Cue in Server-Unix-Millis.
+  /// Bei TYPE_CUE_STARTED und Snapshot-Events gesetzt.
+  /// Clients nutzen diesen Wert + ClockSync für korrekte Elapsed-Berechnung.
+  @$pb.TagNumber(9)
+  $fixnum.Int64 get cueStartedAtMs => $_getI64(8);
+  @$pb.TagNumber(9)
+  set cueStartedAtMs($fixnum.Int64 value) => $_setInt64(8, value);
+  @$pb.TagNumber(9)
+  $core.bool hasCueStartedAtMs() => $_has(8);
+  @$pb.TagNumber(9)
+  void clearCueStartedAtMs() => $_clearField(9);
 }
 
 const $core.bool _omitFieldNames =
