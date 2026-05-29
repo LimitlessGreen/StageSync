@@ -56,12 +56,10 @@ class _ScButtonState extends State<ScButton> {
       ScButtonSize.compact => ScSpacing.buttonHeightCompact,
     };
 
-    // Visual states
-    final pressAlpha = _pressed && enabled ? 0.55 : 1.0;
-    final effectiveColor = Color.fromRGBO(
-      color.r.round(), color.g.round(), color.b.round(),
-      pressAlpha,
-    );
+    // Visual states — withValues(alpha:) is the correct way to tint;
+    // Color.fromRGBO(.r/.g/.b) is wrong because .r/.g/.b return 0.0–1.0.
+    final effectiveColor =
+        _pressed && enabled ? color.withValues(alpha: 0.55) : color;
 
     final content = widget.isLoading
         ? SizedBox(
