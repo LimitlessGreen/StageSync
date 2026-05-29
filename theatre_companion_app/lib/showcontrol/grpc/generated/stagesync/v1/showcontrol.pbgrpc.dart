@@ -41,7 +41,7 @@ class ShowControlServiceClient extends $grpc.Client {
     return $createUnaryCall(_$getCueList, request, options: options);
   }
 
-  /// CueList ersetzen (Master/Client-Role erforderlich)
+  /// CueList ersetzen (Master/Editor-Role erforderlich)
   $grpc.ResponseFuture<$0.CueListResponse> updateCueList(
     $0.UpdateCueListRequest request, {
     $grpc.CallOptions? options,
@@ -96,13 +96,44 @@ class ShowControlServiceClient extends $grpc.Client {
     return $createUnaryCall(_$resume, request, options: options);
   }
 
-  /// Show-State streamen (aktuelle Cue, Nodes-Status, etc.)
-  $grpc.ResponseStream<$0.ShowStateEvent> watchShowState(
-    $0.WatchShowStateRequest request, {
+  /// ── 4-Stream EventBus ────────────────────────────────────────────────────
+  /// Stream 1: Show-Definition (CueList, Patch, Assets)
+  $grpc.ResponseStream<$0.ShowDefinitionEvent> watchShowDefinition(
+    $0.WatchShowDefinitionRequest request, {
     $grpc.CallOptions? options,
   }) {
     return $createStreamingCall(
-        _$watchShowState, $async.Stream.fromIterable([request]),
+        _$watchShowDefinition, $async.Stream.fromIterable([request]),
+        options: options);
+  }
+
+  /// Stream 2: Show-Execution (Transport, Cue-States)
+  $grpc.ResponseStream<$0.ShowExecutionEvent> watchShowExecution(
+    $0.WatchShowExecutionRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createStreamingCall(
+        _$watchShowExecution, $async.Stream.fromIterable([request]),
+        options: options);
+  }
+
+  /// Stream 3: Node Health (Online/Offline, Clock-Delta)
+  $grpc.ResponseStream<$0.NodeHealthEvent> watchNodeHealth(
+    $0.WatchNodeHealthRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createStreamingCall(
+        _$watchNodeHealth, $async.Stream.fromIterable([request]),
+        options: options);
+  }
+
+  /// Stream 4: Media Sync (Asset-Änderungen)
+  $grpc.ResponseStream<$0.MediaSyncEvent> watchMediaSync(
+    $0.WatchMediaSyncRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createStreamingCall(
+        _$watchMediaSync, $async.Stream.fromIterable([request]),
         options: options);
   }
 
@@ -143,11 +174,26 @@ class ShowControlServiceClient extends $grpc.Client {
       '/stagesync.v1.ShowControlService/Resume',
       ($0.ResumeRequest value) => value.writeToBuffer(),
       $1.Empty.fromBuffer);
-  static final _$watchShowState =
-      $grpc.ClientMethod<$0.WatchShowStateRequest, $0.ShowStateEvent>(
-          '/stagesync.v1.ShowControlService/WatchShowState',
-          ($0.WatchShowStateRequest value) => value.writeToBuffer(),
-          $0.ShowStateEvent.fromBuffer);
+  static final _$watchShowDefinition =
+      $grpc.ClientMethod<$0.WatchShowDefinitionRequest, $0.ShowDefinitionEvent>(
+          '/stagesync.v1.ShowControlService/WatchShowDefinition',
+          ($0.WatchShowDefinitionRequest value) => value.writeToBuffer(),
+          $0.ShowDefinitionEvent.fromBuffer);
+  static final _$watchShowExecution =
+      $grpc.ClientMethod<$0.WatchShowExecutionRequest, $0.ShowExecutionEvent>(
+          '/stagesync.v1.ShowControlService/WatchShowExecution',
+          ($0.WatchShowExecutionRequest value) => value.writeToBuffer(),
+          $0.ShowExecutionEvent.fromBuffer);
+  static final _$watchNodeHealth =
+      $grpc.ClientMethod<$0.WatchNodeHealthRequest, $0.NodeHealthEvent>(
+          '/stagesync.v1.ShowControlService/WatchNodeHealth',
+          ($0.WatchNodeHealthRequest value) => value.writeToBuffer(),
+          $0.NodeHealthEvent.fromBuffer);
+  static final _$watchMediaSync =
+      $grpc.ClientMethod<$0.WatchMediaSyncRequest, $0.MediaSyncEvent>(
+          '/stagesync.v1.ShowControlService/WatchMediaSync',
+          ($0.WatchMediaSyncRequest value) => value.writeToBuffer(),
+          $0.MediaSyncEvent.fromBuffer);
 }
 
 @$pb.GrpcServiceName('stagesync.v1.ShowControlService')
@@ -212,14 +258,41 @@ abstract class ShowControlServiceBase extends $grpc.Service {
         false,
         ($core.List<$core.int> value) => $0.ResumeRequest.fromBuffer(value),
         ($1.Empty value) => value.writeToBuffer()));
-    $addMethod($grpc.ServiceMethod<$0.WatchShowStateRequest, $0.ShowStateEvent>(
-        'WatchShowState',
-        watchShowState_Pre,
+    $addMethod($grpc.ServiceMethod<$0.WatchShowDefinitionRequest,
+            $0.ShowDefinitionEvent>(
+        'WatchShowDefinition',
+        watchShowDefinition_Pre,
         false,
         true,
         ($core.List<$core.int> value) =>
-            $0.WatchShowStateRequest.fromBuffer(value),
-        ($0.ShowStateEvent value) => value.writeToBuffer()));
+            $0.WatchShowDefinitionRequest.fromBuffer(value),
+        ($0.ShowDefinitionEvent value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.WatchShowExecutionRequest,
+            $0.ShowExecutionEvent>(
+        'WatchShowExecution',
+        watchShowExecution_Pre,
+        false,
+        true,
+        ($core.List<$core.int> value) =>
+            $0.WatchShowExecutionRequest.fromBuffer(value),
+        ($0.ShowExecutionEvent value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.WatchNodeHealthRequest, $0.NodeHealthEvent>(
+            'WatchNodeHealth',
+            watchNodeHealth_Pre,
+            false,
+            true,
+            ($core.List<$core.int> value) =>
+                $0.WatchNodeHealthRequest.fromBuffer(value),
+            ($0.NodeHealthEvent value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.WatchMediaSyncRequest, $0.MediaSyncEvent>(
+        'WatchMediaSync',
+        watchMediaSync_Pre,
+        false,
+        true,
+        ($core.List<$core.int> value) =>
+            $0.WatchMediaSyncRequest.fromBuffer(value),
+        ($0.MediaSyncEvent value) => value.writeToBuffer()));
   }
 
   $async.Future<$0.CueListResponse> getCueList_Pre($grpc.ServiceCall $call,
@@ -284,11 +357,37 @@ abstract class ShowControlServiceBase extends $grpc.Service {
   $async.Future<$1.Empty> resume(
       $grpc.ServiceCall call, $0.ResumeRequest request);
 
-  $async.Stream<$0.ShowStateEvent> watchShowState_Pre($grpc.ServiceCall $call,
-      $async.Future<$0.WatchShowStateRequest> $request) async* {
-    yield* watchShowState($call, await $request);
+  $async.Stream<$0.ShowDefinitionEvent> watchShowDefinition_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.WatchShowDefinitionRequest> $request) async* {
+    yield* watchShowDefinition($call, await $request);
   }
 
-  $async.Stream<$0.ShowStateEvent> watchShowState(
-      $grpc.ServiceCall call, $0.WatchShowStateRequest request);
+  $async.Stream<$0.ShowDefinitionEvent> watchShowDefinition(
+      $grpc.ServiceCall call, $0.WatchShowDefinitionRequest request);
+
+  $async.Stream<$0.ShowExecutionEvent> watchShowExecution_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.WatchShowExecutionRequest> $request) async* {
+    yield* watchShowExecution($call, await $request);
+  }
+
+  $async.Stream<$0.ShowExecutionEvent> watchShowExecution(
+      $grpc.ServiceCall call, $0.WatchShowExecutionRequest request);
+
+  $async.Stream<$0.NodeHealthEvent> watchNodeHealth_Pre($grpc.ServiceCall $call,
+      $async.Future<$0.WatchNodeHealthRequest> $request) async* {
+    yield* watchNodeHealth($call, await $request);
+  }
+
+  $async.Stream<$0.NodeHealthEvent> watchNodeHealth(
+      $grpc.ServiceCall call, $0.WatchNodeHealthRequest request);
+
+  $async.Stream<$0.MediaSyncEvent> watchMediaSync_Pre($grpc.ServiceCall $call,
+      $async.Future<$0.WatchMediaSyncRequest> $request) async* {
+    yield* watchMediaSync($call, await $request);
+  }
+
+  $async.Stream<$0.MediaSyncEvent> watchMediaSync(
+      $grpc.ServiceCall call, $0.WatchMediaSyncRequest request);
 }

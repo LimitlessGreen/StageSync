@@ -43,41 +43,127 @@ class MaOscCueParams_MaCommand extends $pb.ProtobufEnum {
   const MaOscCueParams_MaCommand._(super.value, super.name);
 }
 
-class ShowStateEvent_Type extends $pb.ProtobufEnum {
-  static const ShowStateEvent_Type TYPE_UNSPECIFIED =
-      ShowStateEvent_Type._(0, _omitEnumNames ? '' : 'TYPE_UNSPECIFIED');
-  static const ShowStateEvent_Type TYPE_CUE_STARTED =
-      ShowStateEvent_Type._(1, _omitEnumNames ? '' : 'TYPE_CUE_STARTED');
-  static const ShowStateEvent_Type TYPE_CUE_STOPPED =
-      ShowStateEvent_Type._(2, _omitEnumNames ? '' : 'TYPE_CUE_STOPPED');
-  static const ShowStateEvent_Type TYPE_CUE_PAUSED =
-      ShowStateEvent_Type._(3, _omitEnumNames ? '' : 'TYPE_CUE_PAUSED');
-  static const ShowStateEvent_Type TYPE_CUE_DONE =
-      ShowStateEvent_Type._(4, _omitEnumNames ? '' : 'TYPE_CUE_DONE');
-  static const ShowStateEvent_Type TYPE_CUE_ERROR =
-      ShowStateEvent_Type._(5, _omitEnumNames ? '' : 'TYPE_CUE_ERROR');
-  static const ShowStateEvent_Type TYPE_LIST_UPDATED =
-      ShowStateEvent_Type._(6, _omitEnumNames ? '' : 'TYPE_LIST_UPDATED');
-  static const ShowStateEvent_Type TYPE_POSITION_CHANGED =
-      ShowStateEvent_Type._(7, _omitEnumNames ? '' : 'TYPE_POSITION_CHANGED');
+class ShowDefinitionEvent_DefinitionEventType extends $pb.ProtobufEnum {
+  static const ShowDefinitionEvent_DefinitionEventType DEFINITION_SNAPSHOT =
+      ShowDefinitionEvent_DefinitionEventType._(
+          0, _omitEnumNames ? '' : 'DEFINITION_SNAPSHOT');
+  static const ShowDefinitionEvent_DefinitionEventType CUE_LIST_CHANGED =
+      ShowDefinitionEvent_DefinitionEventType._(
+          1, _omitEnumNames ? '' : 'CUE_LIST_CHANGED');
 
-  static const $core.List<ShowStateEvent_Type> values = <ShowStateEvent_Type>[
-    TYPE_UNSPECIFIED,
-    TYPE_CUE_STARTED,
-    TYPE_CUE_STOPPED,
-    TYPE_CUE_PAUSED,
-    TYPE_CUE_DONE,
-    TYPE_CUE_ERROR,
-    TYPE_LIST_UPDATED,
-    TYPE_POSITION_CHANGED,
+  static const $core.List<ShowDefinitionEvent_DefinitionEventType> values =
+      <ShowDefinitionEvent_DefinitionEventType>[
+    DEFINITION_SNAPSHOT,
+    CUE_LIST_CHANGED,
   ];
 
-  static final $core.List<ShowStateEvent_Type?> _byValue =
-      $pb.ProtobufEnum.$_initByValueList(values, 7);
-  static ShowStateEvent_Type? valueOf($core.int value) =>
+  static final $core.List<ShowDefinitionEvent_DefinitionEventType?> _byValue =
+      $pb.ProtobufEnum.$_initByValueList(values, 1);
+  static ShowDefinitionEvent_DefinitionEventType? valueOf($core.int value) =>
       value < 0 || value >= _byValue.length ? null : _byValue[value];
 
-  const ShowStateEvent_Type._(super.value, super.name);
+  const ShowDefinitionEvent_DefinitionEventType._(super.value, super.name);
+}
+
+class ShowExecutionEvent_ExecutionEventType extends $pb.ProtobufEnum {
+  static const ShowExecutionEvent_ExecutionEventType EXECUTION_SNAPSHOT =
+      ShowExecutionEvent_ExecutionEventType._(
+          0, _omitEnumNames ? '' : 'EXECUTION_SNAPSHOT');
+  static const ShowExecutionEvent_ExecutionEventType CUE_STARTED =
+      ShowExecutionEvent_ExecutionEventType._(
+          1, _omitEnumNames ? '' : 'CUE_STARTED');
+  static const ShowExecutionEvent_ExecutionEventType CUE_PAUSED =
+      ShowExecutionEvent_ExecutionEventType._(
+          2, _omitEnumNames ? '' : 'CUE_PAUSED');
+  static const ShowExecutionEvent_ExecutionEventType CUE_RESUMED =
+      ShowExecutionEvent_ExecutionEventType._(
+          3, _omitEnumNames ? '' : 'CUE_RESUMED');
+  static const ShowExecutionEvent_ExecutionEventType CUE_STOPPED =
+      ShowExecutionEvent_ExecutionEventType._(
+          4, _omitEnumNames ? '' : 'CUE_STOPPED');
+  static const ShowExecutionEvent_ExecutionEventType CUE_DONE =
+      ShowExecutionEvent_ExecutionEventType._(
+          5, _omitEnumNames ? '' : 'CUE_DONE');
+  static const ShowExecutionEvent_ExecutionEventType CUE_ERROR =
+      ShowExecutionEvent_ExecutionEventType._(
+          6, _omitEnumNames ? '' : 'CUE_ERROR');
+
+  static const $core.List<ShowExecutionEvent_ExecutionEventType> values =
+      <ShowExecutionEvent_ExecutionEventType>[
+    EXECUTION_SNAPSHOT,
+    CUE_STARTED,
+    CUE_PAUSED,
+    CUE_RESUMED,
+    CUE_STOPPED,
+    CUE_DONE,
+    CUE_ERROR,
+  ];
+
+  static final $core.List<ShowExecutionEvent_ExecutionEventType?> _byValue =
+      $pb.ProtobufEnum.$_initByValueList(values, 6);
+  static ShowExecutionEvent_ExecutionEventType? valueOf($core.int value) =>
+      value < 0 || value >= _byValue.length ? null : _byValue[value];
+
+  const ShowExecutionEvent_ExecutionEventType._(super.value, super.name);
+}
+
+class NodeHealthEvent_HealthEventType extends $pb.ProtobufEnum {
+  static const NodeHealthEvent_HealthEventType HEALTH_SNAPSHOT =
+      NodeHealthEvent_HealthEventType._(
+          0, _omitEnumNames ? '' : 'HEALTH_SNAPSHOT');
+  static const NodeHealthEvent_HealthEventType NODE_ONLINE =
+      NodeHealthEvent_HealthEventType._(1, _omitEnumNames ? '' : 'NODE_ONLINE');
+  static const NodeHealthEvent_HealthEventType NODE_OFFLINE =
+      NodeHealthEvent_HealthEventType._(
+          2, _omitEnumNames ? '' : 'NODE_OFFLINE');
+  static const NodeHealthEvent_HealthEventType NODE_DEGRADED =
+      NodeHealthEvent_HealthEventType._(
+          3, _omitEnumNames ? '' : 'NODE_DEGRADED');
+  static const NodeHealthEvent_HealthEventType CLOCK_DELTA =
+      NodeHealthEvent_HealthEventType._(4, _omitEnumNames ? '' : 'CLOCK_DELTA');
+
+  static const $core.List<NodeHealthEvent_HealthEventType> values =
+      <NodeHealthEvent_HealthEventType>[
+    HEALTH_SNAPSHOT,
+    NODE_ONLINE,
+    NODE_OFFLINE,
+    NODE_DEGRADED,
+    CLOCK_DELTA,
+  ];
+
+  static final $core.List<NodeHealthEvent_HealthEventType?> _byValue =
+      $pb.ProtobufEnum.$_initByValueList(values, 4);
+  static NodeHealthEvent_HealthEventType? valueOf($core.int value) =>
+      value < 0 || value >= _byValue.length ? null : _byValue[value];
+
+  const NodeHealthEvent_HealthEventType._(super.value, super.name);
+}
+
+class MediaSyncEvent_MediaEventType extends $pb.ProtobufEnum {
+  static const MediaSyncEvent_MediaEventType MEDIA_SNAPSHOT =
+      MediaSyncEvent_MediaEventType._(
+          0, _omitEnumNames ? '' : 'MEDIA_SNAPSHOT');
+  static const MediaSyncEvent_MediaEventType ASSET_ADDED =
+      MediaSyncEvent_MediaEventType._(1, _omitEnumNames ? '' : 'ASSET_ADDED');
+  static const MediaSyncEvent_MediaEventType ASSET_REMOVED =
+      MediaSyncEvent_MediaEventType._(2, _omitEnumNames ? '' : 'ASSET_REMOVED');
+  static const MediaSyncEvent_MediaEventType ASSET_UPDATED =
+      MediaSyncEvent_MediaEventType._(3, _omitEnumNames ? '' : 'ASSET_UPDATED');
+
+  static const $core.List<MediaSyncEvent_MediaEventType> values =
+      <MediaSyncEvent_MediaEventType>[
+    MEDIA_SNAPSHOT,
+    ASSET_ADDED,
+    ASSET_REMOVED,
+    ASSET_UPDATED,
+  ];
+
+  static final $core.List<MediaSyncEvent_MediaEventType?> _byValue =
+      $pb.ProtobufEnum.$_initByValueList(values, 3);
+  static MediaSyncEvent_MediaEventType? valueOf($core.int value) =>
+      value < 0 || value >= _byValue.length ? null : _byValue[value];
+
+  const MediaSyncEvent_MediaEventType._(super.value, super.name);
 }
 
 const $core.bool _omitEnumNames =

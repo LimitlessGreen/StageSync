@@ -514,8 +514,6 @@ class MaOscCueParams extends $pb.GeneratedMessage {
       $pb.GeneratedMessage.$_defaultFor<MaOscCueParams>(create);
   static MaOscCueParams? _defaultInstance;
 
-  /// OSC-Adresse, die an GrandMA gesendet wird
-  /// z.B. "/gma3/cmd" mit Argument "Executor 1 Go"
   @$pb.TagNumber(1)
   $core.String get oscAddress => $_getSZ(0);
   @$pb.TagNumber(1)
@@ -534,7 +532,6 @@ class MaOscCueParams extends $pb.GeneratedMessage {
   @$pb.TagNumber(2)
   void clearOscArgument() => $_clearField(2);
 
-  /// Alternativ: direkte GrandMA-Executor-Steuerung
   @$pb.TagNumber(3)
   $core.int get executorPage => $_getIZ(2);
   @$pb.TagNumber(3)
@@ -1720,8 +1717,8 @@ class ResumeRequest extends $pb.GeneratedMessage {
   void clearCommandId() => $_clearField(3);
 }
 
-class WatchShowStateRequest extends $pb.GeneratedMessage {
-  factory WatchShowStateRequest({
+class WatchShowDefinitionRequest extends $pb.GeneratedMessage {
+  factory WatchShowDefinitionRequest({
     $core.String? sessionId,
     $core.String? nodeId,
     $core.String? token,
@@ -1733,17 +1730,17 @@ class WatchShowStateRequest extends $pb.GeneratedMessage {
     return result;
   }
 
-  WatchShowStateRequest._();
+  WatchShowDefinitionRequest._();
 
-  factory WatchShowStateRequest.fromBuffer($core.List<$core.int> data,
+  factory WatchShowDefinitionRequest.fromBuffer($core.List<$core.int> data,
           [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
       create()..mergeFromBuffer(data, registry);
-  factory WatchShowStateRequest.fromJson($core.String json,
+  factory WatchShowDefinitionRequest.fromJson($core.String json,
           [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
       create()..mergeFromJson(json, registry);
 
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(
-      _omitMessageNames ? '' : 'WatchShowStateRequest',
+      _omitMessageNames ? '' : 'WatchShowDefinitionRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
       createEmptyInstance: create)
     ..aOS(1, _omitFieldNames ? '' : 'sessionId')
@@ -1752,24 +1749,25 @@ class WatchShowStateRequest extends $pb.GeneratedMessage {
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
-  WatchShowStateRequest clone() => deepCopy();
+  WatchShowDefinitionRequest clone() => deepCopy();
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
-  WatchShowStateRequest copyWith(
-          void Function(WatchShowStateRequest) updates) =>
-      super.copyWith((message) => updates(message as WatchShowStateRequest))
-          as WatchShowStateRequest;
+  WatchShowDefinitionRequest copyWith(
+          void Function(WatchShowDefinitionRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as WatchShowDefinitionRequest))
+          as WatchShowDefinitionRequest;
 
   @$core.override
   $pb.BuilderInfo get info_ => _i;
 
   @$core.pragma('dart2js:noInline')
-  static WatchShowStateRequest create() => WatchShowStateRequest._();
+  static WatchShowDefinitionRequest create() => WatchShowDefinitionRequest._();
   @$core.override
-  WatchShowStateRequest createEmptyInstance() => create();
+  WatchShowDefinitionRequest createEmptyInstance() => create();
   @$core.pragma('dart2js:noInline')
-  static WatchShowStateRequest getDefault() => _defaultInstance ??=
-      $pb.GeneratedMessage.$_defaultFor<WatchShowStateRequest>(create);
-  static WatchShowStateRequest? _defaultInstance;
+  static WatchShowDefinitionRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<WatchShowDefinitionRequest>(create);
+  static WatchShowDefinitionRequest? _defaultInstance;
 
   @$pb.TagNumber(1)
   $core.String get sessionId => $_getSZ(0);
@@ -1799,174 +1797,746 @@ class WatchShowStateRequest extends $pb.GeneratedMessage {
   void clearToken() => $_clearField(3);
 }
 
-class ShowStateEvent extends $pb.GeneratedMessage {
-  factory ShowStateEvent({
-    ShowStateEvent_Type? type,
-    CueList? cueList,
-    Cue? affectedCue,
-    $core.String? nodeId,
-    $2.Timestamp? occurredAt,
-    $core.String? errorMsg,
+class ShowDefinitionEvent extends $pb.GeneratedMessage {
+  factory ShowDefinitionEvent({
     $fixnum.Int64? seq,
-    $core.bool? isPaused,
-    $fixnum.Int64? cueStartedAtMs,
-    $core.Iterable<$core.String>? runningCueIds,
+    ShowDefinitionEvent_DefinitionEventType? type,
+    $2.Timestamp? occurredAt,
+    CueList? cueList,
   }) {
     final result = create();
-    if (type != null) result.type = type;
-    if (cueList != null) result.cueList = cueList;
-    if (affectedCue != null) result.affectedCue = affectedCue;
-    if (nodeId != null) result.nodeId = nodeId;
-    if (occurredAt != null) result.occurredAt = occurredAt;
-    if (errorMsg != null) result.errorMsg = errorMsg;
     if (seq != null) result.seq = seq;
-    if (isPaused != null) result.isPaused = isPaused;
-    if (cueStartedAtMs != null) result.cueStartedAtMs = cueStartedAtMs;
-    if (runningCueIds != null) result.runningCueIds.addAll(runningCueIds);
+    if (type != null) result.type = type;
+    if (occurredAt != null) result.occurredAt = occurredAt;
+    if (cueList != null) result.cueList = cueList;
     return result;
   }
 
-  ShowStateEvent._();
+  ShowDefinitionEvent._();
 
-  factory ShowStateEvent.fromBuffer($core.List<$core.int> data,
+  factory ShowDefinitionEvent.fromBuffer($core.List<$core.int> data,
           [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
       create()..mergeFromBuffer(data, registry);
-  factory ShowStateEvent.fromJson($core.String json,
+  factory ShowDefinitionEvent.fromJson($core.String json,
           [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
       create()..mergeFromJson(json, registry);
 
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(
-      _omitMessageNames ? '' : 'ShowStateEvent',
+      _omitMessageNames ? '' : 'ShowDefinitionEvent',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
       createEmptyInstance: create)
-    ..aE<ShowStateEvent_Type>(1, _omitFieldNames ? '' : 'type',
-        enumValues: ShowStateEvent_Type.values)
-    ..aOM<CueList>(2, _omitFieldNames ? '' : 'cueList',
-        subBuilder: CueList.create)
-    ..aOM<Cue>(3, _omitFieldNames ? '' : 'affectedCue', subBuilder: Cue.create)
-    ..aOS(4, _omitFieldNames ? '' : 'nodeId')
-    ..aOM<$2.Timestamp>(5, _omitFieldNames ? '' : 'occurredAt',
+    ..aInt64(1, _omitFieldNames ? '' : 'seq')
+    ..aE<ShowDefinitionEvent_DefinitionEventType>(
+        2, _omitFieldNames ? '' : 'type',
+        enumValues: ShowDefinitionEvent_DefinitionEventType.values)
+    ..aOM<$2.Timestamp>(3, _omitFieldNames ? '' : 'occurredAt',
         subBuilder: $2.Timestamp.create)
-    ..aOS(6, _omitFieldNames ? '' : 'errorMsg')
-    ..aInt64(7, _omitFieldNames ? '' : 'seq')
-    ..aOB(8, _omitFieldNames ? '' : 'isPaused')
-    ..aInt64(9, _omitFieldNames ? '' : 'cueStartedAtMs')
-    ..pPS(10, _omitFieldNames ? '' : 'runningCueIds')
+    ..aOM<CueList>(10, _omitFieldNames ? '' : 'cueList',
+        subBuilder: CueList.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
-  ShowStateEvent clone() => deepCopy();
+  ShowDefinitionEvent clone() => deepCopy();
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
-  ShowStateEvent copyWith(void Function(ShowStateEvent) updates) =>
-      super.copyWith((message) => updates(message as ShowStateEvent))
-          as ShowStateEvent;
+  ShowDefinitionEvent copyWith(void Function(ShowDefinitionEvent) updates) =>
+      super.copyWith((message) => updates(message as ShowDefinitionEvent))
+          as ShowDefinitionEvent;
 
   @$core.override
   $pb.BuilderInfo get info_ => _i;
 
   @$core.pragma('dart2js:noInline')
-  static ShowStateEvent create() => ShowStateEvent._();
+  static ShowDefinitionEvent create() => ShowDefinitionEvent._();
   @$core.override
-  ShowStateEvent createEmptyInstance() => create();
+  ShowDefinitionEvent createEmptyInstance() => create();
   @$core.pragma('dart2js:noInline')
-  static ShowStateEvent getDefault() => _defaultInstance ??=
-      $pb.GeneratedMessage.$_defaultFor<ShowStateEvent>(create);
-  static ShowStateEvent? _defaultInstance;
+  static ShowDefinitionEvent getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ShowDefinitionEvent>(create);
+  static ShowDefinitionEvent? _defaultInstance;
 
   @$pb.TagNumber(1)
-  ShowStateEvent_Type get type => $_getN(0);
+  $fixnum.Int64 get seq => $_getI64(0);
   @$pb.TagNumber(1)
-  set type(ShowStateEvent_Type value) => $_setField(1, value);
+  set seq($fixnum.Int64 value) => $_setInt64(0, value);
   @$pb.TagNumber(1)
-  $core.bool hasType() => $_has(0);
+  $core.bool hasSeq() => $_has(0);
   @$pb.TagNumber(1)
-  void clearType() => $_clearField(1);
+  void clearSeq() => $_clearField(1);
 
   @$pb.TagNumber(2)
-  CueList get cueList => $_getN(1);
+  ShowDefinitionEvent_DefinitionEventType get type => $_getN(1);
   @$pb.TagNumber(2)
-  set cueList(CueList value) => $_setField(2, value);
+  set type(ShowDefinitionEvent_DefinitionEventType value) =>
+      $_setField(2, value);
   @$pb.TagNumber(2)
-  $core.bool hasCueList() => $_has(1);
+  $core.bool hasType() => $_has(1);
   @$pb.TagNumber(2)
-  void clearCueList() => $_clearField(2);
-  @$pb.TagNumber(2)
-  CueList ensureCueList() => $_ensure(1);
+  void clearType() => $_clearField(2);
 
   @$pb.TagNumber(3)
-  Cue get affectedCue => $_getN(2);
+  $2.Timestamp get occurredAt => $_getN(2);
   @$pb.TagNumber(3)
-  set affectedCue(Cue value) => $_setField(3, value);
+  set occurredAt($2.Timestamp value) => $_setField(3, value);
   @$pb.TagNumber(3)
-  $core.bool hasAffectedCue() => $_has(2);
+  $core.bool hasOccurredAt() => $_has(2);
   @$pb.TagNumber(3)
-  void clearAffectedCue() => $_clearField(3);
+  void clearOccurredAt() => $_clearField(3);
   @$pb.TagNumber(3)
-  Cue ensureAffectedCue() => $_ensure(2);
+  $2.Timestamp ensureOccurredAt() => $_ensure(2);
 
-  @$pb.TagNumber(4)
-  $core.String get nodeId => $_getSZ(3);
-  @$pb.TagNumber(4)
-  set nodeId($core.String value) => $_setString(3, value);
-  @$pb.TagNumber(4)
-  $core.bool hasNodeId() => $_has(3);
-  @$pb.TagNumber(4)
-  void clearNodeId() => $_clearField(4);
+  @$pb.TagNumber(10)
+  CueList get cueList => $_getN(3);
+  @$pb.TagNumber(10)
+  set cueList(CueList value) => $_setField(10, value);
+  @$pb.TagNumber(10)
+  $core.bool hasCueList() => $_has(3);
+  @$pb.TagNumber(10)
+  void clearCueList() => $_clearField(10);
+  @$pb.TagNumber(10)
+  CueList ensureCueList() => $_ensure(3);
+}
 
-  @$pb.TagNumber(5)
-  $2.Timestamp get occurredAt => $_getN(4);
-  @$pb.TagNumber(5)
-  set occurredAt($2.Timestamp value) => $_setField(5, value);
-  @$pb.TagNumber(5)
-  $core.bool hasOccurredAt() => $_has(4);
-  @$pb.TagNumber(5)
-  void clearOccurredAt() => $_clearField(5);
-  @$pb.TagNumber(5)
-  $2.Timestamp ensureOccurredAt() => $_ensure(4);
+class WatchShowExecutionRequest extends $pb.GeneratedMessage {
+  factory WatchShowExecutionRequest({
+    $core.String? sessionId,
+    $core.String? nodeId,
+    $core.String? token,
+  }) {
+    final result = create();
+    if (sessionId != null) result.sessionId = sessionId;
+    if (nodeId != null) result.nodeId = nodeId;
+    if (token != null) result.token = token;
+    return result;
+  }
 
-  @$pb.TagNumber(6)
+  WatchShowExecutionRequest._();
+
+  factory WatchShowExecutionRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory WatchShowExecutionRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'WatchShowExecutionRequest',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'sessionId')
+    ..aOS(2, _omitFieldNames ? '' : 'nodeId')
+    ..aOS(3, _omitFieldNames ? '' : 'token')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  WatchShowExecutionRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  WatchShowExecutionRequest copyWith(
+          void Function(WatchShowExecutionRequest) updates) =>
+      super.copyWith((message) => updates(message as WatchShowExecutionRequest))
+          as WatchShowExecutionRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static WatchShowExecutionRequest create() => WatchShowExecutionRequest._();
+  @$core.override
+  WatchShowExecutionRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static WatchShowExecutionRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<WatchShowExecutionRequest>(create);
+  static WatchShowExecutionRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get sessionId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set sessionId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasSessionId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearSessionId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get nodeId => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set nodeId($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasNodeId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearNodeId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get token => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set token($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasToken() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearToken() => $_clearField(3);
+}
+
+class ShowExecutionEvent extends $pb.GeneratedMessage {
+  factory ShowExecutionEvent({
+    $fixnum.Int64? seq,
+    ShowExecutionEvent_ExecutionEventType? type,
+    $2.Timestamp? occurredAt,
+    Cue? affectedCue,
+    $core.String? nodeId,
+    $core.String? errorMsg,
+    $fixnum.Int64? cueStartedAtMs,
+    $core.bool? isPaused,
+    $core.Iterable<$core.String>? runningCueIds,
+  }) {
+    final result = create();
+    if (seq != null) result.seq = seq;
+    if (type != null) result.type = type;
+    if (occurredAt != null) result.occurredAt = occurredAt;
+    if (affectedCue != null) result.affectedCue = affectedCue;
+    if (nodeId != null) result.nodeId = nodeId;
+    if (errorMsg != null) result.errorMsg = errorMsg;
+    if (cueStartedAtMs != null) result.cueStartedAtMs = cueStartedAtMs;
+    if (isPaused != null) result.isPaused = isPaused;
+    if (runningCueIds != null) result.runningCueIds.addAll(runningCueIds);
+    return result;
+  }
+
+  ShowExecutionEvent._();
+
+  factory ShowExecutionEvent.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ShowExecutionEvent.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ShowExecutionEvent',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
+      createEmptyInstance: create)
+    ..aInt64(1, _omitFieldNames ? '' : 'seq')
+    ..aE<ShowExecutionEvent_ExecutionEventType>(
+        2, _omitFieldNames ? '' : 'type',
+        enumValues: ShowExecutionEvent_ExecutionEventType.values)
+    ..aOM<$2.Timestamp>(3, _omitFieldNames ? '' : 'occurredAt',
+        subBuilder: $2.Timestamp.create)
+    ..aOM<Cue>(10, _omitFieldNames ? '' : 'affectedCue', subBuilder: Cue.create)
+    ..aOS(11, _omitFieldNames ? '' : 'nodeId')
+    ..aOS(12, _omitFieldNames ? '' : 'errorMsg')
+    ..aInt64(13, _omitFieldNames ? '' : 'cueStartedAtMs')
+    ..aOB(14, _omitFieldNames ? '' : 'isPaused')
+    ..pPS(15, _omitFieldNames ? '' : 'runningCueIds')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ShowExecutionEvent clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ShowExecutionEvent copyWith(void Function(ShowExecutionEvent) updates) =>
+      super.copyWith((message) => updates(message as ShowExecutionEvent))
+          as ShowExecutionEvent;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ShowExecutionEvent create() => ShowExecutionEvent._();
+  @$core.override
+  ShowExecutionEvent createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ShowExecutionEvent getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ShowExecutionEvent>(create);
+  static ShowExecutionEvent? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $fixnum.Int64 get seq => $_getI64(0);
+  @$pb.TagNumber(1)
+  set seq($fixnum.Int64 value) => $_setInt64(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasSeq() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearSeq() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  ShowExecutionEvent_ExecutionEventType get type => $_getN(1);
+  @$pb.TagNumber(2)
+  set type(ShowExecutionEvent_ExecutionEventType value) => $_setField(2, value);
+  @$pb.TagNumber(2)
+  $core.bool hasType() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearType() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $2.Timestamp get occurredAt => $_getN(2);
+  @$pb.TagNumber(3)
+  set occurredAt($2.Timestamp value) => $_setField(3, value);
+  @$pb.TagNumber(3)
+  $core.bool hasOccurredAt() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearOccurredAt() => $_clearField(3);
+  @$pb.TagNumber(3)
+  $2.Timestamp ensureOccurredAt() => $_ensure(2);
+
+  @$pb.TagNumber(10)
+  Cue get affectedCue => $_getN(3);
+  @$pb.TagNumber(10)
+  set affectedCue(Cue value) => $_setField(10, value);
+  @$pb.TagNumber(10)
+  $core.bool hasAffectedCue() => $_has(3);
+  @$pb.TagNumber(10)
+  void clearAffectedCue() => $_clearField(10);
+  @$pb.TagNumber(10)
+  Cue ensureAffectedCue() => $_ensure(3);
+
+  @$pb.TagNumber(11)
+  $core.String get nodeId => $_getSZ(4);
+  @$pb.TagNumber(11)
+  set nodeId($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(11)
+  $core.bool hasNodeId() => $_has(4);
+  @$pb.TagNumber(11)
+  void clearNodeId() => $_clearField(11);
+
+  @$pb.TagNumber(12)
   $core.String get errorMsg => $_getSZ(5);
-  @$pb.TagNumber(6)
+  @$pb.TagNumber(12)
   set errorMsg($core.String value) => $_setString(5, value);
-  @$pb.TagNumber(6)
+  @$pb.TagNumber(12)
   $core.bool hasErrorMsg() => $_has(5);
-  @$pb.TagNumber(6)
-  void clearErrorMsg() => $_clearField(6);
-
-  @$pb.TagNumber(7)
-  $fixnum.Int64 get seq => $_getI64(6);
-  @$pb.TagNumber(7)
-  set seq($fixnum.Int64 value) => $_setInt64(6, value);
-  @$pb.TagNumber(7)
-  $core.bool hasSeq() => $_has(6);
-  @$pb.TagNumber(7)
-  void clearSeq() => $_clearField(7);
-
-  @$pb.TagNumber(8)
-  $core.bool get isPaused => $_getBF(7);
-  @$pb.TagNumber(8)
-  set isPaused($core.bool value) => $_setBool(7, value);
-  @$pb.TagNumber(8)
-  $core.bool hasIsPaused() => $_has(7);
-  @$pb.TagNumber(8)
-  void clearIsPaused() => $_clearField(8);
+  @$pb.TagNumber(12)
+  void clearErrorMsg() => $_clearField(12);
 
   /// Explizite Startzeit der aktiven Cue in Server-Unix-Millis.
-  /// Bei TYPE_CUE_STARTED und Snapshot-Events gesetzt.
   /// Clients nutzen diesen Wert + ClockSync für korrekte Elapsed-Berechnung.
-  @$pb.TagNumber(9)
-  $fixnum.Int64 get cueStartedAtMs => $_getI64(8);
-  @$pb.TagNumber(9)
-  set cueStartedAtMs($fixnum.Int64 value) => $_setInt64(8, value);
-  @$pb.TagNumber(9)
-  $core.bool hasCueStartedAtMs() => $_has(8);
-  @$pb.TagNumber(9)
-  void clearCueStartedAtMs() => $_clearField(9);
+  @$pb.TagNumber(13)
+  $fixnum.Int64 get cueStartedAtMs => $_getI64(6);
+  @$pb.TagNumber(13)
+  set cueStartedAtMs($fixnum.Int64 value) => $_setInt64(6, value);
+  @$pb.TagNumber(13)
+  $core.bool hasCueStartedAtMs() => $_has(6);
+  @$pb.TagNumber(13)
+  void clearCueStartedAtMs() => $_clearField(13);
 
-  /// IDs aller gleichzeitig laufenden Cues (z.B. parallele Group-Children).
-  /// Leer bei normalen Einzelcues; befüllt während Group-Ausführung.
+  @$pb.TagNumber(14)
+  $core.bool get isPaused => $_getBF(7);
+  @$pb.TagNumber(14)
+  set isPaused($core.bool value) => $_setBool(7, value);
+  @$pb.TagNumber(14)
+  $core.bool hasIsPaused() => $_has(7);
+  @$pb.TagNumber(14)
+  void clearIsPaused() => $_clearField(14);
+
+  /// IDs aller gleichzeitig laufenden Cues (parallele Group-Children).
+  @$pb.TagNumber(15)
+  $pb.PbList<$core.String> get runningCueIds => $_getList(8);
+}
+
+class WatchNodeHealthRequest extends $pb.GeneratedMessage {
+  factory WatchNodeHealthRequest({
+    $core.String? sessionId,
+    $core.String? nodeId,
+    $core.String? token,
+  }) {
+    final result = create();
+    if (sessionId != null) result.sessionId = sessionId;
+    if (nodeId != null) result.nodeId = nodeId;
+    if (token != null) result.token = token;
+    return result;
+  }
+
+  WatchNodeHealthRequest._();
+
+  factory WatchNodeHealthRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory WatchNodeHealthRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'WatchNodeHealthRequest',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'sessionId')
+    ..aOS(2, _omitFieldNames ? '' : 'nodeId')
+    ..aOS(3, _omitFieldNames ? '' : 'token')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  WatchNodeHealthRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  WatchNodeHealthRequest copyWith(
+          void Function(WatchNodeHealthRequest) updates) =>
+      super.copyWith((message) => updates(message as WatchNodeHealthRequest))
+          as WatchNodeHealthRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static WatchNodeHealthRequest create() => WatchNodeHealthRequest._();
+  @$core.override
+  WatchNodeHealthRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static WatchNodeHealthRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<WatchNodeHealthRequest>(create);
+  static WatchNodeHealthRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get sessionId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set sessionId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasSessionId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearSessionId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get nodeId => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set nodeId($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasNodeId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearNodeId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get token => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set token($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasToken() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearToken() => $_clearField(3);
+}
+
+class NodeHealthEvent extends $pb.GeneratedMessage {
+  factory NodeHealthEvent({
+    $fixnum.Int64? seq,
+    NodeHealthEvent_HealthEventType? type,
+    $2.Timestamp? occurredAt,
+    $2.NodeInfo? node,
+    $fixnum.Int64? clockDeltaMs,
+  }) {
+    final result = create();
+    if (seq != null) result.seq = seq;
+    if (type != null) result.type = type;
+    if (occurredAt != null) result.occurredAt = occurredAt;
+    if (node != null) result.node = node;
+    if (clockDeltaMs != null) result.clockDeltaMs = clockDeltaMs;
+    return result;
+  }
+
+  NodeHealthEvent._();
+
+  factory NodeHealthEvent.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory NodeHealthEvent.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'NodeHealthEvent',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
+      createEmptyInstance: create)
+    ..aInt64(1, _omitFieldNames ? '' : 'seq')
+    ..aE<NodeHealthEvent_HealthEventType>(2, _omitFieldNames ? '' : 'type',
+        enumValues: NodeHealthEvent_HealthEventType.values)
+    ..aOM<$2.Timestamp>(3, _omitFieldNames ? '' : 'occurredAt',
+        subBuilder: $2.Timestamp.create)
+    ..aOM<$2.NodeInfo>(10, _omitFieldNames ? '' : 'node',
+        subBuilder: $2.NodeInfo.create)
+    ..aInt64(11, _omitFieldNames ? '' : 'clockDeltaMs')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  NodeHealthEvent clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  NodeHealthEvent copyWith(void Function(NodeHealthEvent) updates) =>
+      super.copyWith((message) => updates(message as NodeHealthEvent))
+          as NodeHealthEvent;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static NodeHealthEvent create() => NodeHealthEvent._();
+  @$core.override
+  NodeHealthEvent createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static NodeHealthEvent getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<NodeHealthEvent>(create);
+  static NodeHealthEvent? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $fixnum.Int64 get seq => $_getI64(0);
+  @$pb.TagNumber(1)
+  set seq($fixnum.Int64 value) => $_setInt64(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasSeq() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearSeq() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  NodeHealthEvent_HealthEventType get type => $_getN(1);
+  @$pb.TagNumber(2)
+  set type(NodeHealthEvent_HealthEventType value) => $_setField(2, value);
+  @$pb.TagNumber(2)
+  $core.bool hasType() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearType() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $2.Timestamp get occurredAt => $_getN(2);
+  @$pb.TagNumber(3)
+  set occurredAt($2.Timestamp value) => $_setField(3, value);
+  @$pb.TagNumber(3)
+  $core.bool hasOccurredAt() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearOccurredAt() => $_clearField(3);
+  @$pb.TagNumber(3)
+  $2.Timestamp ensureOccurredAt() => $_ensure(2);
+
   @$pb.TagNumber(10)
-  $pb.PbList<$core.String> get runningCueIds => $_getList(9);
+  $2.NodeInfo get node => $_getN(3);
+  @$pb.TagNumber(10)
+  set node($2.NodeInfo value) => $_setField(10, value);
+  @$pb.TagNumber(10)
+  $core.bool hasNode() => $_has(3);
+  @$pb.TagNumber(10)
+  void clearNode() => $_clearField(10);
+  @$pb.TagNumber(10)
+  $2.NodeInfo ensureNode() => $_ensure(3);
+
+  @$pb.TagNumber(11)
+  $fixnum.Int64 get clockDeltaMs => $_getI64(4);
+  @$pb.TagNumber(11)
+  set clockDeltaMs($fixnum.Int64 value) => $_setInt64(4, value);
+  @$pb.TagNumber(11)
+  $core.bool hasClockDeltaMs() => $_has(4);
+  @$pb.TagNumber(11)
+  void clearClockDeltaMs() => $_clearField(11);
+}
+
+class WatchMediaSyncRequest extends $pb.GeneratedMessage {
+  factory WatchMediaSyncRequest({
+    $core.String? sessionId,
+    $core.String? nodeId,
+    $core.String? token,
+    $core.String? showId,
+  }) {
+    final result = create();
+    if (sessionId != null) result.sessionId = sessionId;
+    if (nodeId != null) result.nodeId = nodeId;
+    if (token != null) result.token = token;
+    if (showId != null) result.showId = showId;
+    return result;
+  }
+
+  WatchMediaSyncRequest._();
+
+  factory WatchMediaSyncRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory WatchMediaSyncRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'WatchMediaSyncRequest',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'sessionId')
+    ..aOS(2, _omitFieldNames ? '' : 'nodeId')
+    ..aOS(3, _omitFieldNames ? '' : 'token')
+    ..aOS(4, _omitFieldNames ? '' : 'showId')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  WatchMediaSyncRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  WatchMediaSyncRequest copyWith(
+          void Function(WatchMediaSyncRequest) updates) =>
+      super.copyWith((message) => updates(message as WatchMediaSyncRequest))
+          as WatchMediaSyncRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static WatchMediaSyncRequest create() => WatchMediaSyncRequest._();
+  @$core.override
+  WatchMediaSyncRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static WatchMediaSyncRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<WatchMediaSyncRequest>(create);
+  static WatchMediaSyncRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get sessionId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set sessionId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasSessionId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearSessionId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get nodeId => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set nodeId($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasNodeId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearNodeId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get token => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set token($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasToken() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearToken() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get showId => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set showId($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasShowId() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearShowId() => $_clearField(4);
+}
+
+class MediaSyncEvent extends $pb.GeneratedMessage {
+  factory MediaSyncEvent({
+    $fixnum.Int64? seq,
+    MediaSyncEvent_MediaEventType? type,
+    $2.Timestamp? occurredAt,
+    $core.String? assetId,
+    $core.String? assetName,
+    $core.String? sha256,
+    $fixnum.Int64? sizeBytes,
+  }) {
+    final result = create();
+    if (seq != null) result.seq = seq;
+    if (type != null) result.type = type;
+    if (occurredAt != null) result.occurredAt = occurredAt;
+    if (assetId != null) result.assetId = assetId;
+    if (assetName != null) result.assetName = assetName;
+    if (sha256 != null) result.sha256 = sha256;
+    if (sizeBytes != null) result.sizeBytes = sizeBytes;
+    return result;
+  }
+
+  MediaSyncEvent._();
+
+  factory MediaSyncEvent.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MediaSyncEvent.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MediaSyncEvent',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
+      createEmptyInstance: create)
+    ..aInt64(1, _omitFieldNames ? '' : 'seq')
+    ..aE<MediaSyncEvent_MediaEventType>(2, _omitFieldNames ? '' : 'type',
+        enumValues: MediaSyncEvent_MediaEventType.values)
+    ..aOM<$2.Timestamp>(3, _omitFieldNames ? '' : 'occurredAt',
+        subBuilder: $2.Timestamp.create)
+    ..aOS(10, _omitFieldNames ? '' : 'assetId')
+    ..aOS(11, _omitFieldNames ? '' : 'assetName')
+    ..aOS(12, _omitFieldNames ? '' : 'sha256')
+    ..aInt64(13, _omitFieldNames ? '' : 'sizeBytes')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MediaSyncEvent clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MediaSyncEvent copyWith(void Function(MediaSyncEvent) updates) =>
+      super.copyWith((message) => updates(message as MediaSyncEvent))
+          as MediaSyncEvent;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MediaSyncEvent create() => MediaSyncEvent._();
+  @$core.override
+  MediaSyncEvent createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MediaSyncEvent getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MediaSyncEvent>(create);
+  static MediaSyncEvent? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $fixnum.Int64 get seq => $_getI64(0);
+  @$pb.TagNumber(1)
+  set seq($fixnum.Int64 value) => $_setInt64(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasSeq() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearSeq() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  MediaSyncEvent_MediaEventType get type => $_getN(1);
+  @$pb.TagNumber(2)
+  set type(MediaSyncEvent_MediaEventType value) => $_setField(2, value);
+  @$pb.TagNumber(2)
+  $core.bool hasType() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearType() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $2.Timestamp get occurredAt => $_getN(2);
+  @$pb.TagNumber(3)
+  set occurredAt($2.Timestamp value) => $_setField(3, value);
+  @$pb.TagNumber(3)
+  $core.bool hasOccurredAt() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearOccurredAt() => $_clearField(3);
+  @$pb.TagNumber(3)
+  $2.Timestamp ensureOccurredAt() => $_ensure(2);
+
+  /// Asset-Informationen (für ASSET_ADDED/REMOVED/UPDATED)
+  @$pb.TagNumber(10)
+  $core.String get assetId => $_getSZ(3);
+  @$pb.TagNumber(10)
+  set assetId($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(10)
+  $core.bool hasAssetId() => $_has(3);
+  @$pb.TagNumber(10)
+  void clearAssetId() => $_clearField(10);
+
+  @$pb.TagNumber(11)
+  $core.String get assetName => $_getSZ(4);
+  @$pb.TagNumber(11)
+  set assetName($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(11)
+  $core.bool hasAssetName() => $_has(4);
+  @$pb.TagNumber(11)
+  void clearAssetName() => $_clearField(11);
+
+  @$pb.TagNumber(12)
+  $core.String get sha256 => $_getSZ(5);
+  @$pb.TagNumber(12)
+  set sha256($core.String value) => $_setString(5, value);
+  @$pb.TagNumber(12)
+  $core.bool hasSha256() => $_has(5);
+  @$pb.TagNumber(12)
+  void clearSha256() => $_clearField(12);
+
+  @$pb.TagNumber(13)
+  $fixnum.Int64 get sizeBytes => $_getI64(6);
+  @$pb.TagNumber(13)
+  set sizeBytes($fixnum.Int64 value) => $_setInt64(6, value);
+  @$pb.TagNumber(13)
+  $core.bool hasSizeBytes() => $_has(6);
+  @$pb.TagNumber(13)
+  void clearSizeBytes() => $_clearField(13);
 }
 
 const $core.bool _omitFieldNames =

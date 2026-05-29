@@ -478,9 +478,9 @@ final $typed_data.Uint8List resumeRequestDescriptor = $convert.base64Decode(
     'Cg1SZXN1bWVSZXF1ZXN0Eh0KCnNlc3Npb25faWQYASABKAlSCXNlc3Npb25JZBIUCgV0b2tlbh'
     'gCIAEoCVIFdG9rZW4SHQoKY29tbWFuZF9pZBgDIAEoCVIJY29tbWFuZElk');
 
-@$core.Deprecated('Use watchShowStateRequestDescriptor instead')
-const WatchShowStateRequest$json = {
-  '1': 'WatchShowStateRequest',
+@$core.Deprecated('Use watchShowDefinitionRequestDescriptor instead')
+const WatchShowDefinitionRequest$json = {
+  '1': 'WatchShowDefinitionRequest',
   '2': [
     {'1': 'session_id', '3': 1, '4': 1, '5': 9, '10': 'sessionId'},
     {'1': 'node_id', '3': 2, '4': 1, '5': 9, '10': 'nodeId'},
@@ -488,82 +488,279 @@ const WatchShowStateRequest$json = {
   ],
 };
 
-/// Descriptor for `WatchShowStateRequest`. Decode as a `google.protobuf.DescriptorProto`.
-final $typed_data.Uint8List watchShowStateRequestDescriptor = $convert.base64Decode(
-    'ChVXYXRjaFNob3dTdGF0ZVJlcXVlc3QSHQoKc2Vzc2lvbl9pZBgBIAEoCVIJc2Vzc2lvbklkEh'
-    'cKB25vZGVfaWQYAiABKAlSBm5vZGVJZBIUCgV0b2tlbhgDIAEoCVIFdG9rZW4=');
+/// Descriptor for `WatchShowDefinitionRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List watchShowDefinitionRequestDescriptor =
+    $convert.base64Decode(
+        'ChpXYXRjaFNob3dEZWZpbml0aW9uUmVxdWVzdBIdCgpzZXNzaW9uX2lkGAEgASgJUglzZXNzaW'
+        '9uSWQSFwoHbm9kZV9pZBgCIAEoCVIGbm9kZUlkEhQKBXRva2VuGAMgASgJUgV0b2tlbg==');
 
-@$core.Deprecated('Use showStateEventDescriptor instead')
-const ShowStateEvent$json = {
-  '1': 'ShowStateEvent',
+@$core.Deprecated('Use showDefinitionEventDescriptor instead')
+const ShowDefinitionEvent$json = {
+  '1': 'ShowDefinitionEvent',
   '2': [
+    {'1': 'seq', '3': 1, '4': 1, '5': 3, '10': 'seq'},
     {
       '1': 'type',
-      '3': 1,
+      '3': 2,
       '4': 1,
       '5': 14,
-      '6': '.stagesync.v1.ShowStateEvent.Type',
+      '6': '.stagesync.v1.ShowDefinitionEvent.DefinitionEventType',
       '10': 'type'
     },
     {
-      '1': 'cue_list',
-      '3': 2,
-      '4': 1,
-      '5': 11,
-      '6': '.stagesync.v1.CueList',
-      '10': 'cueList'
-    },
-    {
-      '1': 'affected_cue',
-      '3': 3,
-      '4': 1,
-      '5': 11,
-      '6': '.stagesync.v1.Cue',
-      '10': 'affectedCue'
-    },
-    {'1': 'node_id', '3': 4, '4': 1, '5': 9, '10': 'nodeId'},
-    {
       '1': 'occurred_at',
-      '3': 5,
+      '3': 3,
       '4': 1,
       '5': 11,
       '6': '.stagesync.v1.Timestamp',
       '10': 'occurredAt'
     },
-    {'1': 'error_msg', '3': 6, '4': 1, '5': 9, '10': 'errorMsg'},
-    {'1': 'seq', '3': 7, '4': 1, '5': 3, '10': 'seq'},
-    {'1': 'is_paused', '3': 8, '4': 1, '5': 8, '10': 'isPaused'},
-    {'1': 'cue_started_at_ms', '3': 9, '4': 1, '5': 3, '10': 'cueStartedAtMs'},
-    {'1': 'running_cue_ids', '3': 10, '4': 3, '5': 9, '10': 'runningCueIds'},
+    {
+      '1': 'cue_list',
+      '3': 10,
+      '4': 1,
+      '5': 11,
+      '6': '.stagesync.v1.CueList',
+      '10': 'cueList'
+    },
   ],
-  '4': [ShowStateEvent_Type$json],
+  '4': [ShowDefinitionEvent_DefinitionEventType$json],
 };
 
-@$core.Deprecated('Use showStateEventDescriptor instead')
-const ShowStateEvent_Type$json = {
-  '1': 'Type',
+@$core.Deprecated('Use showDefinitionEventDescriptor instead')
+const ShowDefinitionEvent_DefinitionEventType$json = {
+  '1': 'DefinitionEventType',
   '2': [
-    {'1': 'TYPE_UNSPECIFIED', '2': 0},
-    {'1': 'TYPE_CUE_STARTED', '2': 1},
-    {'1': 'TYPE_CUE_STOPPED', '2': 2},
-    {'1': 'TYPE_CUE_PAUSED', '2': 3},
-    {'1': 'TYPE_CUE_DONE', '2': 4},
-    {'1': 'TYPE_CUE_ERROR', '2': 5},
-    {'1': 'TYPE_LIST_UPDATED', '2': 6},
-    {'1': 'TYPE_POSITION_CHANGED', '2': 7},
+    {'1': 'DEFINITION_SNAPSHOT', '2': 0},
+    {'1': 'CUE_LIST_CHANGED', '2': 1},
   ],
 };
 
-/// Descriptor for `ShowStateEvent`. Decode as a `google.protobuf.DescriptorProto`.
-final $typed_data.Uint8List showStateEventDescriptor = $convert.base64Decode(
-    'Cg5TaG93U3RhdGVFdmVudBI1CgR0eXBlGAEgASgOMiEuc3RhZ2VzeW5jLnYxLlNob3dTdGF0ZU'
-    'V2ZW50LlR5cGVSBHR5cGUSMAoIY3VlX2xpc3QYAiABKAsyFS5zdGFnZXN5bmMudjEuQ3VlTGlz'
-    'dFIHY3VlTGlzdBI0CgxhZmZlY3RlZF9jdWUYAyABKAsyES5zdGFnZXN5bmMudjEuQ3VlUgthZm'
-    'ZlY3RlZEN1ZRIXCgdub2RlX2lkGAQgASgJUgZub2RlSWQSOAoLb2NjdXJyZWRfYXQYBSABKAsy'
-    'Fy5zdGFnZXN5bmMudjEuVGltZXN0YW1wUgpvY2N1cnJlZEF0EhsKCWVycm9yX21zZxgGIAEoCV'
-    'IIZXJyb3JNc2cSEAoDc2VxGAcgASgDUgNzZXESGwoJaXNfcGF1c2VkGAggASgIUghpc1BhdXNl'
-    'ZBIpChFjdWVfc3RhcnRlZF9hdF9tcxgJIAEoA1IOY3VlU3RhcnRlZEF0TXMSJgoPcnVubmluZ1'
-    '9jdWVfaWRzGAogAygJUg1ydW5uaW5nQ3VlSWRzIrYBCgRUeXBlEhQKEFRZUEVfVU5TUEVDSUZJ'
-    'RUQQABIUChBUWVBFX0NVRV9TVEFSVEVEEAESFAoQVFlQRV9DVUVfU1RPUFBFRBACEhMKD1RZUE'
-    'VfQ1VFX1BBVVNFRBADEhEKDVRZUEVfQ1VFX0RPTkUQBBISCg5UWVBFX0NVRV9FUlJPUhAFEhUK'
-    'EVRZUEVfTElTVF9VUERBVEVEEAYSGQoVVFlQRV9QT1NJVElPTl9DSEFOR0VEEAc=');
+/// Descriptor for `ShowDefinitionEvent`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List showDefinitionEventDescriptor = $convert.base64Decode(
+    'ChNTaG93RGVmaW5pdGlvbkV2ZW50EhAKA3NlcRgBIAEoA1IDc2VxEkkKBHR5cGUYAiABKA4yNS'
+    '5zdGFnZXN5bmMudjEuU2hvd0RlZmluaXRpb25FdmVudC5EZWZpbml0aW9uRXZlbnRUeXBlUgR0'
+    'eXBlEjgKC29jY3VycmVkX2F0GAMgASgLMhcuc3RhZ2VzeW5jLnYxLlRpbWVzdGFtcFIKb2NjdX'
+    'JyZWRBdBIwCghjdWVfbGlzdBgKIAEoCzIVLnN0YWdlc3luYy52MS5DdWVMaXN0UgdjdWVMaXN0'
+    'IkQKE0RlZmluaXRpb25FdmVudFR5cGUSFwoTREVGSU5JVElPTl9TTkFQU0hPVBAAEhQKEENVRV'
+    '9MSVNUX0NIQU5HRUQQAQ==');
+
+@$core.Deprecated('Use watchShowExecutionRequestDescriptor instead')
+const WatchShowExecutionRequest$json = {
+  '1': 'WatchShowExecutionRequest',
+  '2': [
+    {'1': 'session_id', '3': 1, '4': 1, '5': 9, '10': 'sessionId'},
+    {'1': 'node_id', '3': 2, '4': 1, '5': 9, '10': 'nodeId'},
+    {'1': 'token', '3': 3, '4': 1, '5': 9, '10': 'token'},
+  ],
+};
+
+/// Descriptor for `WatchShowExecutionRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List watchShowExecutionRequestDescriptor =
+    $convert.base64Decode(
+        'ChlXYXRjaFNob3dFeGVjdXRpb25SZXF1ZXN0Eh0KCnNlc3Npb25faWQYASABKAlSCXNlc3Npb2'
+        '5JZBIXCgdub2RlX2lkGAIgASgJUgZub2RlSWQSFAoFdG9rZW4YAyABKAlSBXRva2Vu');
+
+@$core.Deprecated('Use showExecutionEventDescriptor instead')
+const ShowExecutionEvent$json = {
+  '1': 'ShowExecutionEvent',
+  '2': [
+    {'1': 'seq', '3': 1, '4': 1, '5': 3, '10': 'seq'},
+    {
+      '1': 'type',
+      '3': 2,
+      '4': 1,
+      '5': 14,
+      '6': '.stagesync.v1.ShowExecutionEvent.ExecutionEventType',
+      '10': 'type'
+    },
+    {
+      '1': 'occurred_at',
+      '3': 3,
+      '4': 1,
+      '5': 11,
+      '6': '.stagesync.v1.Timestamp',
+      '10': 'occurredAt'
+    },
+    {
+      '1': 'affected_cue',
+      '3': 10,
+      '4': 1,
+      '5': 11,
+      '6': '.stagesync.v1.Cue',
+      '10': 'affectedCue'
+    },
+    {'1': 'node_id', '3': 11, '4': 1, '5': 9, '10': 'nodeId'},
+    {'1': 'error_msg', '3': 12, '4': 1, '5': 9, '10': 'errorMsg'},
+    {'1': 'cue_started_at_ms', '3': 13, '4': 1, '5': 3, '10': 'cueStartedAtMs'},
+    {'1': 'is_paused', '3': 14, '4': 1, '5': 8, '10': 'isPaused'},
+    {'1': 'running_cue_ids', '3': 15, '4': 3, '5': 9, '10': 'runningCueIds'},
+  ],
+  '4': [ShowExecutionEvent_ExecutionEventType$json],
+};
+
+@$core.Deprecated('Use showExecutionEventDescriptor instead')
+const ShowExecutionEvent_ExecutionEventType$json = {
+  '1': 'ExecutionEventType',
+  '2': [
+    {'1': 'EXECUTION_SNAPSHOT', '2': 0},
+    {'1': 'CUE_STARTED', '2': 1},
+    {'1': 'CUE_PAUSED', '2': 2},
+    {'1': 'CUE_RESUMED', '2': 3},
+    {'1': 'CUE_STOPPED', '2': 4},
+    {'1': 'CUE_DONE', '2': 5},
+    {'1': 'CUE_ERROR', '2': 6},
+  ],
+};
+
+/// Descriptor for `ShowExecutionEvent`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List showExecutionEventDescriptor = $convert.base64Decode(
+    'ChJTaG93RXhlY3V0aW9uRXZlbnQSEAoDc2VxGAEgASgDUgNzZXESRwoEdHlwZRgCIAEoDjIzLn'
+    'N0YWdlc3luYy52MS5TaG93RXhlY3V0aW9uRXZlbnQuRXhlY3V0aW9uRXZlbnRUeXBlUgR0eXBl'
+    'EjgKC29jY3VycmVkX2F0GAMgASgLMhcuc3RhZ2VzeW5jLnYxLlRpbWVzdGFtcFIKb2NjdXJyZW'
+    'RBdBI0CgxhZmZlY3RlZF9jdWUYCiABKAsyES5zdGFnZXN5bmMudjEuQ3VlUgthZmZlY3RlZEN1'
+    'ZRIXCgdub2RlX2lkGAsgASgJUgZub2RlSWQSGwoJZXJyb3JfbXNnGAwgASgJUghlcnJvck1zZx'
+    'IpChFjdWVfc3RhcnRlZF9hdF9tcxgNIAEoA1IOY3VlU3RhcnRlZEF0TXMSGwoJaXNfcGF1c2Vk'
+    'GA4gASgIUghpc1BhdXNlZBImCg9ydW5uaW5nX2N1ZV9pZHMYDyADKAlSDXJ1bm5pbmdDdWVJZH'
+    'MijAEKEkV4ZWN1dGlvbkV2ZW50VHlwZRIWChJFWEVDVVRJT05fU05BUFNIT1QQABIPCgtDVUVf'
+    'U1RBUlRFRBABEg4KCkNVRV9QQVVTRUQQAhIPCgtDVUVfUkVTVU1FRBADEg8KC0NVRV9TVE9QUE'
+    'VEEAQSDAoIQ1VFX0RPTkUQBRINCglDVUVfRVJST1IQBg==');
+
+@$core.Deprecated('Use watchNodeHealthRequestDescriptor instead')
+const WatchNodeHealthRequest$json = {
+  '1': 'WatchNodeHealthRequest',
+  '2': [
+    {'1': 'session_id', '3': 1, '4': 1, '5': 9, '10': 'sessionId'},
+    {'1': 'node_id', '3': 2, '4': 1, '5': 9, '10': 'nodeId'},
+    {'1': 'token', '3': 3, '4': 1, '5': 9, '10': 'token'},
+  ],
+};
+
+/// Descriptor for `WatchNodeHealthRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List watchNodeHealthRequestDescriptor =
+    $convert.base64Decode(
+        'ChZXYXRjaE5vZGVIZWFsdGhSZXF1ZXN0Eh0KCnNlc3Npb25faWQYASABKAlSCXNlc3Npb25JZB'
+        'IXCgdub2RlX2lkGAIgASgJUgZub2RlSWQSFAoFdG9rZW4YAyABKAlSBXRva2Vu');
+
+@$core.Deprecated('Use nodeHealthEventDescriptor instead')
+const NodeHealthEvent$json = {
+  '1': 'NodeHealthEvent',
+  '2': [
+    {'1': 'seq', '3': 1, '4': 1, '5': 3, '10': 'seq'},
+    {
+      '1': 'type',
+      '3': 2,
+      '4': 1,
+      '5': 14,
+      '6': '.stagesync.v1.NodeHealthEvent.HealthEventType',
+      '10': 'type'
+    },
+    {
+      '1': 'occurred_at',
+      '3': 3,
+      '4': 1,
+      '5': 11,
+      '6': '.stagesync.v1.Timestamp',
+      '10': 'occurredAt'
+    },
+    {
+      '1': 'node',
+      '3': 10,
+      '4': 1,
+      '5': 11,
+      '6': '.stagesync.v1.NodeInfo',
+      '10': 'node'
+    },
+    {'1': 'clock_delta_ms', '3': 11, '4': 1, '5': 3, '10': 'clockDeltaMs'},
+  ],
+  '4': [NodeHealthEvent_HealthEventType$json],
+};
+
+@$core.Deprecated('Use nodeHealthEventDescriptor instead')
+const NodeHealthEvent_HealthEventType$json = {
+  '1': 'HealthEventType',
+  '2': [
+    {'1': 'HEALTH_SNAPSHOT', '2': 0},
+    {'1': 'NODE_ONLINE', '2': 1},
+    {'1': 'NODE_OFFLINE', '2': 2},
+    {'1': 'NODE_DEGRADED', '2': 3},
+    {'1': 'CLOCK_DELTA', '2': 4},
+  ],
+};
+
+/// Descriptor for `NodeHealthEvent`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List nodeHealthEventDescriptor = $convert.base64Decode(
+    'Cg9Ob2RlSGVhbHRoRXZlbnQSEAoDc2VxGAEgASgDUgNzZXESQQoEdHlwZRgCIAEoDjItLnN0YW'
+    'dlc3luYy52MS5Ob2RlSGVhbHRoRXZlbnQuSGVhbHRoRXZlbnRUeXBlUgR0eXBlEjgKC29jY3Vy'
+    'cmVkX2F0GAMgASgLMhcuc3RhZ2VzeW5jLnYxLlRpbWVzdGFtcFIKb2NjdXJyZWRBdBIqCgRub2'
+    'RlGAogASgLMhYuc3RhZ2VzeW5jLnYxLk5vZGVJbmZvUgRub2RlEiQKDmNsb2NrX2RlbHRhX21z'
+    'GAsgASgDUgxjbG9ja0RlbHRhTXMibQoPSGVhbHRoRXZlbnRUeXBlEhMKD0hFQUxUSF9TTkFQU0'
+    'hPVBAAEg8KC05PREVfT05MSU5FEAESEAoMTk9ERV9PRkZMSU5FEAISEQoNTk9ERV9ERUdSQURF'
+    'RBADEg8KC0NMT0NLX0RFTFRBEAQ=');
+
+@$core.Deprecated('Use watchMediaSyncRequestDescriptor instead')
+const WatchMediaSyncRequest$json = {
+  '1': 'WatchMediaSyncRequest',
+  '2': [
+    {'1': 'session_id', '3': 1, '4': 1, '5': 9, '10': 'sessionId'},
+    {'1': 'node_id', '3': 2, '4': 1, '5': 9, '10': 'nodeId'},
+    {'1': 'token', '3': 3, '4': 1, '5': 9, '10': 'token'},
+    {'1': 'show_id', '3': 4, '4': 1, '5': 9, '10': 'showId'},
+  ],
+};
+
+/// Descriptor for `WatchMediaSyncRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List watchMediaSyncRequestDescriptor = $convert.base64Decode(
+    'ChVXYXRjaE1lZGlhU3luY1JlcXVlc3QSHQoKc2Vzc2lvbl9pZBgBIAEoCVIJc2Vzc2lvbklkEh'
+    'cKB25vZGVfaWQYAiABKAlSBm5vZGVJZBIUCgV0b2tlbhgDIAEoCVIFdG9rZW4SFwoHc2hvd19p'
+    'ZBgEIAEoCVIGc2hvd0lk');
+
+@$core.Deprecated('Use mediaSyncEventDescriptor instead')
+const MediaSyncEvent$json = {
+  '1': 'MediaSyncEvent',
+  '2': [
+    {'1': 'seq', '3': 1, '4': 1, '5': 3, '10': 'seq'},
+    {
+      '1': 'type',
+      '3': 2,
+      '4': 1,
+      '5': 14,
+      '6': '.stagesync.v1.MediaSyncEvent.MediaEventType',
+      '10': 'type'
+    },
+    {
+      '1': 'occurred_at',
+      '3': 3,
+      '4': 1,
+      '5': 11,
+      '6': '.stagesync.v1.Timestamp',
+      '10': 'occurredAt'
+    },
+    {'1': 'asset_id', '3': 10, '4': 1, '5': 9, '10': 'assetId'},
+    {'1': 'asset_name', '3': 11, '4': 1, '5': 9, '10': 'assetName'},
+    {'1': 'sha256', '3': 12, '4': 1, '5': 9, '10': 'sha256'},
+    {'1': 'size_bytes', '3': 13, '4': 1, '5': 3, '10': 'sizeBytes'},
+  ],
+  '4': [MediaSyncEvent_MediaEventType$json],
+};
+
+@$core.Deprecated('Use mediaSyncEventDescriptor instead')
+const MediaSyncEvent_MediaEventType$json = {
+  '1': 'MediaEventType',
+  '2': [
+    {'1': 'MEDIA_SNAPSHOT', '2': 0},
+    {'1': 'ASSET_ADDED', '2': 1},
+    {'1': 'ASSET_REMOVED', '2': 2},
+    {'1': 'ASSET_UPDATED', '2': 3},
+  ],
+};
+
+/// Descriptor for `MediaSyncEvent`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List mediaSyncEventDescriptor = $convert.base64Decode(
+    'Cg5NZWRpYVN5bmNFdmVudBIQCgNzZXEYASABKANSA3NlcRI/CgR0eXBlGAIgASgOMisuc3RhZ2'
+    'VzeW5jLnYxLk1lZGlhU3luY0V2ZW50Lk1lZGlhRXZlbnRUeXBlUgR0eXBlEjgKC29jY3VycmVk'
+    'X2F0GAMgASgLMhcuc3RhZ2VzeW5jLnYxLlRpbWVzdGFtcFIKb2NjdXJyZWRBdBIZCghhc3NldF'
+    '9pZBgKIAEoCVIHYXNzZXRJZBIdCgphc3NldF9uYW1lGAsgASgJUglhc3NldE5hbWUSFgoGc2hh'
+    'MjU2GAwgASgJUgZzaGEyNTYSHQoKc2l6ZV9ieXRlcxgNIAEoA1IJc2l6ZUJ5dGVzIlsKDk1lZG'
+    'lhRXZlbnRUeXBlEhIKDk1FRElBX1NOQVBTSE9UEAASDwoLQVNTRVRfQURERUQQARIRCg1BU1NF'
+    'VF9SRU1PVkVEEAISEQoNQVNTRVRfVVBEQVRFRBAD');
