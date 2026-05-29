@@ -23,6 +23,7 @@ import '../design_system/domain_components/cue_list_row.dart';
 import '../design_system/domain_components/active_cue_monitor.dart';
 import '../design_system/domain_components/node_status_badge.dart';
 import '../design_system/domain_components/audio_cue_minibar.dart';
+import '../design_system/domain_components/cue_type_picker.dart';
 import '../screens/nodes/node_management_panel.dart';
 import '../screens/media/media_manager_screen.dart';
 import '../screens/audio/local_audio_panel.dart';
@@ -327,8 +328,14 @@ class _CueListPanel extends StatelessWidget {
                 color: ScColors.textSecondary,
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                onPressed: () => notifier.addCue(),
                 tooltip: 'Cue hinzufügen',
+                onPressed: () async {
+                  final box = context.findRenderObject() as RenderBox?;
+                  if (box == null) return;
+                  final pos = box.localToGlobal(Offset(box.size.width, box.size.height));
+                  final params = await showCueTypePicker(context, pos);
+                  if (params != null) notifier.addCue(params: params);
+                },
               ),
             ],
           ),
@@ -672,21 +679,105 @@ class _ParamsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return switch (params) {
-      AudioParams p => _AudioParamsEditor(params: p, onChanged: onChanged),
-      WaitParams  p => _WaitParamsEditor(params: p, onChanged: onChanged),
-      MaOscParams p => _MaOscParamsEditor(params: p, onChanged: onChanged),
-      GotoParams  p => _GotoParamsEditor(params: p, onChanged: onChanged),
-      _             => _Section(
-          title: 'TYP',
-          children: [
-            Text(
-              params.runtimeType.toString().replaceAll('Params', ''),
-              style: ScText.label,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Typ-Wechsler
+        _CueTypeSwitcher(current: params, onSwitch: onChanged),
+        const SizedBox(height: 12),
+        // Param-Editor für den gewählten Typ
+        switch (params) {
+          AudioParams p => _AudioParamsEditor(params: p, onChanged: onChanged),
+          WaitParams  p => _WaitParamsEditor(params: p, onChanged: onChanged),
+          MaOscParams p => _MaOscParamsEditor(params: p, onChanged: onChanged),
+          GotoParams  p => _GotoParamsEditor(params: p, onChanged: onChanged),
+          _             => const SizedBox.shrink(),
+        },
+      ],
+    );
+  }
+}
+
+/// Kompakte Chip-Leiste zum Wechsel des Cue-Typs.
+class _CueTypeSwitcher extends StatelessWidget {
+  final CueParams current;
+  final ValueChanged<CueParams> onSwitch;
+
+  const _CueTypeSwitcher({required this.current, required this.onSwitch});
+
+  static const _types = [
+    (icon: Icons.volume_up,            label: 'Audio', key: 'audio'),
+    (icon: Icons.timer_outlined,        label: 'Wait',  key: 'wait'),
+    (icon: Icons.settings_remote,       label: 'MA',    key: 'maOsc'),
+    (icon: Icons.redo,                  label: 'GOTO',  key: 'goto'),
+    (icon: Icons.account_tree_outlined, label: 'Group', key: 'group'),
+  ];
+
+  String get _currentKey => switch (current) {
+    AudioParams() => 'audio',
+    WaitParams()  => 'wait',
+    MaOscParams() => 'maOsc',
+    GotoParams()  => 'goto',
+    GroupParams() => 'group',
+    _             => '',
+  };
+
+  CueParams _defaultFor(String key) => switch (key) {
+    'audio' => const AudioParams(assetId: ''),
+    'wait'  => const WaitParams(durationMs: 5000),
+    'maOsc' => const MaOscParams(oscAddress: '/gma2/cmd'),
+    'goto'  => const GotoParams(targetCueId: ''),
+    'group' => const GroupParams(childCueIds: [], sequential: false),
+    _       => const AudioParams(assetId: ''),
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 4,
+      children: _types.map((t) {
+        final isSelected = t.key == _currentKey;
+        return Tooltip(
+          message: t.label,
+          child: GestureDetector(
+            onTap: isSelected ? null : () => onSwitch(_defaultFor(t.key)),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 120),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? ScColors.active.withValues(alpha: 0.15)
+                    : Colors.transparent,
+                border: Border.all(
+                  color: isSelected ? ScColors.active : ScColors.divider,
+                ),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    t.icon,
+                    size: 12,
+                    color: isSelected ? ScColors.active : ScColors.textDim,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    t.label,
+                    style: TextStyle(
+                      color: isSelected ? ScColors.active : ScColors.textDim,
+                      fontSize: 10,
+                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ],
-        ),
-    };
+          ),
+        );
+      }).toList(),
+    );
   }
 }
 

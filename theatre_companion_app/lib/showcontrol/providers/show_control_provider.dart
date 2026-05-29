@@ -7,6 +7,7 @@ import '../grpc/stage_sync_client.dart';
 import '../grpc/generated/stagesync/v1/showcontrol.pb.dart' hide PatchConfig;
 import '../infrastructure/grpc/show_control_repository.dart' as repo;
 import '../domain/show.dart' as domain;
+import '../domain/cue_params.dart' as domain_params;
 import '../domain/node_status.dart';
 import '../nodes/audio_node/audio_device.dart';
 import '../domain/patch_config.dart';
@@ -235,13 +236,15 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
     await updateCueList(updated);
   }
 
-  Future<void> addCue() async {
+  Future<void> addCue({domain_params.CueParams params = const domain_params.AudioParams(assetId: '')}) async {
     if (!_session.isInSession) return;
-    final newCue = Cue()
-      ..cueId = _uuid.v4()
-      ..number = _nextCueNumber()
-      ..label = 'Neue Cue';
-    await upsertCue(newCue);
+    final domainCue = domain.Cue(
+      id: _uuid.v4(),
+      number: _nextCueNumber(),
+      label: 'Neue Cue',
+      params: params,
+    );
+    await upsertDomainCue(domainCue);
   }
 
   String _nextCueNumber() {
