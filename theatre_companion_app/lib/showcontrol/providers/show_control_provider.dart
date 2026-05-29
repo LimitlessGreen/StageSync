@@ -15,8 +15,7 @@ const _uuid = Uuid();
 // ── State ─────────────────────────────────────────────────────────────────────
 
 /// Sentinel, um in [ShowControlState.copyWith] „nicht übergeben" von „auf null
-/// setzen" zu unterscheiden (das alte `?? this`-Muster konnte nullable Felder
-/// nicht löschen — dadurch blieb z.B. beim Stop die aktive Cue erhalten).
+/// setzen" zu unterscheiden.
 const Object _unset = Object();
 
 class ShowControlState {
@@ -27,17 +26,13 @@ class ShowControlState {
   final bool isPaused;
   final String? error;
 
-  /// Startzeit der aktiven Cue in **Server-Zeit** (Unix-Millis). Vom Master per
-  /// ShowStateEvent gesetzt → über [ClockSync] zeigen alle Geräte dieselbe
-  /// verstrichene Zeit (statt lokal hochzuzählen).
+  /// Startzeit der aktiven Cue in Server-Zeit (Unix-Millis).
   final int? activeCueStartedServerMs;
 
-  /// Server-Zeit (Unix-Millis), zu der pausiert wurde. Nicht-null = Transport
-  /// eingefroren → die verstrichene Zeit bleibt stehen.
+  /// Server-Zeit (Unix-Millis), zu der pausiert wurde.
   final int? pausedAtServerMs;
 
-  /// Alle aktuell ausführenden Cue-IDs. Bei normalen Cues: {activeCueId}.
-  /// Bei Group-Cues zusätzlich die parallel laufenden Kind-Cue-IDs.
+  /// Alle aktuell ausführenden Cue-IDs (bei Group-Cues mehrere).
   final Set<String> runningCueIds;
 
   const ShowControlState({
@@ -91,18 +86,22 @@ final showControlProvider =
 
 class ShowControlNotifier extends StateNotifier<ShowControlState> {
   final Ref _ref;
-  StreamSubscription<ShowStateEvent>? _stateSub;
-  // Letzte angewandte Server-Sequenz → veraltete/out-of-order Events verwerfen.
-  int _lastSeq = 0;
+
+  // Stream 1: Show-Definition (CueList-Änderungen)
+  StreamSubscription<ShowDefinitionEvent>? _defSub;
+  int _lastDefSeq = 0;
+
+  // Stream 2: Show-Execution (Transport-Events)
+  StreamSubscription<ShowExecutionEvent>? _execSub;
+  int _lastExecSeq = 0;
 
   ShowControlNotifier(this._ref) : super(const ShowControlState());
 
   SessionState get _session => _ref.read(sessionProvider);
-
   String get _sessionId => _session.session!.sessionId;
   String get _token => _session.token!;
 
-  /// CueList laden und Show-State-Stream starten.
+  /// CueList laden und beide Event-Streams starten.
   Future<void> initialize() async {
     if (!_session.isInSession) return;
 
@@ -119,17 +118,17 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
         isLoading: false,
       );
 
-      _subscribeToState();
+      _subscribeToDefinition();
+      _subscribeToExecution();
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
 
-  /// GO — nächste Cue ausführen (ohne Argument = aktive Cue weiter).
+  // ── Transport Commands ──────────────────────────────────────────────────────
+
   Future<void> go({String cueId = ''}) async {
     if (!_session.isInSession) return;
-    final client = StageSyncClient.instance;
-
     final req = GoRequest()
       ..sessionId = _sessionId
       ..token = _token
@@ -137,9 +136,9 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
       ..commandId = _uuid.v4();
 
     try {
-      final resp = await client.showControl.go(req);
-      // Startzeit NICHT lokal setzen — das autoritative TYPE_CUE_STARTED-Event
-      // vom Master liefert die Server-Startzeit für alle Geräte einheitlich.
+      final resp = await StageSyncClient.instance.showControl.go(req);
+      // Startzeit NICHT lokal setzen — das autoritative CUE_STARTED-Event
+      // vom Server liefert die Server-Startzeit für alle Geräte einheitlich.
       state = state.copyWith(
         activeCue: resp.executingCue,
         nextCue: resp.nextCue,
@@ -149,7 +148,6 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
     }
   }
 
-  /// STOP — bricht die laufende Cue ab und setzt die Queue zurück.
   Future<void> stop() async {
     if (!_session.isInSession) return;
     final req = StopRequest()
@@ -157,7 +155,6 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
       ..token = _token
       ..commandId = _uuid.v4();
     await StageSyncClient.instance.showControl.stop(req);
-    // Aktive Cue + Timer wirklich zurücksetzen (nicht nur isPaused).
     state = state.copyWith(
       activeCue: null,
       isPaused: false,
@@ -166,7 +163,6 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
     );
   }
 
-  /// PAUSE — hält die laufende Cue an und friert die verstrichene Zeit ein.
   Future<void> pause() async {
     if (!_session.isInSession) return;
     final req = PauseRequest()
@@ -180,9 +176,6 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
     );
   }
 
-  /// RESUME — setzt eine pausierte Cue fort. Die korrekte Fortsetzung der Zeit
-  /// liefert das vom Master gesendete TYPE_CUE_STARTED (mit angepasster
-  /// Startzeit); hier nur optimistisch isPaused lösen.
   Future<void> resume() async {
     if (!_session.isInSession) return;
     final req = ResumeRequest()
@@ -193,25 +186,16 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
     state = state.copyWith(isPaused: false);
   }
 
-  /// GO — springt direkt zu einer bestimmten Cue (Kontext-Menü / Doppelklick).
   Future<void> goToCue(String cueId) => go(cueId: cueId);
-
-  /// Cue löschen via Keyboard / Kontextmenü.
   Future<void> deleteCueById(String cueId) => deleteCue(cueId);
 
-  /// Speichert ein Domain-[domain.Cue] via Proto-Mapper auf dem Server.
-  /// Wird vom Inspector-"Speichern"-Button aufgerufen.
   Future<void> upsertDomainCue(domain.Cue domainCue) =>
       upsertCue(repo.ShowControlRepository.cueToProto(domainCue));
 
-  /// Cue-Reihenfolge neu setzen (drag & drop im DesktopShell).
-  ///
-  /// [orderedIds] = neue Reihenfolge aller Cue-IDs.
   Future<void> reorderCue({required List<String> orderedIds}) async {
     final list = state.cueList;
     if (list == null) return;
 
-    // Build a mutable deepCopy, reorder via the proto mutable field.
     final byId = {for (final c in list.cues) c.cueId: c};
     final reordered = orderedIds
         .map((id) => byId[id])
@@ -225,7 +209,6 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
     await updateCueList(updated);
   }
 
-  /// Neue leere Audio-Cue hinzufügen (wird an den Server gesendet).
   Future<void> addCue() async {
     if (!_session.isInSession) return;
     final newCue = Cue()
@@ -244,7 +227,6 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
     return '${cues.length + 1}';
   }
 
-  /// Cue hinzufügen oder aktualisieren.
   Future<void> upsertCue(Cue cue) async {
     if (!_session.isInSession) return;
     final currentListId = state.cueList?.cueListId ?? 'main';
@@ -254,10 +236,9 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
       ..cueListId = currentListId
       ..cue = cue;
     await StageSyncClient.instance.showControl.upsertCue(req);
-    await initialize(); // CueList neu laden
+    await initialize();
   }
 
-  /// Cue löschen.
   Future<void> deleteCue(String cueId) async {
     if (!_session.isInSession) return;
     final currentListId = state.cueList?.cueListId ?? 'main';
@@ -270,7 +251,6 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
     await initialize();
   }
 
-  /// Komplette CueList ersetzen (z.B. nach Reorder).
   Future<void> updateCueList(CueList updated) async {
     if (!_session.isInSession) return;
     final req = UpdateCueListRequest()
@@ -281,39 +261,70 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
     state = state.copyWith(cueList: resp.cueList);
   }
 
-  void _subscribeToState() {
-    _stateSub?.cancel();
-    _lastSeq = 0; // neuer Stream → Sequenz zurücksetzen
-    final req = WatchShowStateRequest()
+  // ── Stream 1: Show-Definition ───────────────────────────────────────────────
+
+  void _subscribeToDefinition() {
+    _defSub?.cancel();
+    _lastDefSeq = 0;
+    final req = WatchShowDefinitionRequest()
       ..sessionId = _sessionId
       ..nodeId = _session.myNode!.nodeId
       ..token = _token;
 
-    _stateSub = StageSyncClient.instance.showControl
-        .watchShowState(req)
-        .listen(_handleEvent);
+    _defSub = StageSyncClient.instance.showControl
+        .watchShowDefinition(req)
+        .listen(_handleDefinitionEvent);
   }
 
-  void _handleEvent(ShowStateEvent event) {
-    // Veraltete Events verwerfen (Sequenz pro Session, monoton). Gleiche Seq
-    // (z.B. Snapshot-Events) werden zugelassen — Anwendungen sind idempotent.
+  void _handleDefinitionEvent(ShowDefinitionEvent event) {
     final seq = event.seq.toInt();
-    if (seq != 0 && seq < _lastSeq) return;
-    if (seq > _lastSeq) _lastSeq = seq;
+    if (seq != 0 && seq < _lastDefSeq) return;
+    if (seq > _lastDefSeq) _lastDefSeq = seq;
 
-    // Cue-Liste immer übernehmen, wenn das Event sie mitliefert.
-    final cueList = event.hasCueList() ? event.cueList : state.cueList;
+    // Beide Event-Typen (SNAPSHOT + CUE_LIST_CHANGED) liefern die neue CueList.
+    if (event.hasCueList()) {
+      state = state.copyWith(cueList: event.cueList);
+    }
+  }
+
+  // ── Stream 2: Show-Execution ────────────────────────────────────────────────
+
+  void _subscribeToExecution() {
+    _execSub?.cancel();
+    _lastExecSeq = 0;
+    final req = WatchShowExecutionRequest()
+      ..sessionId = _sessionId
+      ..nodeId = _session.myNode!.nodeId
+      ..token = _token;
+
+    _execSub = StageSyncClient.instance.showControl
+        .watchShowExecution(req)
+        .listen(_handleExecutionEvent);
+  }
+
+  void _handleExecutionEvent(ShowExecutionEvent event) {
+    final seq = event.seq.toInt();
+    if (seq != 0 && seq < _lastExecSeq) return;
+    if (seq > _lastExecSeq) _lastExecSeq = seq;
 
     switch (event.type) {
-      case ShowStateEvent_Type.TYPE_CUE_STARTED:
-        // Einzige autoritative Quelle für „aktive Cue + Timerstart" (auch Resume:
-        // der Master schickt eine angepasste Startzeit). NUR hier wird gestartet.
-        // cueStartedAtMs bevorzugen (explizit gesetzt), Fallback auf occurred_at.
+      case ShowExecutionEvent_ExecutionEventType.EXECUTION_SNAPSHOT:
+        // Snapshot: Transport-State beim Verbinden synchronisieren.
+        if (event.hasAffectedCue()) {
+          final startMs = event.cueStartedAtMs.toInt() != 0
+              ? event.cueStartedAtMs.toInt()
+              : _eventServerMs(event);
+          state = state.copyWith(
+            isPaused: event.isPaused,
+            activeCue: event.affectedCue,
+            activeCueStartedServerMs: startMs,
+          );
+        }
+      case ShowExecutionEvent_ExecutionEventType.CUE_STARTED:
         final startMs = event.cueStartedAtMs.toInt() != 0
             ? event.cueStartedAtMs.toInt()
             : _eventServerMs(event);
         state = state.copyWith(
-          cueList: cueList,
           isPaused: false,
           activeCue: event.hasAffectedCue() ? event.affectedCue : state.activeCue,
           activeCueStartedServerMs: startMs,
@@ -322,39 +333,35 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
               ? event.runningCueIds.toSet()
               : (event.hasAffectedCue() ? {event.affectedCue.cueId} : state.runningCueIds),
         );
-      case ShowStateEvent_Type.TYPE_CUE_PAUSED:
-        // Auf die Server-Pausenzeit einfrieren → alle Geräte zeigen denselben Wert.
+      case ShowExecutionEvent_ExecutionEventType.CUE_PAUSED:
         state = state.copyWith(
-          cueList: cueList,
           isPaused: true,
           pausedAtServerMs: _eventServerMs(event),
         );
-      case ShowStateEvent_Type.TYPE_CUE_STOPPED:
+      case ShowExecutionEvent_ExecutionEventType.CUE_RESUMED:
+        // Resume schickt CUE_STARTED mit angepasster Startzeit — hier nur
+        // isPaused optimistisch lösen falls das Event separat kommt.
+        state = state.copyWith(isPaused: false);
+      case ShowExecutionEvent_ExecutionEventType.CUE_STOPPED:
         state = state.copyWith(
-          cueList: cueList,
           activeCue: null,
           isPaused: false,
           activeCueStartedServerMs: null,
           pausedAtServerMs: null,
           runningCueIds: const {},
         );
-      case ShowStateEvent_Type.TYPE_CUE_DONE:
-      case ShowStateEvent_Type.TYPE_CUE_ERROR:
-        // Bei Group-Children: running_cue_ids zeigt was noch läuft.
+      case ShowExecutionEvent_ExecutionEventType.CUE_DONE:
+      case ShowExecutionEvent_ExecutionEventType.CUE_ERROR:
         final updatedRunning = event.runningCueIds.isNotEmpty
             ? event.runningCueIds.toSet()
             : state.runningCueIds;
-        state = state.copyWith(cueList: cueList, runningCueIds: updatedRunning);
+        state = state.copyWith(runningCueIds: updatedRunning);
       default:
-        // LIST_UPDATED: NUR die Liste aktualisieren.
-        // Das Hinzufügen/Ändern einer Cue darf NICHT die aktive Cue setzen oder
-        // den Timer starten (sonst „läuft" ein neu hinzugefügter Eintrag los).
-        state = state.copyWith(cueList: cueList);
+        break;
     }
   }
 
-  /// Server-Zeitstempel eines Events in Unix-Millis (Fallback: jetzige Serverzeit).
-  int _eventServerMs(ShowStateEvent event) {
+  int _eventServerMs(ShowExecutionEvent event) {
     if (event.hasOccurredAt()) {
       final ms = event.occurredAt.unixMillis.toInt();
       if (ms != 0) return ms;
@@ -364,7 +371,8 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
 
   @override
   void dispose() {
-    _stateSub?.cancel();
+    _defSub?.cancel();
+    _execSub?.cancel();
     super.dispose();
   }
 }
