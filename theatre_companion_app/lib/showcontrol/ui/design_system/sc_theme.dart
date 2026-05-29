@@ -27,7 +27,7 @@ abstract final class ScTheme {
       ),
       dividerColor: ScColors.divider,
       cardColor: ScColors.surface,
-      cardTheme: const CardTheme(
+      cardTheme: CardThemeData(
         color: ScColors.surface,
         elevation: 0,
         margin: EdgeInsets.zero,
@@ -62,4 +62,5 @@ abstract final class ScTheme {
     );
   }
 }
+
 
