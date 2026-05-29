@@ -12,7 +12,7 @@ enum ScButtonSize { large, normal, compact }
 /// [danger]    → STOP-style (red outlined or fill)
 /// [secondary] → PAUSE/RESUME-style (amber outlined)
 /// [ghost]     → toolbar icon-buttons (transparent)
-class ScButton extends StatelessWidget {
+class ScButton extends StatefulWidget {
   final String label;
   final IconData? icon;
   final VoidCallback? onPressed;
@@ -33,21 +33,37 @@ class ScButton extends StatelessWidget {
   });
 
   @override
+  State<ScButton> createState() => _ScButtonState();
+}
+
+class _ScButtonState extends State<ScButton> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
-    final (color, onColor, isFilled) = switch (variant) {
+    final enabled = widget.onPressed != null && !widget.isLoading;
+
+    final (color, onColor, isFilled) = switch (widget.variant) {
       ScButtonVariant.primary   => (ScColors.active, Colors.black, true),
       ScButtonVariant.danger    => (ScColors.error, Colors.white, false),
       ScButtonVariant.secondary => (ScColors.warn, Colors.black, false),
       ScButtonVariant.ghost     => (ScColors.textDim, Colors.white, false),
     };
 
-    final height = switch (size) {
+    final height = switch (widget.size) {
       ScButtonSize.large   => ScSpacing.buttonHeightLarge,
       ScButtonSize.normal  => ScSpacing.buttonHeightDefault,
       ScButtonSize.compact => ScSpacing.buttonHeightCompact,
     };
 
-    final content = isLoading
+    // Visual states
+    final pressAlpha = _pressed && enabled ? 0.55 : 1.0;
+    final effectiveColor = Color.fromRGBO(
+      color.r.round(), color.g.round(), color.b.round(),
+      pressAlpha,
+    );
+
+    final content = widget.isLoading
         ? SizedBox(
             width: 18,
             height: 18,
@@ -59,20 +75,28 @@ class ScButton extends StatelessWidget {
         : Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (size == ScButtonSize.large)
-                _buildLargeContent(color, onColor)
+              if (widget.size == ScButtonSize.large)
+                _buildLargeContent(effectiveColor, onColor, enabled)
               else
-                _buildNormalContent(color, onColor),
-              if (shortcutHint != null)
-                Text(shortcutHint!, style: ScText.shortcutHint),
+                _buildNormalContent(effectiveColor, onColor, enabled),
+              if (widget.shortcutHint != null)
+                Text(widget.shortcutHint!, style: ScText.shortcutHint),
             ],
           );
 
     final decoration = BoxDecoration(
-      color: isFilled ? (onPressed != null ? color : ScColors.past) : null,
-      border: isFilled ? null : Border.all(color: color.withValues(alpha: 0.7)),
-      borderRadius: BorderRadius.circular(size == ScButtonSize.large ? 16 : 8),
-      boxShadow: isFilled && onPressed != null
+      color: isFilled
+          ? (enabled
+              ? (isFilled ? effectiveColor : null)
+              : ScColors.past)
+          : (_pressed && enabled
+              ? color.withValues(alpha: 0.12)
+              : null),
+      border: isFilled
+          ? null
+          : Border.all(color: effectiveColor.withValues(alpha: enabled ? 0.7 : 0.3)),
+      borderRadius: BorderRadius.circular(widget.size == ScButtonSize.large ? 16 : 8),
+      boxShadow: isFilled && enabled && !_pressed
           ? [
               BoxShadow(
                 color: color.withValues(alpha: 0.3),
@@ -84,15 +108,24 @@ class ScButton extends StatelessWidget {
     );
 
     return Tooltip(
-      message: shortcutHint != null ? '$label  [$shortcutHint]' : label,
+      message: widget.shortcutHint != null
+          ? '${widget.label}  [${widget.shortcutHint}]'
+          : widget.label,
       child: GestureDetector(
-        onTap: onPressed,
+        onTapDown: enabled ? (_) => setState(() => _pressed = true) : null,
+        onTapUp: enabled
+            ? (_) {
+                setState(() => _pressed = false);
+                widget.onPressed?.call();
+              }
+            : null,
+        onTapCancel: enabled ? () => setState(() => _pressed = false) : null,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
+          duration: const Duration(milliseconds: 80),
           height: height,
           decoration: decoration,
           padding: EdgeInsets.symmetric(
-            horizontal: size == ScButtonSize.compact ? 10 : 16,
+            horizontal: widget.size == ScButtonSize.compact ? 10 : 16,
           ),
           child: Center(child: content),
         ),
@@ -100,28 +133,28 @@ class ScButton extends StatelessWidget {
     );
   }
 
-  Widget _buildLargeContent(Color color, Color onColor) {
+  Widget _buildLargeContent(Color color, Color onColor, bool enabled) {
     return Text(
-      label,
+      widget.label,
       style: ScText.goButton.copyWith(
-        color: onPressed != null ? onColor : ScColors.textDim,
+        color: enabled ? onColor : ScColors.textDim,
       ),
     );
   }
 
-  Widget _buildNormalContent(Color color, Color onColor) {
-    final textColor = onPressed != null ? color : ScColors.textDim;
-    if (icon != null) {
+  Widget _buildNormalContent(Color color, Color onColor, bool enabled) {
+    final textColor = enabled ? color : ScColors.textDim;
+    if (widget.icon != null) {
       return Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 16, color: textColor),
+          Icon(widget.icon, size: 16, color: textColor),
           const SizedBox(width: 6),
           Text(
-            label,
+            widget.label,
             style: TextStyle(
               color: textColor,
-              fontSize: size == ScButtonSize.compact ? 11 : 13,
+              fontSize: widget.size == ScButtonSize.compact ? 11 : 13,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -129,10 +162,10 @@ class ScButton extends StatelessWidget {
       );
     }
     return Text(
-      label,
+      widget.label,
       style: TextStyle(
         color: textColor,
-        fontSize: size == ScButtonSize.compact ? 11 : 13,
+        fontSize: widget.size == ScButtonSize.compact ? 11 : 13,
         fontWeight: FontWeight.w700,
       ),
     );

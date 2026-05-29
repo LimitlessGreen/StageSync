@@ -15,7 +15,6 @@ import '../../../domain/node_status.dart';
 
 /// Desktop-only Node-Management-Panel.
 /// Liest Nodes aus [nodeStatusListProvider] (WatchNodeHealth-Stream).
-/// Master und Editor können: Audio-Gerät remote setzen, Test-Signale senden.
 class NodeManagementPanel extends ConsumerWidget {
   const NodeManagementPanel({super.key});
 
@@ -24,7 +23,6 @@ class NodeManagementPanel extends ConsumerWidget {
     final mgmtState = ref.watch(nodeManagementProvider);
     final session   = ref.watch(sessionProvider);
     final nodes     = ref.watch(nodeStatusListProvider);
-    // Master (value=1) und Editor (value=3) dürfen Transport-Commands senden.
     final isMasterOrEditor = session.myNode?.tasks.any(
           (t) => t.value == 1 || t.value == 3,
         ) ??
@@ -40,9 +38,15 @@ class NodeManagementPanel extends ConsumerWidget {
           child: Row(
             children: [
               Text('NODES', style: ScText.panelTitle),
-              const SizedBox(width: 12),
-              if (!isMasterOrEditor)
+              const SizedBox(width: 10),
+              Text(
+                '${nodes.length} verbunden',
+                style: ScText.label.copyWith(color: ScColors.textDim),
+              ),
+              if (!isMasterOrEditor) ...[
+                const SizedBox(width: 10),
                 ScChip(label: 'Nur lesen', state: ScChipState.idle),
+              ],
               const Spacer(),
               if (mgmtState.isSending)
                 const SizedBox(
@@ -53,6 +57,9 @@ class NodeManagementPanel extends ConsumerWidget {
                 ),
               if (mgmtState.lastAction != null && !mgmtState.isSending) ...[
                 const SizedBox(width: 8),
+                const Icon(Icons.check_circle_outline,
+                    size: 12, color: ScColors.active),
+                const SizedBox(width: 4),
                 Text(mgmtState.lastAction!, style: ScText.statusSmall),
               ],
             ],
@@ -66,7 +73,7 @@ class NodeManagementPanel extends ConsumerWidget {
             child: Row(
               children: [
                 const Icon(Icons.error_outline, size: 14, color: ScColors.error),
-                const SizedBox(width: 8),
+                const SizedBox(width: 6),
                 Expanded(
                   child: Text(mgmtState.error!,
                       style: ScText.label.copyWith(color: ScColors.error)),
@@ -79,8 +86,17 @@ class NodeManagementPanel extends ConsumerWidget {
         Expanded(
           child: nodes.isEmpty
               ? Center(
-                  child: Text('Keine Nodes verbunden',
-                      style: TextStyle(color: ScColors.textDim)),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.device_hub,
+                          size: 32, color: ScColors.textDim),
+                      const SizedBox(height: 8),
+                      Text('Keine Nodes verbunden',
+                          style: ScText.label.copyWith(
+                              color: ScColors.textDim)),
+                    ],
+                  ),
                 )
               : ListView.separated(
                   itemCount: nodes.length,
@@ -116,81 +132,92 @@ class _NodeCardState extends ConsumerState<_NodeCard> {
   Widget build(BuildContext context) {
     final node = widget.node;
 
-    // Capabilities aus dem Session-State holen
-    // NodeInfo trägt keine Capabilities direkt — die kommen via WatchNodes
-    // in zukünftiger Phase 2. Für jetzt: aus audio-Task ableiten.
-
-    return Column(
-      children: [
-        // ── Header row ──────────────────────────────────────────────────
-        InkWell(
-          onTap: () => setState(() => _expanded = !_expanded),
-          child: Container(
-            height: ScSpacing.rowHeight,
-            padding: const EdgeInsets.symmetric(horizontal: ScSpacing.panelPad),
-            child: Row(
-              children: [
-                // Status dot
-                _StatusDot(health: node.health),
-                const SizedBox(width: 10),
-                // Name + role chips
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(node.name,
-                          style: ScText.cueLabel.copyWith(fontSize: 13)),
-                      const SizedBox(height: 2),
-                      Row(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 120),
+      color: _expanded
+          ? ScColors.surface.withValues(alpha: 0.6)
+          : Colors.transparent,
+      child: Column(
+        children: [
+          // ── Header row ──────────────────────────────────────────────────
+          InkWell(
+            onTap: () => setState(() => _expanded = !_expanded),
+            highlightColor: ScColors.active.withValues(alpha: 0.06),
+            splashColor: ScColors.active.withValues(alpha: 0.08),
+            child: Container(
+              height: ScSpacing.rowHeight,
+              padding:
+                  const EdgeInsets.symmetric(horizontal: ScSpacing.panelPad),
+              child: Row(
+                children: [
+                  _StatusDot(health: node.health),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(node.name,
+                            style: ScText.cueLabel.copyWith(fontSize: 13)),
+                        const SizedBox(height: 3),
+                        Wrap(
+                          spacing: 4,
+                          children: node.tasks
+                              .map((t) => ScChip(
+                                    label: t.toUpperCase(),
+                                    state: _taskChipState(t),
+                                  ))
+                              .toList(),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Clock delta
+                  if (node.clockDeltaMs != null)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 10),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          ...node.tasks.map((t) => Padding(
-                                padding: const EdgeInsets.only(right: 4),
-                                child: ScChip(
-                                  label: t.toUpperCase(),
-                                  state: _taskChipState(t),
-                                ),
-                              )),
+                          Icon(Icons.av_timer,
+                              size: 11,
+                              color: _clockDeltaColor(node.clockDeltaMs!)),
+                          const SizedBox(width: 3),
+                          Text(
+                            'Δ${node.clockDeltaMs}ms',
+                            style: ScText.numberSmall.copyWith(
+                              color: _clockDeltaColor(node.clockDeltaMs!),
+                            ),
+                          ),
                         ],
                       ),
-                    ],
-                  ),
-                ),
-                // Clock delta
-                if (node.clockDeltaMs != null)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: Text(
-                      'Δ${node.clockDeltaMs}ms',
-                      style: ScText.numberSmall.copyWith(
-                        color: _clockDeltaColor(node.clockDeltaMs!),
+                    ),
+                  // Audition badge
+                  if (node.audition.supported)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: Tooltip(
+                        message:
+                            'Audition: ${node.audition.deviceName ?? "verfügbar"}',
+                        child: const Icon(Icons.headphones,
+                            size: 14, color: ScColors.textDim),
                       ),
                     ),
+                  // Expand arrow
+                  Icon(
+                    _expanded ? Icons.expand_less : Icons.expand_more,
+                    size: 18,
+                    color: ScColors.textDim,
                   ),
-                // Audition badge
-                if (node.audition.supported)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: Tooltip(
-                      message: 'Audition: ${node.audition.deviceName ?? "verfügbar"}',
-                      child: const Icon(Icons.headphones,
-                          size: 14, color: ScColors.textDim),
-                    ),
-                  ),
-                // Expand arrow
-                Icon(
-                  _expanded ? Icons.expand_less : Icons.expand_more,
-                  size: 18,
-                  color: ScColors.textDim,
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
-        // ── Expanded detail ──────────────────────────────────────────────
-        if (_expanded)
-          _NodeDetail(node: node, isMaster: widget.isMaster),
-      ],
+          // ── Expanded detail ──────────────────────────────────────────────
+          if (_expanded)
+            _NodeDetail(node: node, isMaster: widget.isMaster),
+        ],
+      ),
     );
   }
 
@@ -217,10 +244,10 @@ class _StatusDot extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = switch (health) {
-      NodeHealthPhase.online      => ScColors.active,
-      NodeHealthPhase.degraded    => ScColors.warn,
+      NodeHealthPhase.online       => ScColors.active,
+      NodeHealthPhase.degraded     => ScColors.warn,
       NodeHealthPhase.reconnecting => ScColors.warn,
-      NodeHealthPhase.offline     => ScColors.error,
+      NodeHealthPhase.offline      => ScColors.error,
     };
     return Container(
       width: 8,
@@ -240,39 +267,74 @@ class _NodeDetail extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isAudio = node.isAudio;
-
     return Container(
-      color: ScColors.bg,
-      padding: const EdgeInsets.fromLTRB(
-          ScSpacing.panelPad + 18, 8, ScSpacing.panelPad, 12),
+      decoration: BoxDecoration(
+        color: ScColors.bg,
+        border: Border(
+          left: BorderSide(color: ScColors.active.withValues(alpha: 0.3), width: 2),
+        ),
+      ),
+      margin: const EdgeInsets.only(left: ScSpacing.panelPad + 18),
+      padding: const EdgeInsets.fromLTRB(12, 10, ScSpacing.panelPad, 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Node ID
-          Text('ID: ${node.nodeId}',
-              style: ScText.numberSmall.copyWith(fontSize: 10)),
-          const SizedBox(height: 10),
-          if (isAudio) ...[
-            Text('Audio', style: ScText.panelTitle),
+          // Node ID row
+          Row(
+            children: [
+              const Icon(Icons.fingerprint, size: 11, color: ScColors.textDim),
+              const SizedBox(width: 4),
+              Text(node.nodeId,
+                  style: ScText.numberSmall.copyWith(
+                      fontSize: 10, color: ScColors.textDim)),
+            ],
+          ),
+          if (node.isAudio) ...[
+            const SizedBox(height: 14),
+            _SectionHeader(title: 'Audio-Ausgabe', icon: Icons.speaker),
             const SizedBox(height: 8),
-            // Audio device section
             if (isMaster)
               _AudioDeviceSection(node: node)
             else
               Text('Nur Master kann Gerät setzen',
                   style: ScText.label.copyWith(color: ScColors.textDim)),
-            const SizedBox(height: 12),
-            // Test signals
-            Text('Test-Signal', style: ScText.panelTitle),
+            const SizedBox(height: 14),
+            _SectionHeader(title: 'Test-Signal', icon: Icons.graphic_eq),
             const SizedBox(height: 8),
             _TestSignalRow(node: node, isMaster: isMaster),
           ],
-          if (!isAudio && !node.isMaNode)
+          if (!node.isAudio && !node.isMaNode) ...[
+            const SizedBox(height: 10),
             Text('Keine Konfigurations-Optionen für diesen Node-Typ',
                 style: ScText.label.copyWith(color: ScColors.textDim)),
+          ],
         ],
       ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  const _SectionHeader({required this.title, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 13, color: ScColors.textDim),
+        const SizedBox(width: 6),
+        Text(title.toUpperCase(),
+            style: ScText.label.copyWith(
+                color: ScColors.textDim,
+                fontSize: 10,
+                letterSpacing: 0.8,
+                fontWeight: FontWeight.w700)),
+        const SizedBox(width: 8),
+        Expanded(
+            child: Container(height: 1, color: ScColors.divider)),
+      ],
     );
   }
 }
@@ -297,8 +359,6 @@ class _AudioDeviceSectionState extends ConsumerState<_AudioDeviceSection> {
     final audioStatus = ref.watch(audioNodeProvider);
     final isLocalNode = widget.node.nodeId == session.myNode?.nodeId;
 
-    // Local node: live device list from AudioNodeService.
-    // Remote node: device list from NodeStatus.availableDevices (populated via NodeHealthEvent).
     final devices = isLocalNode
         ? audioStatus.availableDevices
         : widget.node.availableDevices;
@@ -310,48 +370,66 @@ class _AudioDeviceSectionState extends ConsumerState<_AudioDeviceSection> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (devices.isEmpty)
-          Text(
-            isLocalNode
-                ? (isLocalAudioConnected
-                    ? 'Keine Audiogeräte gefunden'
-                    : 'Audio-Node nicht aktiv')
-                : 'Keine Gerätliste empfangen',
-            style: ScText.label.copyWith(color: ScColors.textDim),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              isLocalNode
+                  ? (isLocalAudioConnected
+                      ? 'Keine Audiogeräte gefunden'
+                      : 'Audio-Node nicht aktiv')
+                  : 'Keine Gerätliste empfangen',
+              style: ScText.label.copyWith(color: ScColors.textDim),
+            ),
           )
         else
-          DropdownButton<int>(
-            value: _selectedIndex ??
-                (isLocalNode
-                    ? audioStatus.selectedDevice?.let((d) =>
-                        devices.contains(d) ? devices.indexOf(d) : null)
-                    : null),
-            hint: Text(
-              isLocalNode
-                  ? (audioStatus.selectedDevice?.name ?? 'Gerät auswählen')
-                  : 'Gerät auswählen',
-              style: ScText.label,
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+            decoration: BoxDecoration(
+              border: Border.all(color: ScColors.divider),
+              borderRadius: BorderRadius.circular(6),
+              color: ScColors.surface,
             ),
-            dropdownColor: ScColors.surface,
-            style: ScText.label.copyWith(color: ScColors.textPrimary),
-            isExpanded: true,
-            items: devices
-                .asMap()
-                .entries
-                .map((e) => DropdownMenuItem(
-                      value: e.key,
-                      child:
-                          Text(e.value.name, overflow: TextOverflow.ellipsis),
-                    ))
-                .toList(),
-            onChanged: (idx) {
-              if (idx == null || idx >= devices.length) return;
-              setState(() {
-                _selectedIndex = idx;
-                _selectedName = devices[idx].name;
-              });
-            },
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                isExpanded: true,
+                value: _selectedIndex ??
+                    (isLocalNode
+                        ? audioStatus.selectedDevice?.let((d) =>
+                            devices.contains(d) ? devices.indexOf(d) : null)
+                        : null),
+                hint: Text(
+                  isLocalNode
+                      ? (audioStatus.selectedDevice?.name ?? 'Gerät auswählen')
+                      : 'Gerät auswählen',
+                  style: ScText.label.copyWith(color: ScColors.textDim),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                dropdownColor: ScColors.surface,
+                style: ScText.label.copyWith(color: ScColors.textPrimary),
+                icon: const Icon(Icons.unfold_more,
+                    size: 16, color: ScColors.textDim),
+                items: devices
+                    .asMap()
+                    .entries
+                    .map((e) => DropdownMenuItem(
+                          value: e.key,
+                          child: Text(e.value.name,
+                              overflow: TextOverflow.ellipsis,
+                              style: ScText.label
+                                  .copyWith(color: ScColors.textPrimary)),
+                        ))
+                    .toList(),
+                onChanged: (idx) {
+                  if (idx == null || idx >= devices.length) return;
+                  setState(() {
+                    _selectedIndex = idx;
+                    _selectedName = devices[idx].name;
+                  });
+                },
+              ),
+            ),
           ),
-        const SizedBox(height: 8),
         Row(
           children: [
             ScButton(
@@ -395,10 +473,9 @@ class _AudioDeviceSectionState extends ConsumerState<_AudioDeviceSection> {
             ),
           ],
         ),
-        // ── Audition ───────────────────────────────────────────────────
         if (widget.node.audition.supported && isLocalNode) ...[
           const SizedBox(height: 12),
-          Text('Audition (Vorhören)', style: ScText.panelTitle),
+          _SectionHeader(title: 'Audition (Vorhören)', icon: Icons.headphones),
           const SizedBox(height: 6),
           Text(
             widget.node.audition.deviceName != null
@@ -418,37 +495,60 @@ extension _Let<T> on T {
 
 // ── Test Signal Row ───────────────────────────────────────────────────────────
 
-class _TestSignalRow extends ConsumerWidget {
+class _TestSignalRow extends ConsumerStatefulWidget {
   final NodeStatus node;
   final bool isMaster;
 
   const _TestSignalRow({required this.node, required this.isMaster});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_TestSignalRow> createState() => _TestSignalRowState();
+}
+
+class _TestSignalRowState extends ConsumerState<_TestSignalRow> {
+  bool _toneActive = false;
+  bool _sweepActive = false;
+
+  @override
+  Widget build(BuildContext context) {
     final notifier = ref.read(nodeManagementProvider.notifier);
 
     return Row(
       children: [
         ScButton(
-          label: '1kHz Ton',
-          icon: Icons.graphic_eq,
-          variant: ScButtonVariant.ghost,
+          label: '1 kHz',
+          icon: _toneActive ? Icons.stop : Icons.graphic_eq,
+          variant: _toneActive ? ScButtonVariant.danger : ScButtonVariant.ghost,
           size: ScButtonSize.compact,
-          onPressed: isMaster
-              ? () => notifier.sendTestTone(targetNodeId: node.nodeId)
+          onPressed: widget.isMaster
+              ? () async {
+                  setState(() => _toneActive = true);
+                  await notifier.sendTestTone(targetNodeId: widget.node.nodeId);
+                  await Future.delayed(const Duration(milliseconds: 1100));
+                  if (mounted) setState(() => _toneActive = false);
+                }
               : null,
         ),
         const SizedBox(width: 8),
         ScButton(
           label: 'Sweep',
-          icon: Icons.multiline_chart,
-          variant: ScButtonVariant.ghost,
+          icon: _sweepActive ? Icons.stop : Icons.multiline_chart,
+          variant: _sweepActive ? ScButtonVariant.danger : ScButtonVariant.ghost,
           size: ScButtonSize.compact,
-          onPressed: isMaster
-              ? () => notifier.sendTestSweep(targetNodeId: node.nodeId)
+          onPressed: widget.isMaster
+              ? () async {
+                  setState(() => _sweepActive = true);
+                  await notifier.sendTestSweep(targetNodeId: widget.node.nodeId);
+                  await Future.delayed(const Duration(milliseconds: 3100));
+                  if (mounted) setState(() => _sweepActive = false);
+                }
               : null,
         ),
+        if (!widget.isMaster) ...[
+          const SizedBox(width: 10),
+          Text('Nur Master',
+              style: ScText.label.copyWith(color: ScColors.textDim)),
+        ],
       ],
     );
   }
