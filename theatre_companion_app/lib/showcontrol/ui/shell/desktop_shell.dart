@@ -24,6 +24,7 @@ import '../design_system/domain_components/active_cue_monitor.dart';
 import '../design_system/domain_components/node_status_badge.dart';
 import '../design_system/domain_components/audio_cue_minibar.dart';
 import '../screens/nodes/node_management_panel.dart';
+import '../screens/media/media_manager_screen.dart';
 import '../design_system/domain_components/patch_matrix.dart';
 import '../../domain/show.dart';
 import '../../domain/cue_params.dart';
@@ -950,23 +951,9 @@ class _BottomTabPanel extends ConsumerWidget {
           nodes: domainState.nodes,
           onChanged: (updated) => notifier.updatePatchConfig(updated),
         ),
-        const _MediaPlaceholder(),
+        const MediaManagerScreen(),
         const NodeManagementPanel(),
       ],
-    );
-  }
-}
-
-class _MediaPlaceholder extends StatelessWidget {
-  const _MediaPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Text(
-        'Media-Manager — Phase 5',
-        style: TextStyle(color: ScColors.textDim),
-      ),
     );
   }
 }

@@ -39,9 +39,10 @@ class ShowControlRepository {
         autoContinue: proto.autoContinue,
         durationMs: _durationMs(proto),
       ),
-      // MIGRATION NOTE: targetNodeId temporarily maps to logicalOutputId.
-      // Phase 2 will introduce a dedicated logicalOutputId proto field.
-      logicalOutputId: proto.targetNodeId.isEmpty ? null : proto.targetNodeId,
+      // logical_output_id bevorzugt; targetNodeId als Fallback für ältere Cues.
+      logicalOutputId: proto.logicalOutputId.isNotEmpty
+          ? proto.logicalOutputId
+          : (proto.targetNodeId.isNotEmpty ? proto.targetNodeId : null),
     );
   }
 
@@ -196,7 +197,8 @@ class ShowControlRepository {
       ..autoContinue = domain.timing.autoContinue;
 
     if (domain.logicalOutputId != null) {
-      proto.targetNodeId = domain.logicalOutputId!;
+      proto.logicalOutputId = domain.logicalOutputId!;
+      proto.targetNodeId    = domain.logicalOutputId!; // backward compat
     }
 
     switch (domain.params) {

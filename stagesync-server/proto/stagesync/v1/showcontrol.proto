@@ -59,7 +59,11 @@ message Cue {
   CueType  cue_type   = 4;
   CueState state      = 5;
 
-  // Welcher Node führt diese Cue aus
+  // Logischer Ausgang aus PatchConfig (Ebene 1 — stabiler als Node-ID).
+  // Bevorzugt gegenüber target_node_id; leer = kein Output-Routing.
+  string   logical_output_id = 18;
+  // Direktes Node-Routing (deprecated — nur als Fallback, wird ignoriert wenn
+  // logical_output_id gesetzt ist).
   string   target_node_id   = 6;
   // Leer = nächste Cue automatisch, sonst wartet die Engine auf GO
   bool     auto_continue    = 7;

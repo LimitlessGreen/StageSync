@@ -44,6 +44,7 @@ class Cue extends $pb.GeneratedMessage {
     $2.Timestamp? updatedAt,
     $fixnum.Int64? version,
     GroupCueParams? group,
+    $core.String? logicalOutputId,
   }) {
     final result = create();
     if (cueId != null) result.cueId = cueId;
@@ -63,6 +64,7 @@ class Cue extends $pb.GeneratedMessage {
     if (updatedAt != null) result.updatedAt = updatedAt;
     if (version != null) result.version = version;
     if (group != null) result.group = group;
+    if (logicalOutputId != null) result.logicalOutputId = logicalOutputId;
     return result;
   }
 
@@ -114,6 +116,7 @@ class Cue extends $pb.GeneratedMessage {
     ..aInt64(16, _omitFieldNames ? '' : 'version')
     ..aOM<GroupCueParams>(17, _omitFieldNames ? '' : 'group',
         subBuilder: GroupCueParams.create)
+    ..aOS(18, _omitFieldNames ? '' : 'logicalOutputId')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -192,7 +195,8 @@ class Cue extends $pb.GeneratedMessage {
   @$pb.TagNumber(5)
   void clearState() => $_clearField(5);
 
-  /// Welcher Node führt diese Cue aus
+  /// Direktes Node-Routing (deprecated — nur als Fallback, wird ignoriert wenn
+  /// logical_output_id gesetzt ist).
   @$pb.TagNumber(6)
   $core.String get targetNodeId => $_getSZ(5);
   @$pb.TagNumber(6)
@@ -315,6 +319,17 @@ class Cue extends $pb.GeneratedMessage {
   void clearGroup() => $_clearField(17);
   @$pb.TagNumber(17)
   GroupCueParams ensureGroup() => $_ensure(16);
+
+  /// Logischer Ausgang aus PatchConfig (Ebene 1 — stabiler als Node-ID).
+  /// Bevorzugt gegenüber target_node_id; leer = kein Output-Routing.
+  @$pb.TagNumber(18)
+  $core.String get logicalOutputId => $_getSZ(17);
+  @$pb.TagNumber(18)
+  set logicalOutputId($core.String value) => $_setString(17, value);
+  @$pb.TagNumber(18)
+  $core.bool hasLogicalOutputId() => $_has(17);
+  @$pb.TagNumber(18)
+  void clearLogicalOutputId() => $_clearField(18);
 }
 
 class AudioCueParams extends $pb.GeneratedMessage {

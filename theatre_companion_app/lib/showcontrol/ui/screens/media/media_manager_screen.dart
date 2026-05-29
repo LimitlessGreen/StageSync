@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../providers/media_provider.dart';
+import '../../../providers/audio_node_provider.dart';
+import '../../../nodes/audio_node/audio_node_service.dart';
 import '../../design_system/sc_colors.dart';
 import '../../design_system/sc_spacing.dart';
 import '../../design_system/sc_typography.dart';
@@ -78,7 +80,18 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
                       isUploading: state.isUploading,
                       onDelete: (name) =>
                           ref.read(mediaProvider.notifier).delete(name),
-                      onAudition: (_) {/* Phase 4+: wire to audioNodeProvider */},
+                      onAudition: (asset) {
+                        final audioNotifier =
+                            ref.read(audioNodeProvider.notifier);
+                        final isConnected = ref.read(audioNodeProvider).state ==
+                            AudioNodeState.connected;
+                        if (isConnected && asset.id.isNotEmpty) {
+                          audioNotifier.auditionPlay(
+                            assetId: asset.id,
+                            volumeDb: 0,
+                          );
+                        }
+                      },
                     ),
         ),
       ],

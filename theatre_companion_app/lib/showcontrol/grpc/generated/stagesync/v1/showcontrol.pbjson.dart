@@ -38,6 +38,13 @@ const Cue$json = {
       '6': '.stagesync.v1.CueState',
       '10': 'state'
     },
+    {
+      '1': 'logical_output_id',
+      '3': 18,
+      '4': 1,
+      '5': 9,
+      '10': 'logicalOutputId'
+    },
     {'1': 'target_node_id', '3': 6, '4': 1, '5': 9, '10': 'targetNodeId'},
     {'1': 'auto_continue', '3': 7, '4': 1, '5': 8, '10': 'autoContinue'},
     {'1': 'pre_wait_ms', '3': 8, '4': 1, '5': 1, '10': 'preWaitMs'},
@@ -115,17 +122,17 @@ final $typed_data.Uint8List cueDescriptor = $convert.base64Decode(
     'CgNDdWUSFQoGY3VlX2lkGAEgASgJUgVjdWVJZBIWCgZudW1iZXIYAiABKAlSBm51bWJlchIUCg'
     'VsYWJlbBgDIAEoCVIFbGFiZWwSMAoIY3VlX3R5cGUYBCABKA4yFS5zdGFnZXN5bmMudjEuQ3Vl'
     'VHlwZVIHY3VlVHlwZRIsCgVzdGF0ZRgFIAEoDjIWLnN0YWdlc3luYy52MS5DdWVTdGF0ZVIFc3'
-    'RhdGUSJAoOdGFyZ2V0X25vZGVfaWQYBiABKAlSDHRhcmdldE5vZGVJZBIjCg1hdXRvX2NvbnRp'
-    'bnVlGAcgASgIUgxhdXRvQ29udGludWUSHgoLcHJlX3dhaXRfbXMYCCABKAFSCXByZVdhaXRNcx'
-    'IgCgxwb3N0X3dhaXRfbXMYCSABKAFSCnBvc3RXYWl0TXMSNAoFYXVkaW8YCiABKAsyHC5zdGFn'
-    'ZXN5bmMudjEuQXVkaW9DdWVQYXJhbXNIAFIFYXVkaW8SNQoGbWFfb3NjGAsgASgLMhwuc3RhZ2'
-    'VzeW5jLnYxLk1hT3NjQ3VlUGFyYW1zSABSBW1hT3NjEjEKBHdhaXQYDCABKAsyGy5zdGFnZXN5'
-    'bmMudjEuV2FpdEN1ZVBhcmFtc0gAUgR3YWl0EjQKBmdvdG9fcBgNIAEoCzIbLnN0YWdlc3luYy'
-    '52MS5Hb3RvQ3VlUGFyYW1zSABSBWdvdG9QEjQKBWdyb3VwGBEgASgLMhwuc3RhZ2VzeW5jLnYx'
-    'Lkdyb3VwQ3VlUGFyYW1zSABSBWdyb3VwEjYKCmNyZWF0ZWRfYXQYDiABKAsyFy5zdGFnZXN5bm'
-    'MudjEuVGltZXN0YW1wUgljcmVhdGVkQXQSNgoKdXBkYXRlZF9hdBgPIAEoCzIXLnN0YWdlc3lu'
-    'Yy52MS5UaW1lc3RhbXBSCXVwZGF0ZWRBdBIYCgd2ZXJzaW9uGBAgASgDUgd2ZXJzaW9uQggKBn'
-    'BhcmFtcw==');
+    'RhdGUSKgoRbG9naWNhbF9vdXRwdXRfaWQYEiABKAlSD2xvZ2ljYWxPdXRwdXRJZBIkCg50YXJn'
+    'ZXRfbm9kZV9pZBgGIAEoCVIMdGFyZ2V0Tm9kZUlkEiMKDWF1dG9fY29udGludWUYByABKAhSDG'
+    'F1dG9Db250aW51ZRIeCgtwcmVfd2FpdF9tcxgIIAEoAVIJcHJlV2FpdE1zEiAKDHBvc3Rfd2Fp'
+    'dF9tcxgJIAEoAVIKcG9zdFdhaXRNcxI0CgVhdWRpbxgKIAEoCzIcLnN0YWdlc3luYy52MS5BdW'
+    'Rpb0N1ZVBhcmFtc0gAUgVhdWRpbxI1CgZtYV9vc2MYCyABKAsyHC5zdGFnZXN5bmMudjEuTWFP'
+    'c2NDdWVQYXJhbXNIAFIFbWFPc2MSMQoEd2FpdBgMIAEoCzIbLnN0YWdlc3luYy52MS5XYWl0Q3'
+    'VlUGFyYW1zSABSBHdhaXQSNAoGZ290b19wGA0gASgLMhsuc3RhZ2VzeW5jLnYxLkdvdG9DdWVQ'
+    'YXJhbXNIAFIFZ290b1ASNAoFZ3JvdXAYESABKAsyHC5zdGFnZXN5bmMudjEuR3JvdXBDdWVQYX'
+    'JhbXNIAFIFZ3JvdXASNgoKY3JlYXRlZF9hdBgOIAEoCzIXLnN0YWdlc3luYy52MS5UaW1lc3Rh'
+    'bXBSCWNyZWF0ZWRBdBI2Cgp1cGRhdGVkX2F0GA8gASgLMhcuc3RhZ2VzeW5jLnYxLlRpbWVzdG'
+    'FtcFIJdXBkYXRlZEF0EhgKB3ZlcnNpb24YECABKANSB3ZlcnNpb25CCAoGcGFyYW1z');
 
 @$core.Deprecated('Use audioCueParamsDescriptor instead')
 const AudioCueParams$json = {

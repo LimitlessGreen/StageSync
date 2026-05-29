@@ -10,9 +10,8 @@ sealed class CueParams {
 @immutable
 final class AudioParams extends CueParams {
   /// Content-addressable asset ID (SHA-256 of the audio file).
-  /// MIGRATION NOTE: During the current proto-transition this is set to
-  /// `p.basename(filePath)`. Once the server sends real asset IDs, this becomes
-  /// the full SHA-256 hex string.
+  /// Maps to proto field AudioCueParams.asset_id; server stores and returns
+  /// the full SHA-256 hex string. Empty = asset not yet assigned.
   final String assetId;
   final double volumeDb;
   final double fadeInMs;

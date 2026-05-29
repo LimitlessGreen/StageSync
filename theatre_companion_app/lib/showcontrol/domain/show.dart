@@ -41,9 +41,8 @@ class Cue {
   final CueTrigger trigger;
   final CueTiming timing;
 
-  /// References a [LogicalOutput.id] in [PatchConfig].
-  /// MIGRATION NOTE: currently mapped from proto `targetNodeId` until the server
-  /// supports proper logical output IDs (Phase 2 proto extension).
+  /// References a [LogicalOutput.id] in [PatchConfig] (proto: logical_output_id).
+  /// Determines which physical outputs this cue is routed to via PatchConfig.
   final String? logicalOutputId;
 
   final bool armed;
