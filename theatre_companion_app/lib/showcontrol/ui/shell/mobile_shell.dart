@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/show_control_provider.dart';
 import '../../providers/show_control_domain_provider.dart';
 import '../../providers/session_provider.dart';
+import '../../providers/audio_node_provider.dart';
+import '../../providers/ma_node_provider.dart';
+import '../../grpc/generated/stagesync/v1/common.pb.dart' show NodeTask;
 import '../design_system/sc_colors.dart';
 import '../design_system/sc_spacing.dart';
 import '../design_system/sc_typography.dart';
@@ -34,9 +37,21 @@ class _MobileShellState extends ConsumerState<MobileShell> {
     });
   }
 
+  Future<void> _leaveSession() async {
+    final tasks = ref.read(sessionProvider).myNode?.tasks ?? [];
+    if (tasks.contains(NodeTask.NODE_TASK_AUDIO_OUTPUT)) {
+      await ref.read(audioNodeProvider.notifier).stopAudioNode();
+    }
+    if (tasks.contains(NodeTask.NODE_TASK_MA_OSC)) {
+      await ref.read(maNodeProvider.notifier).stopMaNode();
+    }
+    await ref.read(sessionProvider.notifier).leaveSession();
+  }
+
   @override
   Widget build(BuildContext context) {
     final domainState = ref.watch(showControlDomainProvider);
+    final sessionState = ref.watch(sessionProvider);
     final notifier = ref.read(showControlProvider.notifier);
 
     return Scaffold(
@@ -45,7 +60,11 @@ class _MobileShellState extends ConsumerState<MobileShell> {
         child: Column(
           children: [
             // ── Status strip ─────────────────────────────────────────────
-            _StatusStrip(nodes: domainState.nodes),
+            _StatusStrip(
+              sessionName: sessionState.session?.name ?? 'Show Control',
+              nodes: domainState.nodes,
+              onLeave: _leaveSession,
+            ),
             const Divider(height: 1, color: ScColors.divider),
             // ── Read-only cue list ────────────────────────────────────────
             Expanded(
@@ -73,21 +92,56 @@ class _MobileShellState extends ConsumerState<MobileShell> {
 // ── Status Strip ───────────────────────────────────────────────────────────────
 
 class _StatusStrip extends StatelessWidget {
+  final String sessionName;
   final List nodes;
+  final VoidCallback onLeave;
 
-  const _StatusStrip({required this.nodes});
+  const _StatusStrip({
+    required this.sessionName,
+    required this.nodes,
+    required this.onLeave,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 36,
+      height: 44,
       color: ScColors.surface,
       padding: const EdgeInsets.symmetric(horizontal: ScSpacing.panelPad),
       child: Row(
         children: [
-          Text('SHOW CONTROL', style: ScText.panelTitle),
-          const Spacer(),
+          const Icon(Icons.theater_comedy, size: 14, color: ScColors.textDim),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              sessionName,
+              style: ScText.panelTitle,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
           NodeHealthStrip(nodes: nodes.cast()),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: onLeave,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                border: Border.all(color: ScColors.error.withValues(alpha: 0.5)),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.logout, size: 14, color: ScColors.error),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Verlassen',
+                    style: ScText.label.copyWith(color: ScColors.error, fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
