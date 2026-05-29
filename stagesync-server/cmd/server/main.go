@@ -72,7 +72,7 @@ func main() {
 	// Handler registrieren
 	pb.RegisterSessionServiceServer(grpcServer, grpchandlers.NewSessionHandler(sessionMgr))
 	pb.RegisterNodeServiceServer(grpcServer, grpchandlers.NewNodeHandler(sessionMgr, dispatcher))
-	pb.RegisterShowControlServiceServer(grpcServer, grpchandlers.NewShowControlHandler(sessionMgr, dispatcher, persistence))
+	pb.RegisterShowControlServiceServer(grpcServer, grpchandlers.NewShowControlHandler(sessionMgr, dispatcher, persistence, mediaStore))
 
 	// gRPC Reflection (für grpcurl / Debugging)
 	reflection.Register(grpcServer)

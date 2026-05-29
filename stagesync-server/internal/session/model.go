@@ -98,6 +98,14 @@ func (s *Session) hasOnlineMaster() bool {
 	return ok && n.Online
 }
 
+func (s *Session) SetNodeCapabilities(nodeID string, caps *pb.NodeCapabilities) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if n, ok := s.nodes[nodeID]; ok {
+		n.Capabilities = caps
+	}
+}
+
 func (s *Session) MarkOffline(nodeID string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()

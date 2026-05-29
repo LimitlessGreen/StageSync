@@ -53,10 +53,16 @@ func (h *NodeHandler) RegisterNode(ctx context.Context, req *pb.RegisterNodeRequ
 		sess.SetNodeMediaServerUrl(nodeID, mediaUrl)
 		n, _ = sess.GetNode(nodeID)
 		log.Printf("[RegisterNode] URL gesetzt → n.Info.MediaServerUrl=%q", n.Info.MediaServerUrl)
-		h.sessionMgr.NotifyNodeUpdated(req.SessionId, n.Info)
 	} else {
 		log.Printf("[RegisterNode] WARNUNG: keine MediaServerUrl empfangen!")
 	}
+
+	// Capabilities persistieren — werden an WatchNodeHealth-Subscriber weitergegeben.
+	if req.Capabilities != nil {
+		sess.SetNodeCapabilities(nodeID, req.Capabilities)
+		n, _ = sess.GetNode(nodeID)
+	}
+	h.sessionMgr.NotifyNodeUpdated(req.SessionId, n.Info)
 
 	log.Printf("[node] registered: %s (%s) mediaServer=%s in session %s",
 		n.Info.Name, n.Info.NodeType, n.Info.MediaServerUrl, req.SessionId)

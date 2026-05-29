@@ -10,6 +10,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	pb "stagesync-server/gen/go/stagesync/v1"
+	"stagesync-server/internal/media"
 	"stagesync-server/internal/node"
 	"stagesync-server/internal/session"
 	"stagesync-server/internal/showcontrol"
@@ -63,6 +64,7 @@ type ShowControlHandler struct {
 	sessionMgr  *session.Manager
 	dispatcher  *node.Dispatcher
 	persistence *showcontrol.Persistence
+	mediaStore  *media.Store // für WatchMediaSync (nil = kein Media-Store)
 	dedup       *commandDedup
 
 	mu      sync.RWMutex
@@ -70,11 +72,12 @@ type ShowControlHandler struct {
 	engines map[string]*showcontrol.Engine // sessionID → Engine
 }
 
-func NewShowControlHandler(mgr *session.Manager, disp *node.Dispatcher, persist *showcontrol.Persistence) *ShowControlHandler {
+func NewShowControlHandler(mgr *session.Manager, disp *node.Dispatcher, persist *showcontrol.Persistence, ms *media.Store) *ShowControlHandler {
 	return &ShowControlHandler{
 		sessionMgr:  mgr,
 		dispatcher:  disp,
 		persistence: persist,
+		mediaStore:  ms,
 		dedup:       newCommandDedup(),
 		stores:      make(map[string]*showcontrol.Store),
 		engines:     make(map[string]*showcontrol.Engine),
@@ -375,14 +378,14 @@ func (h *ShowControlHandler) WatchNodeHealth(req *pb.WatchNodeHealthRequest, str
 		return status.Errorf(codes.NotFound, "%v", err)
 	}
 
-	// Snapshot: einen Event pro bekanntem Node senden.
-	// NodeInfo.Online trägt den aktuellen Online-Status.
+	// Snapshot: einen Event pro bekanntem Node senden (inkl. Capabilities).
 	nodes := sess.AllNodes()
 	for _, n := range nodes {
 		if err := stream.Send(&pb.NodeHealthEvent{
-			Type:       pb.NodeHealthEvent_HEALTH_SNAPSHOT,
-			Node:       n.Info,
-			OccurredAt: nowProto(),
+			Type:         pb.NodeHealthEvent_HEALTH_SNAPSHOT,
+			Node:         n.Info,
+			Capabilities: n.Capabilities,
+			OccurredAt:   nowProto(),
 		}); err != nil {
 			return err
 		}
@@ -407,10 +410,18 @@ func (h *ShowControlHandler) WatchNodeHealth(req *pb.WatchNodeHealthRequest, str
 		default:
 			continue
 		}
+		// Capabilities beim NODE_ONLINE-Event aus dem Session-Store holen.
+		var caps *pb.NodeCapabilities
+		if ev.AffectedNode != nil {
+			if n, ok := sess.GetNode(ev.AffectedNode.NodeId); ok {
+				caps = n.Capabilities
+			}
+		}
 		if err := stream.Send(&pb.NodeHealthEvent{
-			Type:       evType,
-			Node:       ev.AffectedNode,
-			OccurredAt: ev.OccurredAt,
+			Type:         evType,
+			Node:         ev.AffectedNode,
+			Capabilities: caps,
+			OccurredAt:   ev.OccurredAt,
 		}); err != nil {
 			return err
 		}
@@ -424,14 +435,70 @@ func (h *ShowControlHandler) WatchMediaSync(req *pb.WatchMediaSyncRequest, strea
 	if err := h.auth(req.SessionId, req.Token); err != nil {
 		return err
 	}
-	// Snapshot: leerer Media-State (Asset-Events kommen via HTTP SSE / MediaService).
-	if err := stream.Send(&pb.MediaSyncEvent{
-		Type:       pb.MediaSyncEvent_MEDIA_SNAPSHOT,
-		OccurredAt: nowProto(),
-	}); err != nil {
+
+	// Ohne Media-Store: leerer Snapshot, Stream bleibt offen.
+	if h.mediaStore == nil {
+		if err := stream.Send(&pb.MediaSyncEvent{
+			Type:       pb.MediaSyncEvent_MEDIA_SNAPSHOT,
+			OccurredAt: nowProto(),
+		}); err != nil {
+			return err
+		}
+		<-stream.Context().Done()
+		return nil
+	}
+
+	// Erst abonnieren, dann Snapshot → kein Upload geht verloren.
+	changeCh, unsub := h.mediaStore.Subscribe()
+	defer unsub()
+
+	if err := h.sendMediaSnapshot(stream); err != nil {
 		return err
 	}
-	<-stream.Context().Done()
+
+	for {
+		select {
+		case <-stream.Context().Done():
+			return nil
+		case _, ok := <-changeCh:
+			if !ok {
+				return nil
+			}
+			// Neu-Snapshot bei jeder Änderung: diff-freies, einfaches Protokoll.
+			// Clients übernehmen das Manifest komplett (kein partieller Merge nötig).
+			if err := h.sendMediaSnapshot(stream); err != nil {
+				return err
+			}
+		}
+	}
+}
+
+func (h *ShowControlHandler) sendMediaSnapshot(stream pb.ShowControlService_WatchMediaSyncServer) error {
+	files, err := h.mediaStore.List()
+	if err != nil {
+		return status.Errorf(codes.Internal, "media list: %v", err)
+	}
+	for _, f := range files {
+		if err := stream.Send(&pb.MediaSyncEvent{
+			Type:      pb.MediaSyncEvent_MEDIA_SNAPSHOT,
+			AssetId:   f.SHA256,
+			AssetName: f.Name,
+			Sha256:    f.SHA256,
+			SizeBytes: f.SizeBytes,
+			OccurredAt: nowProto(),
+		}); err != nil {
+			return err
+		}
+	}
+	// Leerer SNAPSHOT wenn keine Dateien → Client weiß dass Stream läuft.
+	if len(files) == 0 {
+		if err := stream.Send(&pb.MediaSyncEvent{
+			Type:       pb.MediaSyncEvent_MEDIA_SNAPSHOT,
+			OccurredAt: nowProto(),
+		}); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

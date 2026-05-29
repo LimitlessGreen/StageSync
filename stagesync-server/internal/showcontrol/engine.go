@@ -405,16 +405,15 @@ func (e *Engine) dispatchAudio(ctx context.Context, cue *pb.Cue) error {
 		return e.dispatcher.DispatchToTask(ctx, pb.NodeTask_NODE_TASK_AUDIO_OUTPUT, cmd)
 	}
 
-	// 1. Preload senden (Sicherheitsnetz). Wurde die Cue bereits via armCue
-	// vorgeladen, ist das auf dem Node ein No-Op (Pfad-Tracking) — die Datei
-	// liegt dann schon dekodiert im Speicher und der Trigger feuert sofort.
-	if params.Audio.FilePath != "" {
+	// 1. Preload senden. asset_id (SHA-256) wird bevorzugt; file_path als Fallback.
+	if params.Audio.AssetId != "" || params.Audio.FilePath != "" {
 		_ = dispatch(&pb.NodeCommandRequest{
 			SessionId:    e.sessionID,
 			TargetNodeId: cue.TargetNodeId,
 			Command: &pb.NodeCommandRequest_AudioPreload{
 				AudioPreload: &pb.AudioPreloadCommand{
 					CueId:    cue.CueId,
+					AssetId:  params.Audio.AssetId,
 					FilePath: params.Audio.FilePath,
 				},
 			},
@@ -453,7 +452,7 @@ func (e *Engine) armCue(ctx context.Context, cue *pb.Cue) {
 		return
 	}
 	params, ok := cue.Params.(*pb.Cue_Audio)
-	if !ok || params == nil || params.Audio.FilePath == "" {
+	if !ok || params == nil || (params.Audio.AssetId == "" && params.Audio.FilePath == "") {
 		return
 	}
 	cmd := &pb.NodeCommandRequest{
@@ -462,6 +461,7 @@ func (e *Engine) armCue(ctx context.Context, cue *pb.Cue) {
 		Command: &pb.NodeCommandRequest_AudioPreload{
 			AudioPreload: &pb.AudioPreloadCommand{
 				CueId:    cue.CueId,
+				AssetId:  params.Audio.AssetId,
 				FilePath: params.Audio.FilePath,
 			},
 		},

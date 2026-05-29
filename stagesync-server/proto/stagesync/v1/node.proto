@@ -175,8 +175,9 @@ message SendNodeCommandRequest {
 }
 
 message AudioPreloadCommand {
-  string cue_id   = 1;
-  string file_path = 2;
+  string cue_id    = 1;
+  string file_path = 2; // deprecated: basename-Pfad (Migrations-Fallback)
+  string asset_id  = 3; // SHA-256 des Assets (bevorzugt gegenüber file_path)
 }
 
 message AudioPlayCommand {
