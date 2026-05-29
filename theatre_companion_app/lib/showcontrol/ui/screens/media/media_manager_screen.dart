@@ -97,7 +97,7 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
                             ? (-23.0 - lufs).clamp(-40.0, 20.0)
                             : 0.0;
                         ref.read(audioNodeProvider.notifier).auditionPlay(
-                          assetId: asset.id,
+                          assetId: asset.name,  // Dateiname, nicht SHA-256
                           volumeDb: volumeDb,
                         );
                       },

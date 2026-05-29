@@ -977,9 +977,9 @@ class _AudioParamsEditor extends ConsumerWidget {
               icon: Icons.headphones,
               variant: ScButtonVariant.secondary,
               size: ScButtonSize.compact,
-              onPressed: isAudioConnected && params.assetId.isNotEmpty
+              onPressed: isAudioConnected && params.assetId.isNotEmpty && asset != null
                   ? () => audioNotifier.auditionPlay(
-                        assetId: params.assetId,
+                        assetId: asset.name,   // Dateiname, nicht SHA-256
                         volumeDb: params.volumeDb,
                         startMs: params.startTimeMs,
                       )
