@@ -961,23 +961,30 @@ class _AudioParamsEditor extends ConsumerWidget {
         onChanged: (v) => onChanged(params.copyWith(loop: v)),
       ),
       const SizedBox(height: 8),
-      AudioCueMinibar(params: params),
+      AudioCueMinibar(params: params, asset: asset),
       const SizedBox(height: 8),
       // ── Audition ──────────────────────────────────────────────────
       Row(
         children: [
-          ScButton(
-            label: 'Vorhören',
-            icon: Icons.headphones,
-            variant: ScButtonVariant.secondary,
-            size: ScButtonSize.compact,
-            onPressed: isAudioConnected && params.assetId.isNotEmpty
-                ? () => audioNotifier.auditionPlay(
-                      assetId: params.assetId,
-                      volumeDb: params.volumeDb,
-                      startMs: params.startTimeMs,
-                    )
-                : null,
+          Tooltip(
+            message: !isAudioConnected
+                ? 'Audio-Engine starten (Audio-Tab → Starten)'
+                : params.assetId.isEmpty
+                    ? 'Kein Asset ausgewählt'
+                    : '',
+            child: ScButton(
+              label: 'Vorhören',
+              icon: Icons.headphones,
+              variant: ScButtonVariant.secondary,
+              size: ScButtonSize.compact,
+              onPressed: isAudioConnected && params.assetId.isNotEmpty
+                  ? () => audioNotifier.auditionPlay(
+                        assetId: params.assetId,
+                        volumeDb: params.volumeDb,
+                        startMs: params.startTimeMs,
+                      )
+                  : null,
+            ),
           ),
           const SizedBox(width: 8),
           ScButton(

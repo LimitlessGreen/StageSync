@@ -153,6 +153,8 @@ class MediaNotifier extends StateNotifier<MediaState> {
     }
   }
 
+  void clearError() => state = state.copyWith(clearError: true, clearUploadError: true);
+
   /// Deletes the asset with [name] from the server and refreshes the list.
   Future<void> delete(String name) async {
     final client = _client;

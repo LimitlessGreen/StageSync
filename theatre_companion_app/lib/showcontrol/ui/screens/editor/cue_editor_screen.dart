@@ -283,7 +283,7 @@ class _ParamsContent extends ConsumerWidget {
     return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            AudioCueMinibar(params: ap, knownDurationMs: cue.displayDurationMs),
+            AudioCueMinibar(params: ap, asset: asset),
             const SizedBox(height: 8),
             Row(
               children: [

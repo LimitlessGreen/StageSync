@@ -67,9 +67,17 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
         const Divider(height: 1, color: ScColors.divider),
         // ── Error banners ─────────────────────────────────────────────────
         if (state.error != null)
-          _ErrorBanner(message: state.error!, type: _BannerType.error),
+          _ErrorBanner(
+            message: state.error!,
+            type: _BannerType.error,
+            onDismiss: () => ref.read(mediaProvider.notifier).clearError(),
+          ),
         if (state.uploadError != null)
-          _ErrorBanner(message: state.uploadError!, type: _BannerType.warn),
+          _ErrorBanner(
+            message: state.uploadError!,
+            type: _BannerType.warn,
+            onDismiss: () => ref.read(mediaProvider.notifier).clearError(),
+          ),
         // ── Content ───────────────────────────────────────────────────────
         Expanded(
           child: state.isLoading && assets.isEmpty
@@ -554,7 +562,8 @@ enum _BannerType { error, warn }
 class _ErrorBanner extends StatelessWidget {
   final String message;
   final _BannerType type;
-  const _ErrorBanner({required this.message, required this.type});
+  final VoidCallback? onDismiss;
+  const _ErrorBanner({required this.message, required this.type, this.onDismiss});
 
   @override
   Widget build(BuildContext context) {
@@ -569,6 +578,15 @@ class _ErrorBanner extends StatelessWidget {
           Icon(Icons.warning_amber_rounded, size: 14, color: color),
           const SizedBox(width: 8),
           Expanded(child: Text(message, style: ScText.label.copyWith(color: color))),
+          if (onDismiss != null)
+            InkWell(
+              onTap: onDismiss,
+              borderRadius: BorderRadius.circular(4),
+              child: Padding(
+                padding: const EdgeInsets.all(4),
+                child: Icon(Icons.close, size: 13, color: color),
+              ),
+            ),
         ],
       ),
     );

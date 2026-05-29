@@ -310,6 +310,14 @@ class _NodeDetailColumnState extends ConsumerState<_NodeDetailColumn> {
     }
   }
 
+  // Returns the effective selection: user-picked index OR the currently active device.
+  int? _effectiveIdx(List<AudioDevice> devices, AudioDevice? activeDevice, bool isLocal) {
+    if (_selectedDeviceIdx != null) return _selectedDeviceIdx;
+    if (!isLocal || activeDevice == null) return null;
+    final i = devices.indexWhere((d) => d.name == activeDevice.name);
+    return i >= 0 ? i : null;
+  }
+
   @override
   Widget build(BuildContext context) {
     final session      = ref.watch(sessionProvider);
@@ -320,6 +328,7 @@ class _NodeDetailColumnState extends ConsumerState<_NodeDetailColumn> {
     final devices      = isLocalNode ? audioStatus.availableDevices : node.availableDevices;
     final isLocalAudioOk = isLocalNode && audioStatus.state == AudioNodeState.connected;
     final canInteract  = isLocalNode ? isLocalAudioOk : devices.isNotEmpty;
+    final effectiveIdx = _effectiveIdx(devices, audioStatus.selectedDevice, isLocalNode);
 
     return SingleChildScrollView(
       child: Column(
@@ -359,7 +368,7 @@ class _NodeDetailColumnState extends ConsumerState<_NodeDetailColumn> {
             else
               ...devices.asMap().entries.map((e) => _DeviceSelectRow(
                     device: e.value,
-                    isSelected: _selectedDeviceIdx == e.key,
+                    isSelected: effectiveIdx == e.key,
                     isCurrent: isLocalNode &&
                         audioStatus.selectedDevice?.name == e.value.name,
                     onTap: () => setState(() => _selectedDeviceIdx = e.key),
@@ -375,16 +384,16 @@ class _NodeDetailColumnState extends ConsumerState<_NodeDetailColumn> {
                     icon: Icons.check,
                     variant: ScButtonVariant.secondary,
                     size: ScButtonSize.compact,
-                    onPressed: (_selectedDeviceIdx != null && canInteract)
+                    onPressed: (effectiveIdx != null && canInteract)
                         ? () {
                             if (isLocalNode) {
                               ref.read(audioNodeProvider.notifier)
-                                  .selectDevice(devices[_selectedDeviceIdx!]);
+                                  .selectDevice(devices[effectiveIdx!]);
                             }
                             ref.read(nodeManagementProvider.notifier).setAudioDevice(
                                   targetNodeId: node.nodeId,
-                                  deviceIndex: devices[_selectedDeviceIdx!].index,
-                                  deviceName: devices[_selectedDeviceIdx!].name,
+                                  deviceIndex: devices[effectiveIdx!].index,
+                                  deviceName: devices[effectiveIdx!].name,
                                 );
                           }
                         : null,
