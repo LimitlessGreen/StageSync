@@ -186,10 +186,11 @@ class MediaNotifier extends StateNotifier<MediaState> {
       audio: isAudio
           ? AudioMetadata(
               declaredDurationMs: f.audio?.durationMs.toDouble() ?? 0,
-              channelCount:       f.audio?.channels   ?? 0,
-              sampleRateHz:       f.audio?.sampleRate ?? 0,
+              channelCount:       f.audio?.channels    ?? 0,
+              sampleRateHz:       f.audio?.sampleRate  ?? 0,
+              loudnessLufs:       f.audio?.loudnessLufs,
               codec:              codec,
-              bitDepth:           f.audio?.bitDepth   ?? 0,
+              bitDepth:           f.audio?.bitDepth    ?? 0,
             )
           : null,
       readiness: AssetReadiness.present,

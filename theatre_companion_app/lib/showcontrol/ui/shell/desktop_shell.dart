@@ -716,6 +716,16 @@ class _AudioParamsEditor extends ConsumerWidget {
                 '${asset.audio != null ? "  •  ${asset.audio!.channelLabel}  •  ${asset.audio!.sampleRateHz} Hz" : ""}'
             : 'SHA-256 des Audio-Assets (noch nicht auf Server)',
       ),
+      if (asset?.audio?.loudnessLufs != null) ...[
+        const SizedBox(height: 6),
+        ScInlineField(
+          label: 'Lautheit',
+          value: asset!.audio!.loudnessLufs!.toStringAsFixed(1),
+          suffix: 'LUFS',
+          readOnly: true,
+          tooltip: 'EBU R128 integrierte Lautheit (K-gewichtet)',
+        ),
+      ],
       const SizedBox(height: 6),
       ScInlineField(
         label: 'Volume',

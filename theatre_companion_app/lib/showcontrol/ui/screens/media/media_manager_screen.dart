@@ -185,6 +185,7 @@ class _AssetTable extends StatelessWidget {
             children: [
               _HeaderCell('NAME', flex: 4),
               _HeaderCell('FORMAT', flex: 1),
+              _HeaderCell('LAUTHEIT', flex: 1),
               _HeaderCell('GRÖßE', flex: 1),
               _HeaderCell('STATUS', flex: 1),
               _HeaderCell('HOCHGELADEN', flex: 2),
@@ -300,6 +301,19 @@ class _AssetRowState extends State<_AssetRow> {
                 a.audio?.codec.toUpperCase() ?? '—',
                 style: ScText.label,
               ),
+            ),
+            // Loudness
+            Expanded(
+              flex: 1,
+              child: a.audio?.loudnessLufs != null
+                  ? Tooltip(
+                      message: 'EBU R128 integrierte Lautheit',
+                      child: Text(
+                        '${a.audio!.loudnessLufs!.toStringAsFixed(1)} LUFS',
+                        style: ScText.numberSmall,
+                      ),
+                    )
+                  : Text('—', style: ScText.label.copyWith(color: ScColors.textDim)),
             ),
             // Size
             Expanded(

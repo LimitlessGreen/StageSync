@@ -26,19 +26,23 @@ class MediaAudioInfo {
   final int channels;
   final int sampleRate;
   final int bitDepth;
+  /// EBU R128 integrated loudness in LUFS. null = not yet measured.
+  final double? loudnessLufs;
 
   const MediaAudioInfo({
     this.durationMs = 0,
     this.channels = 0,
     this.sampleRate = 0,
     this.bitDepth = 0,
+    this.loudnessLufs,
   });
 
   factory MediaAudioInfo.fromJson(Map<String, dynamic> j) => MediaAudioInfo(
-        durationMs: (j['duration_ms'] as num?)?.toInt() ?? 0,
-        channels:   (j['channels']   as num?)?.toInt() ?? 0,
-        sampleRate: (j['sample_rate'] as num?)?.toInt() ?? 0,
-        bitDepth:   (j['bit_depth']  as num?)?.toInt() ?? 0,
+        durationMs:   (j['duration_ms']    as num?)?.toInt()    ?? 0,
+        channels:     (j['channels']       as num?)?.toInt()    ?? 0,
+        sampleRate:   (j['sample_rate']    as num?)?.toInt()    ?? 0,
+        bitDepth:     (j['bit_depth']      as num?)?.toInt()    ?? 0,
+        loudnessLufs: (j['loudness_lufs']  as num?)?.toDouble(),
       );
 }
 
@@ -75,9 +79,14 @@ class MediaFile {
 
 /// HTTP-Client für den autoritativen Medien-Speicher des Sync-Servers.
 /// Alle Dateien liegen IMMER auf dem Server; Nodes ziehen sie sich von dort.
+///
+/// Pass [httpClient] to inject a custom client (e.g. for testing).
+/// If null, the global [http.get]/[http.delete] functions are used.
 class ServerMediaClient {
   final String baseUrl;
-  ServerMediaClient(this.baseUrl);
+  final http.Client? _http;
+
+  ServerMediaClient(this.baseUrl, {http.Client? httpClient}) : _http = httpClient;
 
   /// Erzeugt einen Client aus der aktuellen Server-Verbindung (oder null,
   /// wenn nicht verbunden).
@@ -97,8 +106,10 @@ class ServerMediaClient {
   /// Holt das Server-Manifest: alle Dateien mit Name, SHA256, MIME, Größe.
   /// Nodes nutzen dieses für den Diff: nur fehlende/veränderte Dateien laden.
   Future<List<MediaFile>> manifest() async {
-    final resp =
-        await http.get(_u('/media/manifest')).timeout(const Duration(seconds: 10));
+    final resp = await (_http != null
+            ? _http.get(_u('/media/manifest'))
+            : http.get(_u('/media/manifest')))
+        .timeout(const Duration(seconds: 10));
     if (resp.statusCode != 200) {
       throw HttpException('manifest fehlgeschlagen (HTTP ${resp.statusCode})');
     }
@@ -111,11 +122,19 @@ class ServerMediaClient {
   /// Alias für Rückwärtskompatibilität — nutzt jetzt /media/manifest.
   Future<List<MediaFile>> list() => manifest();
 
+  /// Lädt eine einzelne Datei herunter und gibt die rohen Bytes zurück.
+  Future<http.Response> download(String name) async {
+    final uri = downloadUri(name);
+    return _http != null
+        ? _http.get(uri).timeout(const Duration(seconds: 60))
+        : http.get(uri).timeout(const Duration(seconds: 60));
+  }
+
   /// Lädt eine Datei zum Server hoch.
   Future<MediaFile> upload(String filename, List<int> bytes) async {
     final req = http.MultipartRequest('POST', _u('/media/upload'))
       ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
-    final streamed = await req.send().timeout(const Duration(seconds: 60));
+    final streamed = await (_http ?? http.Client()).send(req).timeout(const Duration(seconds: 60));
     final resp = await http.Response.fromStream(streamed);
     if (resp.statusCode != 200) {
       throw HttpException('upload fehlgeschlagen (HTTP ${resp.statusCode}): ${resp.body}');
@@ -125,8 +144,9 @@ class ServerMediaClient {
 
   /// Löscht eine Datei auf dem Server.
   Future<void> delete(String filename) async {
-    final resp = await http
-        .delete(_u('/media/${Uri.encodeComponent(filename)}'))
+    final resp = await (_http != null
+            ? _http.delete(_u('/media/${Uri.encodeComponent(filename)}'))
+            : http.delete(_u('/media/${Uri.encodeComponent(filename)}')))
         .timeout(const Duration(seconds: 10));
     if (resp.statusCode != 200 && resp.statusCode != 404) {
       throw HttpException('löschen fehlgeschlagen (HTTP ${resp.statusCode})');
