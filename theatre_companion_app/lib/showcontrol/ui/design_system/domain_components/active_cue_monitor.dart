@@ -31,6 +31,11 @@ class ActiveCueMonitor extends StatelessWidget {
         ? cueList?.cueById(playhead.nextCueId!)
         : null;
 
+    // Parallel children = running IDs minus the group/active cue itself
+    final childIds = playhead.runningCueIds
+        .where((id) => id != activeId)
+        .toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -41,6 +46,21 @@ class ActiveCueMonitor extends StatelessWidget {
         if (cue?.displayDurationMs != null)
           _ProgressBar(playhead: playhead, cue: cue!),
         const SizedBox(height: 12),
+        // ── Parallel group children ───────────────────────────────────
+        if (childIds.isNotEmpty) ...[
+          Text('PARALLEL', style: ScText.panelTitle),
+          const SizedBox(height: 6),
+          ...childIds.map((childId) {
+            final childCue = cueList?.cueById(childId);
+            final childState = playhead.runStateFor(childId);
+            return _ChildCueRow(
+              childId: childId,
+              cue: childCue,
+              runState: childState,
+            );
+          }),
+          const SizedBox(height: 8),
+        ],
         // ── Per-node state ────────────────────────────────────────────
         if (runState != null && runState.nodes.isNotEmpty) ...[
           Text('NODES', style: ScText.panelTitle),
@@ -199,6 +219,56 @@ class _ProgressBar extends StatelessWidget {
           playhead.isPaused ? ScColors.warn : ScColors.active,
         ),
         minHeight: 6,
+      ),
+    );
+  }
+}
+
+class _ChildCueRow extends StatelessWidget {
+  final String childId;
+  final Cue? cue;
+  final CueRunState? runState;
+
+  const _ChildCueRow({
+    required this.childId,
+    required this.cue,
+    required this.runState,
+  });
+
+  Color get _color => switch (runState?.lifecycle) {
+        CueLifecycle.running => ScColors.active,
+        CueLifecycle.paused  => ScColors.warn,
+        CueLifecycle.error   => ScColors.error,
+        _                    => ScColors.textDim,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final label = cue != null
+        ? '${cue!.number}  ${cue!.label}'
+        : childId.substring(0, childId.length.clamp(0, 8));
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: _color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: ScText.label.copyWith(color: _color),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Text(
+            runState?.lifecycle.name ?? '',
+            style: ScText.label.copyWith(color: ScColors.textDim, fontSize: 10),
+          ),
+        ],
       ),
     );
   }
