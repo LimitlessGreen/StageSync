@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -16,6 +17,7 @@ import (
 	pb "stagesync-server/gen/go/stagesync/v1"
 	"path/filepath"
 
+	"stagesync-server/internal/audionode"
 	"stagesync-server/internal/discovery"
 	grpchandlers "stagesync-server/internal/grpc"
 	"stagesync-server/internal/media"
@@ -25,9 +27,11 @@ import (
 )
 
 var (
-	port        = flag.Int("port", 50051, "gRPC server port")
-	mediaPort   = flag.Int("media-port", 50053, "HTTP media server port")
-	serviceName = flag.String("name", "StageSync", "mDNS service name")
+	port            = flag.Int("port", 50051, "gRPC server port")
+	mediaPort       = flag.Int("media-port", 50053, "HTTP media server port")
+	serviceName     = flag.String("name", "StageSync", "mDNS service name")
+	enableAudioNode = flag.Bool("audio-node", false,
+		"Start an internal audio node (stub). Useful for single-machine setups and rehearsals.")
 )
 
 func main() {
@@ -77,6 +81,13 @@ func main() {
 	// gRPC Reflection (für grpcurl / Debugging)
 	reflection.Register(grpcServer)
 
+	// ── Optional internal audio node ─────────────────────────────────────
+	if *enableAudioNode {
+		log.Println("--audio-node: starting internal audio node (malgo/miniaudio)")
+		an := audionode.New(sessionMgr, dispatcher, mediaStore)
+		an.Start(ctx)
+	}
+
 	// ── mDNS Announcement ───────────────────────────────────────────────────
 	txtRecords := []string{"version=1", fmt.Sprintf("port=%d", *port), fmt.Sprintf("mediaPort=%d", *mediaPort)}
 	if _, err := discovery.Announce(ctx, *serviceName, *port, txtRecords); err != nil {
@@ -94,8 +105,21 @@ func main() {
 
 	<-ctx.Done()
 	log.Println("Shutting down...")
-	grpcServer.GracefulStop()
-	log.Println("Server stopped.")
+
+	// GracefulStop wartet auf alle laufenden RPCs. Langlebige Streams (Watch*)
+	// blockieren das sonst unbegrenzt — daher nach 5 s hart stoppen.
+	stopDone := make(chan struct{})
+	go func() {
+		grpcServer.GracefulStop()
+		close(stopDone)
+	}()
+	select {
+	case <-stopDone:
+		log.Println("Graceful shutdown complete.")
+	case <-time.After(5 * time.Second):
+		log.Println("Graceful shutdown timed out, forcing stop.")
+		grpcServer.Stop()
+	}
 }
 
 func loggingInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
