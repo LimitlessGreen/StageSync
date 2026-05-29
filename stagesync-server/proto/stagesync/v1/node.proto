@@ -164,6 +164,11 @@ message NodeConfigCommand {
   // Netzwerk-Interface des Media-Servers setzen (IP-Adresse).
   // Leer = keine Änderung.
   string network_interface_address = 3;
+
+  // Tasks (Rollen) des Nodes neu setzen. Leer = keine Änderung.
+  // Master sendet dies; Server aktualisiert NodeInfo in der Session-Registry
+  // und broadcastet ein TYPE_CAPS_UPDATED NodeEvent.
+  repeated NodeTask tasks = 4;
 }
 
 // SendNodeCommandRequest: Master/Client sendet Command an einen Node

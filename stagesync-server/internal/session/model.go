@@ -168,6 +168,16 @@ func (s *Session) SetNodeMediaServerUrl(nodeID, url string) {
 	}
 }
 
+// SetNodeTasks ersetzt die Task-Liste eines Nodes thread-sicher.
+func (s *Session) SetNodeTasks(nodeID string, tasks []pb.NodeTask) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if n, ok := s.nodes[nodeID]; ok {
+		n.Info.Tasks = tasks
+		log.Printf("[Session] SetNodeTasks node=%s tasks=%v", nodeID, tasks)
+	}
+}
+
 func (s *Session) ToProto() *pb.Session {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

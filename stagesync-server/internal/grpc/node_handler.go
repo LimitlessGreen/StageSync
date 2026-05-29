@@ -210,6 +210,20 @@ func (h *NodeHandler) SendNodeCommand(ctx context.Context, req *pb.SendNodeComma
 		return nil, status.Error(codes.InvalidArgument, "command is required")
 	}
 
+	// Task-Änderungen werden direkt im Session-State angewandt (kein Roundtrip zum Node nötig).
+	if cfg := req.Command.GetNodeConfig(); cfg != nil && len(cfg.Tasks) > 0 {
+		sess, err := h.sessionMgr.GetSession(req.SessionId)
+		if err == nil {
+			sess.SetNodeTasks(req.TargetNodeId, cfg.Tasks)
+			h.dispatcher.UpdateTasks(req.TargetNodeId, cfg.Tasks)
+			if n, ok := sess.GetNode(req.TargetNodeId); ok {
+				h.sessionMgr.NotifyNodeUpdated(req.SessionId, n.Info)
+				log.Printf("[node] tasks updated for %s: %v", req.TargetNodeId, cfg.Tasks)
+			}
+		}
+		return &pb.NodeCommandResponse{Success: true}, nil
+	}
+
 	if err := h.dispatcher.Dispatch(ctx, req.TargetNodeId, req.Command); err != nil {
 		if err == node.ErrNodeNotConnected {
 			return nil, status.Errorf(codes.Unavailable, "node %q not connected", req.TargetNodeId)
