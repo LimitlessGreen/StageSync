@@ -71,6 +71,10 @@ class ShowControlRepository {
           targetCueId: proto.gotoP.targetCueId,
           targetNumber: proto.gotoP.targetNumber,
         ),
+      pb.Cue_Params.group => GroupParams(
+          childCueIds: proto.group.childCueIds.toList(),
+          sequential: proto.group.sequential,
+        ),
       pb.Cue_Params.notSet => const ScriptParams(script: ''),
     };
   }

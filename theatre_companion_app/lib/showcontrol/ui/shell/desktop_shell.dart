@@ -661,14 +661,18 @@ class _ParamsSection extends StatelessWidget {
   }
 }
 
-class _AudioParamsEditor extends StatelessWidget {
+class _AudioParamsEditor extends ConsumerWidget {
   final AudioParams params;
   final ValueChanged<CueParams> onChanged;
 
   const _AudioParamsEditor({required this.params, required this.onChanged});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final audioNotifier = ref.read(audioNodeProvider.notifier);
+    final isAudioConnected =
+        ref.watch(audioNodeProvider).state == AudioNodeState.connected;
+
     return _Section(title: 'AUDIO', children: [
       ScInlineField(
         label: 'Asset-ID',
@@ -734,6 +738,35 @@ class _AudioParamsEditor extends StatelessWidget {
       ),
       const SizedBox(height: 8),
       AudioCueMinibar(params: params),
+      const SizedBox(height: 8),
+      // ── Audition (Vorhören) ────────────────────────────────────────
+      Row(
+        children: [
+          ScButton(
+            label: 'Vorhören',
+            icon: Icons.headphones,
+            variant: ScButtonVariant.secondary,
+            size: ScButtonSize.compact,
+            onPressed: isAudioConnected && params.assetId.isNotEmpty
+                ? () => audioNotifier.auditionPlay(
+                      assetId: params.assetId,
+                      volumeDb: params.volumeDb,
+                      startMs: params.startTimeMs,
+                    )
+                : null,
+          ),
+          const SizedBox(width: 8),
+          ScButton(
+            label: 'Stopp',
+            icon: Icons.stop,
+            variant: ScButtonVariant.ghost,
+            size: ScButtonSize.compact,
+            onPressed: isAudioConnected
+                ? () => audioNotifier.auditionStop()
+                : null,
+          ),
+        ],
+      ),
     ]);
   }
 }

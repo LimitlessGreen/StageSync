@@ -134,6 +134,11 @@ class ShowDao extends DatabaseAccessor<AppDatabase> with _$ShowDaoMixin {
           'targetCueId': cue.gotoP.targetCueId,
           'targetNumber': cue.gotoP.targetNumber,
         },
+      pb.Cue_Params.group => {
+          'type': 'group',
+          'childCueIds': cue.group.childCueIds.toList(),
+          'sequential': cue.group.sequential,
+        },
       pb.Cue_Params.notSet => {'type': 'none'},
     };
     return jsonEncode(params);

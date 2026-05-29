@@ -3,13 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../providers/session_provider.dart';
 import '../../../providers/node_management_provider.dart';
+import '../../../providers/audio_node_provider.dart';
+import '../../../nodes/audio_node/audio_node_service.dart';
 import '../../design_system/sc_colors.dart';
 import '../../design_system/sc_spacing.dart';
 import '../../design_system/sc_typography.dart';
 import '../../design_system/primitives/sc_button.dart';
 import '../../design_system/primitives/sc_chip.dart';
 import '../../../domain/node_status.dart';
-import '../../../../showcontrol/grpc/generated/stagesync/v1/node.pb.dart' as pb;
 
 /// Desktop-only Node-Management-Panel.
 /// Zeigt alle verbundenen Nodes mit ihren Capabilities.
@@ -288,37 +289,58 @@ class _AudioDeviceSectionState extends ConsumerState<_AudioDeviceSection> {
 
   @override
   Widget build(BuildContext context) {
+    final session = ref.watch(sessionProvider);
+    final audioStatus = ref.watch(audioNodeProvider);
+    final isLocalNode = widget.node.nodeId == session.myNode?.nodeId;
 
-    // Gerätliste aus Capabilities (wenn vorhanden).
-    // Placeholder: leere Liste bis WatchNodes Capabilities überträgt (Phase 2).
-    final List<pb.AudioDeviceInfo> devices = [];
+    // Für den lokalen Node: Gerätliste aus dem lokalen AudioNode-Provider.
+    // Für Remote-Nodes: WatchNodes-Subscription noch nicht implementiert.
+    final localDevices = audioStatus.availableDevices;
+    final isLocalAudioConnected = audioStatus.state == AudioNodeState.connected;
+
+    if (!isLocalNode) {
+      return Text(
+        'Remote-Gerät-Liste benötigt WatchNodes-Subscription\n(Phase 4: 4-Stream EventBus)',
+        style: ScText.label.copyWith(color: ScColors.textDim),
+      );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (devices.isEmpty)
+        if (localDevices.isEmpty || !isLocalAudioConnected)
           Text(
-            'Gerät-Liste nicht verfügbar\n(Node muss Capabilities melden)',
+            isLocalAudioConnected
+                ? 'Keine Audiogeräte gefunden'
+                : 'Audio-Node nicht aktiv',
             style: ScText.label.copyWith(color: ScColors.textDim),
           )
         else
           DropdownButton<int>(
-            value: _selectedIndex,
-            hint: Text('Gerät auswählen', style: ScText.label),
+            value: _selectedIndex ??
+                audioStatus.selectedDevice?.let((d) =>
+                    localDevices.contains(d) ? localDevices.indexOf(d) : null),
+            hint: Text(
+              audioStatus.selectedDevice?.name ?? 'Gerät auswählen',
+              style: ScText.label,
+            ),
             dropdownColor: ScColors.surface,
             style: ScText.label.copyWith(color: ScColors.textPrimary),
-            items: devices
-                .map((d) => DropdownMenuItem(
-                      value: d.index,
-                      child: Text(d.name),
+            isExpanded: true,
+            items: localDevices
+                .asMap()
+                .entries
+                .map((e) => DropdownMenuItem(
+                      value: e.key,
+                      child: Text(e.value.name,
+                          overflow: TextOverflow.ellipsis),
                     ))
                 .toList(),
             onChanged: (idx) {
-              if (idx == null) return;
-              final dev = devices.firstWhere((d) => d.index == idx);
+              if (idx == null || idx >= localDevices.length) return;
               setState(() {
                 _selectedIndex = idx;
-                _selectedName = dev.name;
+                _selectedName = localDevices[idx].name;
               });
             },
           ),
@@ -330,12 +352,17 @@ class _AudioDeviceSectionState extends ConsumerState<_AudioDeviceSection> {
               icon: Icons.check,
               variant: ScButtonVariant.secondary,
               size: ScButtonSize.compact,
-              onPressed: _selectedIndex != null
-                  ? () => ref.read(nodeManagementProvider.notifier).setAudioDevice(
-                        targetNodeId: widget.node.nodeId,
-                        deviceIndex: _selectedIndex!,
-                        deviceName: _selectedName,
-                      )
+              onPressed: (_selectedIndex != null && isLocalAudioConnected)
+                  ? () {
+                      // Local node: switch device directly
+                      final dev = localDevices[_selectedIndex!];
+                      ref.read(audioNodeProvider.notifier).selectDevice(dev);
+                      ref.read(nodeManagementProvider.notifier).setAudioDevice(
+                            targetNodeId: widget.node.nodeId,
+                            deviceIndex: _selectedIndex!,
+                            deviceName: _selectedName,
+                          );
+                    }
                   : null,
             ),
             const SizedBox(width: 8),
@@ -344,15 +371,36 @@ class _AudioDeviceSectionState extends ConsumerState<_AudioDeviceSection> {
               icon: Icons.restore,
               variant: ScButtonVariant.ghost,
               size: ScButtonSize.compact,
-              onPressed: () => ref.read(nodeManagementProvider.notifier).resetToDefault(
-                    targetNodeId: widget.node.nodeId,
-                  ),
+              onPressed: isLocalAudioConnected
+                  ? () {
+                      ref.read(audioNodeProvider.notifier).resetToDefaultDevice();
+                      ref.read(nodeManagementProvider.notifier).resetToDefault(
+                            targetNodeId: widget.node.nodeId,
+                          );
+                    }
+                  : null,
             ),
           ],
         ),
+        // ── Audition ───────────────────────────────────────────────────
+        if (widget.node.audition.supported && isLocalNode) ...[
+          const SizedBox(height: 12),
+          Text('Audition (Vorhören)', style: ScText.panelTitle),
+          const SizedBox(height: 6),
+          Text(
+            widget.node.audition.deviceName != null
+                ? 'Gerät: ${widget.node.audition.deviceName}'
+                : 'Kopfhörer-Kanal verfügbar',
+            style: ScText.label.copyWith(color: ScColors.textDim),
+          ),
+        ],
       ],
     );
   }
+}
+
+extension _Let<T> on T {
+  R? let<R>(R? Function(T) block) => block(this);
 }
 
 // ── Test Signal Row ───────────────────────────────────────────────────────────
