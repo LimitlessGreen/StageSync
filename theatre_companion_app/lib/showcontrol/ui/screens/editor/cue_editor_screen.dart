@@ -11,6 +11,7 @@ import '../../design_system/sc_spacing.dart';
 import '../../design_system/sc_typography.dart';
 import '../../design_system/primitives/sc_button.dart';
 import '../../design_system/primitives/sc_inline_field.dart';
+import '../../design_system/primitives/sc_drag_field.dart';
 import '../../design_system/primitives/sc_split_view.dart';
 import '../../design_system/domain_components/cue_list_row.dart';
 import '../../design_system/domain_components/audio_cue_minibar.dart';
@@ -88,17 +89,19 @@ class _CueListPane extends StatelessWidget {
             children: [
               Text('CUE LIST', style: ScText.panelTitle),
               const Spacer(),
-              ScButton(
-                label: '+ CUE',
-                variant: ScButtonVariant.ghost,
-                size: ScButtonSize.compact,
-                onPressed: () async {
-                  final box = context.findRenderObject() as RenderBox?;
-                  if (box == null) return;
-                  final pos = box.localToGlobal(Offset(box.size.width, box.size.height));
-                  final params = await showCueTypePicker(context, pos);
-                  if (params != null) onAddCue(params);
-                },
+              Builder(
+                builder: (btnCtx) => ScButton(
+                  label: '+ CUE',
+                  variant: ScButtonVariant.ghost,
+                  size: ScButtonSize.compact,
+                  onPressed: () async {
+                    final box = btnCtx.findRenderObject() as RenderBox?;
+                    if (box == null) return;
+                    final pos = box.localToGlobal(Offset(0, box.size.height));
+                    final params = await showCueTypePicker(btnCtx, pos);
+                    if (params != null) onAddCue(params);
+                  },
+                ),
               ),
             ],
           ),
@@ -250,43 +253,41 @@ class _ParamsContent extends StatelessWidget {
           children: [
             AudioCueMinibar(params: ap, knownDurationMs: cue.displayDurationMs),
             const SizedBox(height: 8),
-            ScInlineField(
+            ScDragField(
               label: 'Lautstärke',
-              value: '${ap.volumeDb.toStringAsFixed(1)} dB',
-              onChanged: (v) {
-                final db = double.tryParse(v.replaceAll(' dB', '').trim());
-                if (db != null) {
-                  notifier.upsertDomainCue(
-                    cue.copyWith(params: ap.copyWith(volumeDb: db)),
-                  );
-                }
-              },
+              value: ap.volumeDb,
+              min: -40,
+              max: 20,
+              step: 0.2,
+              suffix: 'dB',
+              decimalPlaces: 1,
+              onChanged: (v) => notifier.upsertDomainCue(
+                cue.copyWith(params: ap.copyWith(volumeDb: v)),
+              ),
             ),
-            ScInlineField(
+            ScDragField(
               label: 'Fade In',
-              value: ap.fadeInMs.toStringAsFixed(0),
+              value: ap.fadeInMs,
+              min: 0,
+              max: 60000,
+              step: 10,
               suffix: 'ms',
-              keyboardType: TextInputType.number,
-              onChanged: (v) {
-                final ms = double.tryParse(v);
-                if (ms != null) {
-                  notifier.upsertDomainCue(
-                      cue.copyWith(params: ap.copyWith(fadeInMs: ms)));
-                }
-              },
+              decimalPlaces: 0,
+              onChanged: (v) => notifier.upsertDomainCue(
+                cue.copyWith(params: ap.copyWith(fadeInMs: v)),
+              ),
             ),
-            ScInlineField(
+            ScDragField(
               label: 'Fade Out',
-              value: ap.fadeOutMs.toStringAsFixed(0),
+              value: ap.fadeOutMs,
+              min: 0,
+              max: 60000,
+              step: 10,
               suffix: 'ms',
-              keyboardType: TextInputType.number,
-              onChanged: (v) {
-                final ms = double.tryParse(v);
-                if (ms != null) {
-                  notifier.upsertDomainCue(
-                      cue.copyWith(params: ap.copyWith(fadeOutMs: ms)));
-                }
-              },
+              decimalPlaces: 0,
+              onChanged: (v) => notifier.upsertDomainCue(
+                cue.copyWith(params: ap.copyWith(fadeOutMs: v)),
+              ),
             ),
           ],
         ),
