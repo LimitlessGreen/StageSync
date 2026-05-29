@@ -100,18 +100,26 @@ PlayheadState _buildPlayhead(ShowControlState state, CueList? cueList) {
     phase = CueListPhase.running;
   }
 
-  // Per-cue state — simplified until server sends proper per-cue node states.
+  // runningCueIds: prefer server-authoritative set; fall back to {activeCueId}.
+  final runningCueIds = state.runningCueIds.isNotEmpty
+      ? state.runningCueIds
+      : (activeCueId != null ? {activeCueId} : const <String>{});
+
+  // Per-cue state: all running IDs get a CueRunState; active cue also tracks
+  // pause. This will be superseded by server-sent per-node states in Phase 4.
   final perCue = <String, CueRunState>{};
-  if (activeCueId != null) {
-    perCue[activeCueId] = CueRunState(
-      lifecycle: state.isPaused ? CueLifecycle.paused : CueLifecycle.running,
+  for (final id in runningCueIds) {
+    perCue[id] = CueRunState(
+      lifecycle: (id == activeCueId && state.isPaused)
+          ? CueLifecycle.paused
+          : CueLifecycle.running,
     );
   }
 
   return PlayheadState(
     cueListId: cueListId,
     activeCueId: activeCueId,
-    runningCueIds: activeCueId != null ? {activeCueId} : const {},
+    runningCueIds: runningCueIds,
     nextCueId: nextCueId,
     phase: phase,
     startedServerMs: state.activeCueStartedServerMs,

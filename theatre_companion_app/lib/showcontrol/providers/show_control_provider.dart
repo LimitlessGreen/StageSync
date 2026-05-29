@@ -36,6 +36,10 @@ class ShowControlState {
   /// eingefroren → die verstrichene Zeit bleibt stehen.
   final int? pausedAtServerMs;
 
+  /// Alle aktuell ausführenden Cue-IDs. Bei normalen Cues: {activeCueId}.
+  /// Bei Group-Cues zusätzlich die parallel laufenden Kind-Cue-IDs.
+  final Set<String> runningCueIds;
+
   const ShowControlState({
     this.cueList,
     this.activeCue,
@@ -45,6 +49,7 @@ class ShowControlState {
     this.error,
     this.activeCueStartedServerMs,
     this.pausedAtServerMs,
+    this.runningCueIds = const {},
   });
 
   ShowControlState copyWith({
@@ -52,6 +57,7 @@ class ShowControlState {
     bool? isLoading,
     bool? isPaused,
     String? error,
+    Set<String>? runningCueIds,
     Object? activeCue = _unset,
     Object? nextCue = _unset,
     Object? activeCueStartedServerMs = _unset,
@@ -64,6 +70,7 @@ class ShowControlState {
         isLoading: isLoading ?? this.isLoading,
         isPaused: isPaused ?? this.isPaused,
         error: error,
+        runningCueIds: runningCueIds ?? this.runningCueIds,
         activeCueStartedServerMs: identical(activeCueStartedServerMs, _unset)
             ? this.activeCueStartedServerMs
             : activeCueStartedServerMs as int?,
@@ -311,6 +318,9 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
           activeCue: event.hasAffectedCue() ? event.affectedCue : state.activeCue,
           activeCueStartedServerMs: startMs,
           pausedAtServerMs: null,
+          runningCueIds: event.runningCueIds.isNotEmpty
+              ? event.runningCueIds.toSet()
+              : (event.hasAffectedCue() ? {event.affectedCue.cueId} : state.runningCueIds),
         );
       case ShowStateEvent_Type.TYPE_CUE_PAUSED:
         // Auf die Server-Pausenzeit einfrieren → alle Geräte zeigen denselben Wert.
@@ -326,9 +336,17 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
           isPaused: false,
           activeCueStartedServerMs: null,
           pausedAtServerMs: null,
+          runningCueIds: const {},
         );
+      case ShowStateEvent_Type.TYPE_CUE_DONE:
+      case ShowStateEvent_Type.TYPE_CUE_ERROR:
+        // Bei Group-Children: running_cue_ids zeigt was noch läuft.
+        final updatedRunning = event.runningCueIds.isNotEmpty
+            ? event.runningCueIds.toSet()
+            : state.runningCueIds;
+        state = state.copyWith(cueList: cueList, runningCueIds: updatedRunning);
       default:
-        // LIST_UPDATED, CUE_DONE, CUE_ERROR: NUR die Liste aktualisieren.
+        // LIST_UPDATED: NUR die Liste aktualisieren.
         // Das Hinzufügen/Ändern einer Cue darf NICHT die aktive Cue setzen oder
         // den Timer starten (sonst „läuft" ein neu hinzugefügter Eintrag los).
         state = state.copyWith(cueList: cueList);
