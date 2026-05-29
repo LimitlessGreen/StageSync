@@ -1,119 +1,199 @@
 # AGENTS.md – StageSync Companion App
 
-**StageSync** is a Flutter P2P BLE-mesh app for theater inventory management.  
-Devices form a leaderless mesh; the elected leader bridges to a central server.
+**StageSync** is a Flutter + Go system for theater show control.  
+The Go server (`../stagesync-server`) is the single authority for all show state.  
+Flutter clients are Operators (desktop) or Viewers/Remotes (mobile); they send commands and receive state via gRPC.
+
+---
+
+## Repository Layout
+
+```
+Companion-App/
+├── stagesync-server/          # Go gRPC server — single source of truth
+│   ├── cmd/server/main.go
+│   ├── internal/
+│   │   ├── grpc/              # gRPC handlers (session, showcontrol, node)
+│   │   ├── showcontrol/       # ShowEngine: playhead, cue execution
+│   │   ├── session/           # SessionManager, NodeRegistry, ClockSync
+│   │   ├── node/              # NodeDispatcher, Capability checks
+│   │   └── media/             # Content-addressable MediaStore (SHA-256)
+│   └── proto/stagesync/v1/    # Protobuf definitions (source of truth)
+└── theatre_companion_app/     # Flutter multi-platform client
+    ├── lib/showcontrol/
+    │   ├── domain/            # Immutable Dart domain models (no proto types)
+    │   ├── infrastructure/    # gRPC repos, MediaSync, DB DAOs
+    │   ├── nodes/             # AudioNodeService (SoLoud), MaNodeService (OSC)
+    │   ├── providers/         # Riverpod notifiers/providers
+    │   ├── session/           # ClockSync, SessionService
+    │   └── ui/                # Design system + screens + shell
+    └── test/showcontrol/      # Unit & integration tests mirror lib/showcontrol/
+```
 
 ---
 
 ## Architecture Overview
 
 ```
-UI (Main Isolate)                    Network (Background Isolate)
-─────────────────                    ────────────────────────────
-networkIsolateManagerProvider  ──►  NetworkIsolateManager._initNative()
-  Riverpod FutureProvider              │
-  (providers/network_state_provider)   ▼
-                                NetworkRepositoryWeaver  ←─ coordinator of all routing
-                                  ├─ BleMeshService / GossipEngine  (BLE P2P)
-                                  ├─ WebSocketService               (leader ↔ server)
-                                  ├─ CloudConnectService            (Socket.IO)
-                                  ├─ LeaderElectionEngine           (score-based election)
-                                  └─ Drift DAOs (InventoryDao, ChatDao, PacketQueueDao)
+Flutter UI (main isolate)
+  └─ Riverpod Providers
+       ├─ ShowControlProvider  ──► ShowControlNotifier (domain state)
+       ├─ SessionProvider      ──► SessionService (clock-sync, heartbeat)
+       ├─ AudioNodeProvider    ──► AudioNodeService (SoLoud, MediaSync)
+       └─ NodeManagementProvider
+
+ShowControlNotifier
+  └─ ShowControlRepository (infrastructure/grpc/)
+       ├─ StageSyncClient      ──► gRPC Channel + Stubs (long-lived, one per session)
+       ├─ DefinitionStream     ──► ShowDefinitionEvent (cues, patch, assets)
+       ├─ ExecutionStream      ──► ShowExecutionEvent (playhead, cue run states)
+       ├─ HealthStream         ──► NodeHealthEvent
+       └─ MediaSyncStream      ──► MediaSyncEvent
+
+Go Server (stagesync-server)
+  └─ gRPC Services
+       ├─ SessionService       — register node, heartbeat, clock
+       ├─ ShowControlService   — GO / STOP / PAUSE / RESUME (role-checked)
+       └─ NodeService          — WatchNodes, SendNodeCommand
 ```
 
-**Web platform**: uses synchronous `NetworkRepositoryWeaver` on the main isolate with in-memory `_WebNoOp*` DAO stubs (no SQLite, no native BLE).  
-**Native (Android/iOS)**: spawns a background isolate via `Isolate.spawn`; uses real Drift/SQLite and `BleMeshService`.
+**Go server is the single master**: all show-state mutations happen there.  
+Flutter clients are command senders and state receivers only — no client-side authority.
 
 ---
 
-## Cross-Isolate Message Protocol
+## Domain Model (Flutter-side)
 
-All communication between isolates uses **sealed classes** in `lib/network/isolate/isolate_messages.dart`:
+Proto types are the transport format only. Flutter uses its own **immutable Dart classes** in `lib/showcontrol/domain/`:
 
-- `NetworkCommand` → UI sends to network isolate (e.g. `ScanItemCommand`, `CloudConnectCommand`, `ShutdownCommand`)
-- `NetworkEvent` ← network isolate emits to UI (e.g. `ItemUpdatedEvent`, `NetworkStatusEvent`, `LeaderChangedEvent`)
+| File | Contents |
+|---|---|
+| `show.dart` | `Show`, `CueList`, `Cue` (immutable + `copyWith`) |
+| `cue_params.dart` | `sealed CueParams` hierarchy (`AudioParams`, `WaitParams`, …) |
+| `cue_trigger.dart` | `CueTrigger` sealed |
+| `playhead.dart` | `PlayheadState`, `CueRunState`, `NodeExecState` |
+| `patch_config.dart` | 4-layer model (CueBus → NodePatch → DevicePatch → AuditionBus) |
+| `asset.dart` | `Asset`, `AudioMetadata`, `AssetReadiness` (4-level enum) |
+| `node_status.dart` | `NodeStatus`, `AuditionCapability` |
 
-**Never** add raw maps or primitives to this protocol – always extend the sealed hierarchy.
-
----
-
-## Key Data Flow: Inventory Scan
-
-1. UI calls `ref.read(networkIsolateManagerProvider.notifier).send(ScanItemCommand(...))`
-2. `NetworkRepositoryWeaver.handleCommand` → `_handleScanItem`
-3. CRDT is persisted to SQLite **before** any network op (ACID guarantee)
-4. If leader & server connected → `WebSocketService.send(encrypted)`; else → `GossipEngine.originateDataPacket` (BLE mesh relay)
-5. `ItemUpdatedEvent` is emitted back to UI immediately
+`ShowControlRepository` (`infrastructure/grpc/show_control_repository.dart`) is the **only** place that converts between proto types and domain types.
 
 ---
 
-## CRDT Model
+## gRPC Channel Strategy
 
-`lib/network/models/inventory_item_crdt.dart` – LWW-Element-Set per field:
-- Each mutable field (`status`, `location`) is a `LwwField<T>` with its own `VectorClock`
-- Conflict resolution: causal order → wall-clock → `ownerShortId` (deterministic tiebreaker)
-- Compact BLE packets carry only `itemShortId` (16-bit hash of UUID), not the full UUID; CRDT merge only happens if the item is already known locally
-
----
-
-## Riverpod State Management
-
-Providers live in `lib/ui/providers/`:
-- `deviceIdProvider` – UUID persisted in `SharedPreferences` (generated once)
-- `networkIsolateManagerProvider` – boots sequence: deviceId → permissions → isolate start → auto-connect cloud
-- `networkEventStreamProvider` – raw `Stream<NetworkEvent>` from the isolate
-- Derived providers filter the stream by event type: `networkStatusProvider`, `itemUpdateStreamProvider`, `chatEventStreamProvider`
-
-Pattern for sending from a widget:
-```dart
-ref.read(networkIsolateManagerProvider.notifier).send(ScanItemCommand(...));
-```
+- One `ClientChannel` per session, reused for all stubs.
+- **4 long-lived server streams**: Definition, Execution, Health, MediaSync.
+- On stream error: **only that stream** is cancelled and rebuilt — the channel stays up.
+- On full disconnect (3 heartbeat failures): exponential backoff 1 s → 30 s, then all 4 streams rebuild from snapshot.
 
 ---
 
-## Database (Drift / SQLite)
+## Roles & Permissions
 
-- Schema: `lib/network/db/app_database.dart` – tables `InventoryItems`, `PacketQueue`, `ChatMessages`
-- Generated file: `app_database.g.dart` – **must regenerate after schema changes**:
-  ```
-  flutter pub run build_runner build --delete-conflicting-outputs
-  ```
-- DAOs are in `lib/network/db/dao/`; each DAO method is an interface (also has a `_WebNoOp*` in-memory implementation for web)
+Role enforcement is **always on the server**. Flutter only shows/hides buttons as UX convenience.
+
+| Role | Can send |
+|---|---|
+| `NODE_TASK_MASTER` / `NODE_TASK_EDITOR` | GO, STOP, PAUSE, RESUME, SendNodeCommand |
+| `NODE_TASK_VIEWER` | read-only; no transport commands |
+
+---
+
+## Audio Node
+
+`AudioNodeService` (`nodes/audio_node/`) runs SoLoud and handles:
+- `AudioPlayCommand` from server (server-synced timestamp)
+- `MediaSync` — lazy pull of assets by SHA-256 from server HTTP API
+- `auditionPlay()` — local preview, isolated handle, no server roundtrip, no show-state impact
+
+`AbstractAudioEngine` is the testable interface; `SoLoudAudioEngine` is the real implementation.
+
+---
+
+## Key Data Flows
+
+### GO command
+1. `TransportBar` → `ref.read(showControlProvider.notifier).go()`
+2. `ShowControlNotifier` calls `ShowControlRepository.sendGo(commandId, cueId)`
+3. Repository sends gRPC `GoRequest` (with UUID `commandId` for server-side deduplication)
+4. Server executes, sends `ShowExecutionEvent` on Execution stream
+5. `ShowControlNotifier` updates `PlayheadState` → UI rebuilds
+
+### Audio playback
+1. Server sends `AudioPlayCommand` on Node-Command stream to AudioNode
+2. `AudioNodeService` ensures file is local (lazy fetch via `MediaSync`)
+3. SoLoud plays at server-anchored timestamp
 
 ---
 
 ## Build & Test Commands
 
 ```bash
-# Run app (debug)
+# Flutter app (debug)
 flutter run
 
-# Regenerate Drift code after DB schema changes
-flutter pub run build_runner build --delete-conflicting-outputs
-
-# Run all tests
+# All tests
 flutter test
 
-# Run a specific test file
-flutter test test/network/coordinator/network_repository_weaver_test.dart
+# Tests for a specific area
+flutter test test/showcontrol/
+
+# Regenerate gRPC Dart stubs (after proto changes)
+# Run from stagesync-server/: make gen
+# Then copy generated files to lib/showcontrol/grpc/generated/
+
+# Regenerate Drift DB code (after schema changes)
+flutter pub run build_runner build --delete-conflicting-outputs
+```
+
+Go server:
+```bash
+# Run server
+cd ../stagesync-server && go run ./cmd/server
+
+# Run Go tests
+cd ../stagesync-server && go test ./...
+
+# Regenerate proto (Go + Dart)
+cd ../stagesync-server && make gen
 ```
 
 ---
 
 ## Testing Conventions
 
-- Use **mocktail** (`Mock`) for all service dependencies; `FakeBleService` injects packets via a `StreamController`
-- Helper `makeTestCrdt(...)` and `inventoryItemFromCrdt(...)` in the weaver test are the canonical test-object factories
-- Tests live in `test/network/` mirroring `lib/network/` directory structure
+### Flutter
+- Mirror `lib/showcontrol/` structure under `test/showcontrol/`.
+- Every new feature or significant refactor ships with tests.
+- Use **mocktail** for service dependencies.
+- `AbstractAudioEngine` / other abstract interfaces allow engine-free unit tests.
+- For domain model tests: pure Dart — no Flutter framework needed, fast to run.
+- For notifier tests: use `ProviderContainer` + mocked repositories.
+
+### Go
+- Unit tests live next to the file they test (`_test.go`).
+- Integration tests that hit real gRPC go in `internal/*/integration_test.go`.
+- Use `testify/assert` and `testify/mock`.
 
 ---
 
-## Platform Abstraction
+## Design System
 
-- `AbstractBleService` (`lib/network/platform/abstract_ble_service.dart`) is the BLE interface
-- `BleMeshService` = real implementation (Android/iOS only)
-- `StubBleService` = no-op fallback (desktop, web, BLE-permission denied)
-- `PlatformCapabilities.detect()` + `PermissionService.requestAll()` determine which is used at runtime; permissions must be requested on the **main isolate before** the network isolate starts
+```
+lib/showcontrol/ui/design_system/
+├── sc_colors.dart       # ScColors — state colors (active/warn/error/idle)
+├── sc_typography.dart   # ScText — mono/label/number/status/title
+├── sc_spacing.dart      # ScSpacing — row heights, panel padding
+├── sc_theme.dart        # ThemeData for ShowControl
+├── primitives/          # No domain knowledge — pure layout/style widgets
+│   └── sc_button, sc_chip, sc_inline_field, sc_meter, sc_panel, sc_split_view
+└── domain_components/   # Know domain types, not proto/gRPC
+    └── cue_list_row, transport_bar, node_status_badge, active_cue_monitor,
+        patch_matrix, audio_cue_minibar, level_meter
+```
+
+Widgets never contain gRPC or proto imports. Business logic lives in notifiers/repositories.
 
 ---
 
@@ -121,11 +201,19 @@ flutter test test/network/coordinator/network_repository_weaver_test.dart
 
 | File | Role |
 |---|---|
-| `lib/network/isolate/isolate_messages.dart` | Full cross-isolate protocol |
-| `lib/network/isolate/network_isolate_manager.dart` | Isolate bridge + web fallback |
-| `lib/network/coordinator/network_repository_weaver.dart` | Central routing coordinator |
-| `lib/network/models/inventory_item_crdt.dart` | LWW-CRDT implementation |
-| `lib/network/db/app_database.dart` | Drift schema (edit → rebuild) |
-| `lib/ui/providers/network_state_provider.dart` | All Riverpod providers |
-| `lib/main.dart` | Bootstrap sequence |
+| `stagesync-server/internal/showcontrol/engine.go` | Authoritative show-state machine |
+| `stagesync-server/internal/grpc/showcontrol_handler.go` | GO/STOP/PAUSE gRPC handlers |
+| `lib/showcontrol/grpc/stage_sync_client.dart` | Long-lived gRPC channel + stubs |
+| `lib/showcontrol/infrastructure/grpc/show_control_repository.dart` | Proto ↔ domain mapper |
+| `lib/showcontrol/providers/show_control_provider.dart` | Main Riverpod notifier |
+| `lib/showcontrol/providers/show_control_domain_provider.dart` | Domain state providers |
+| `lib/showcontrol/nodes/audio_node/audio_node_service.dart` | SoLoud + MediaSync integration |
+| `lib/showcontrol/ui/shell/sc_adaptive_shell.dart` | Keyboard-first adaptive shell |
 
+---
+
+## BLE / Inventory Module (separate feature)
+
+The original BLE mesh inventory feature still exists in `lib/network/` and `test/network/`.  
+Its architecture is documented separately in the network module's own provider/service files.  
+ShowControl and BLE/Inventory are independent — they do not share providers or state.
