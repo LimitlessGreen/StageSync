@@ -5,6 +5,8 @@ import '../../providers/show_control_domain_provider.dart';
 import '../../providers/session_provider.dart';
 import '../../providers/audio_node_provider.dart';
 import '../../providers/ma_node_provider.dart';
+import '../../providers/media_provider.dart';
+import '../../domain/asset.dart';
 import '../../nodes/audio_node/audio_node_service.dart';
 import '../../nodes/ma_node/ma_node_service.dart';
 import '../../grpc/generated/stagesync/v1/common.pb.dart' show NodeTask;
@@ -697,13 +699,20 @@ class _AudioParamsEditor extends ConsumerWidget {
     final audioNotifier = ref.read(audioNodeProvider.notifier);
     final isAudioConnected =
         ref.watch(audioNodeProvider).state == AudioNodeState.connected;
+    final asset = ref.watch(assetLookupProvider(params.assetId));
 
     return _Section(title: 'AUDIO', children: [
+      // Asset-Readiness Badge
+      if (asset != null) _AssetReadinessBadge(asset: asset),
+      if (asset != null) const SizedBox(height: 6),
       ScInlineField(
         label: 'Asset-ID',
-        value: params.assetId,
-        readOnly: true, // set via media picker in Phase 5+
-        tooltip: 'SHA-256 des Audio-Assets',
+        value: params.assetId.isEmpty ? '—' : params.assetId,
+        readOnly: true,
+        tooltip: asset != null
+            ? '${asset.name}  •  ${_formatSize(asset.sizeBytes)}'
+                '${asset.audio != null ? "  •  ${asset.audio!.channelLabel}  •  ${asset.audio!.sampleRateHz} Hz" : ""}'
+            : 'SHA-256 des Audio-Assets (noch nicht auf Server)',
       ),
       const SizedBox(height: 6),
       ScInlineField(
@@ -1012,4 +1021,39 @@ class _ClockInfo extends ConsumerWidget {
       style: ScText.statusSmall,
     );
   }
+}
+
+// ── Asset-Readiness Badge ──────────────────────────────────────────────────────
+
+class _AssetReadinessBadge extends StatelessWidget {
+  final Asset asset;
+  const _AssetReadinessBadge({required this.asset});
+
+  @override
+  Widget build(BuildContext context) {
+    final (color, icon, label) = switch (asset.readiness) {
+      AssetReadiness.patched    => (ScColors.active, Icons.check_circle_outline, asset.readinessLabel),
+      AssetReadiness.renderable => (ScColors.active, Icons.play_circle_outline, asset.readinessLabel),
+      AssetReadiness.validated  => (ScColors.warn,   Icons.verified_outlined, asset.readinessLabel),
+      AssetReadiness.present    => (ScColors.warn,   Icons.download_done_outlined, asset.readinessLabel),
+    };
+
+    return Row(
+      children: [
+        Icon(icon, size: 13, color: color),
+        const SizedBox(width: 5),
+        Text(
+          '${asset.name}  ·  $label',
+          style: ScText.label.copyWith(color: color),
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    );
+  }
+}
+
+String _formatSize(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+  return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
 }

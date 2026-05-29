@@ -153,16 +153,13 @@ class MediaNotifier extends StateNotifier<MediaState> {
       uploadedAt: f.modifiedMs > 0
           ? DateTime.fromMillisecondsSinceEpoch(f.modifiedMs)
           : DateTime.now(),
-      // AudioMetadata: duration/channels/sampleRate only available when the
-      // server sends them via the manifest endpoint (Phase 5). For now, provide
-      // just the codec so the UI can show format info.
       audio: isAudio
           ? AudioMetadata(
-              declaredDurationMs: 0,
-              channelCount: 0,
-              sampleRateHz: 0,
-              codec: codec,
-              bitDepth: 0,
+              declaredDurationMs: f.audio?.durationMs.toDouble() ?? 0,
+              channelCount:       f.audio?.channels   ?? 0,
+              sampleRateHz:       f.audio?.sampleRate ?? 0,
+              codec:              codec,
+              bitDepth:           f.audio?.bitDepth   ?? 0,
             )
           : null,
       readiness: AssetReadiness.present,

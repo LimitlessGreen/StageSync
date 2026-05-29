@@ -15,14 +15,24 @@ import (
 	"time"
 )
 
+// AudioInfo enthält technische Metadaten einer Audiodatei.
+// Wird beim Listing aus dem Datei-Header gelesen (WAV: RIFF-Chunk-Analyse).
+type AudioInfo struct {
+	DurationMs int64 `json:"duration_ms"` // 0 = unbekannt
+	Channels   int32 `json:"channels"`    // 0 = unbekannt
+	SampleRate int32 `json:"sample_rate"` // Hz
+	BitDepth   int32 `json:"bit_depth"`   // 0 = unbekannt
+}
+
 // FileInfo beschreibt eine gespeicherte Mediendatei. sha256 dient als
 // Inhalts-Fingerprint für den Sync (ETag) und als Änderungserkennung.
 type FileInfo struct {
-	Name       string `json:"name"`
-	SizeBytes  int64  `json:"size_bytes"`
-	SHA256     string `json:"sha256"`
-	ModifiedMs int64  `json:"modified_ms"`
-	MimeType   string `json:"mime_type"`
+	Name       string     `json:"name"`
+	SizeBytes  int64      `json:"size_bytes"`
+	SHA256     string     `json:"sha256"`
+	ModifiedMs int64      `json:"modified_ms"`
+	MimeType   string     `json:"mime_type"`
+	Audio      *AudioInfo `json:"audio,omitempty"` // nil für Nicht-WAV oder Parse-Fehler
 }
 
 // mimeForExt gibt den MIME-Typ für eine Audio-Endung zurück.
@@ -145,13 +155,17 @@ func (s *Store) List() ([]FileInfo, error) {
 		if err != nil {
 			continue
 		}
-		out = append(out, FileInfo{
+		info := FileInfo{
 			Name:       e.Name(),
 			SizeBytes:  fi.Size(),
 			SHA256:     sha,
 			ModifiedMs: fi.ModTime().UnixMilli(),
 			MimeType:   mimeForExt(strings.ToLower(filepath.Ext(e.Name()))),
-		})
+		}
+		if strings.ToLower(filepath.Ext(e.Name())) == ".wav" {
+			info.Audio = parseWAV(filepath.Join(s.dir, e.Name()))
+		}
+		out = append(out, info)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
@@ -172,13 +186,17 @@ func (s *Store) Stat(name string) (FileInfo, error) {
 	if err != nil {
 		return FileInfo{}, err
 	}
-	return FileInfo{
+	result := FileInfo{
 		Name:       SafeName(name),
 		SizeBytes:  fi.Size(),
 		SHA256:     sha,
 		ModifiedMs: fi.ModTime().UnixMilli(),
 		MimeType:   mimeForExt(strings.ToLower(filepath.Ext(SafeName(name)))),
-	}, nil
+	}
+	if strings.ToLower(filepath.Ext(SafeName(name))) == ".wav" {
+		result.Audio = parseWAV(s.path(SafeName(name)))
+	}
+	return result, nil
 }
 
 // hashLocked berechnet/cached den SHA-256 einer Datei. Aufrufer hält s.mu.
@@ -269,4 +287,91 @@ func (s *Store) Delete(name string) error {
 func (s *Store) touch(name string) error {
 	now := time.Now()
 	return os.Chtimes(s.path(name), now, now)
+}
+
+// parseWAV liest den RIFF/WAV-Header und gibt AudioInfo zurück.
+// Gibt nil zurück wenn die Datei kein WAV ist oder der Header nicht lesbar ist.
+// Unterstützt: PCM (fmt-Chunk mit wFormatTag=1 oder 3).
+func parseWAV(path string) *AudioInfo {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+
+	// RIFF-Header: "RIFF" (4) + chunkSize (4) + "WAVE" (4) = 12 Bytes
+	var riff [12]byte
+	if _, err := io.ReadFull(f, riff[:]); err != nil {
+		return nil
+	}
+	if string(riff[0:4]) != "RIFF" || string(riff[8:12]) != "WAVE" {
+		return nil
+	}
+
+	// Chunks suchen: fmt und data
+	var channels, sampleRate, bitDepth int32
+	var dataSize int64
+	foundFmt := false
+
+	buf4 := make([]byte, 4)
+	for {
+		if _, err := io.ReadFull(f, buf4); err != nil {
+			break
+		}
+		id := string(buf4)
+		if _, err := io.ReadFull(f, buf4); err != nil {
+			break
+		}
+		size := int64(buf4[0]) | int64(buf4[1])<<8 | int64(buf4[2])<<16 | int64(buf4[3])<<24
+
+		switch id {
+		case "fmt ":
+			if size < 16 {
+				return nil
+			}
+			fmtData := make([]byte, size)
+			if _, err := io.ReadFull(f, fmtData); err != nil {
+				return nil
+			}
+			// wFormatTag: 1=PCM, 3=IEEE float — beide haben Standard-Felder
+			channels   = int32(fmtData[2]) | int32(fmtData[3])<<8
+			sampleRate = int32(fmtData[4]) | int32(fmtData[5])<<8 |
+				int32(fmtData[6])<<16 | int32(fmtData[7])<<24
+			bitDepth   = int32(fmtData[14]) | int32(fmtData[15])<<8
+			foundFmt   = true
+		case "data":
+			dataSize = size
+			if _, err := f.Seek(size, io.SeekCurrent); err != nil {
+				break
+			}
+		default:
+			// Unbekannter Chunk überspringen (WORD-aligned)
+			skip := size
+			if skip%2 != 0 {
+				skip++
+			}
+			if _, err := f.Seek(skip, io.SeekCurrent); err != nil {
+				break
+			}
+		}
+	}
+
+	if !foundFmt || channels == 0 || sampleRate == 0 || bitDepth == 0 {
+		return nil
+	}
+
+	var durationMs int64
+	if dataSize > 0 {
+		bytesPerSec := int64(sampleRate) * int64(channels) * int64(bitDepth/8)
+		if bytesPerSec > 0 {
+			durationMs = (dataSize * 1000) / bytesPerSec
+		}
+	}
+
+	return &AudioInfo{
+		DurationMs: durationMs,
+		Channels:   channels,
+		SampleRate: sampleRate,
+		BitDepth:   bitDepth,
+	}
 }

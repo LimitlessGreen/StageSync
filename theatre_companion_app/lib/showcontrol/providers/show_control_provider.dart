@@ -11,6 +11,7 @@ import '../domain/node_status.dart';
 import '../domain/patch_config.dart';
 import '../session/clock_sync.dart';
 import 'session_provider.dart';
+import 'media_provider.dart';
 
 const _uuid = Uuid();
 
@@ -141,6 +142,9 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
       _subscribeToDefinition();
       _subscribeToExecution();
       _subscribeToNodeHealth();
+      _subscribeToMediaSync();
+      // Media-Manifest beim Start laden (Assets für Inspector-Readiness).
+      _ref.read(mediaProvider.notifier).refresh();
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
     }
@@ -455,6 +459,20 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
     );
 
     state = state.copyWith(nodeStatuses: _nodeMap.values.toList());
+  }
+
+  // ── Stream 4: Media-Sync ────────────────────────────────────────────────────
+
+  void _subscribeToMediaSync() {
+    final req = WatchMediaSyncRequest()
+      ..sessionId = _sessionId
+      ..nodeId = _session.myNode!.nodeId
+      ..token = _token;
+
+    // Jeder MEDIA_SNAPSHOT triggert einen Media-Manifest-Refresh.
+    StageSyncClient.instance.showControl
+        .watchMediaSync(req)
+        .listen((_) => _ref.read(mediaProvider.notifier).refresh());
   }
 
   int _eventServerMs(ShowExecutionEvent event) {

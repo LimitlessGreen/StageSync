@@ -20,6 +20,28 @@ Future<String> mediaCacheDir() async {
   return dir;
 }
 
+/// Technische Audio-Metadaten aus dem Server-Manifest.
+class MediaAudioInfo {
+  final int durationMs;
+  final int channels;
+  final int sampleRate;
+  final int bitDepth;
+
+  const MediaAudioInfo({
+    this.durationMs = 0,
+    this.channels = 0,
+    this.sampleRate = 0,
+    this.bitDepth = 0,
+  });
+
+  factory MediaAudioInfo.fromJson(Map<String, dynamic> j) => MediaAudioInfo(
+        durationMs: (j['duration_ms'] as num?)?.toInt() ?? 0,
+        channels:   (j['channels']   as num?)?.toInt() ?? 0,
+        sampleRate: (j['sample_rate'] as num?)?.toInt() ?? 0,
+        bitDepth:   (j['bit_depth']  as num?)?.toInt() ?? 0,
+      );
+}
+
 /// Eine Datei im Medien-Speicher des Servers (Manifest-Eintrag).
 class MediaFile {
   final String name;
@@ -27,6 +49,7 @@ class MediaFile {
   final String sha256;
   final int modifiedMs;
   final String mimeType;
+  final MediaAudioInfo? audio; // null für Nicht-WAV oder Parse-Fehler
 
   const MediaFile({
     required this.name,
@@ -34,15 +57,20 @@ class MediaFile {
     required this.sha256,
     required this.modifiedMs,
     this.mimeType = 'audio/wav',
+    this.audio,
   });
 
-  factory MediaFile.fromJson(Map<String, dynamic> j) => MediaFile(
-        name: j['name'] as String,
-        sizeBytes: (j['size_bytes'] as num?)?.toInt() ?? 0,
-        sha256: j['sha256'] as String? ?? '',
-        modifiedMs: (j['modified_ms'] as num?)?.toInt() ?? 0,
-        mimeType: j['mime_type'] as String? ?? 'audio/wav',
-      );
+  factory MediaFile.fromJson(Map<String, dynamic> j) {
+    final audioJson = j['audio'] as Map<String, dynamic>?;
+    return MediaFile(
+      name:       j['name'] as String,
+      sizeBytes:  (j['size_bytes'] as num?)?.toInt() ?? 0,
+      sha256:     j['sha256'] as String? ?? '',
+      modifiedMs: (j['modified_ms'] as num?)?.toInt() ?? 0,
+      mimeType:   j['mime_type'] as String? ?? 'audio/wav',
+      audio: audioJson != null ? MediaAudioInfo.fromJson(audioJson) : null,
+    );
+  }
 }
 
 /// HTTP-Client für den autoritativen Medien-Speicher des Sync-Servers.
