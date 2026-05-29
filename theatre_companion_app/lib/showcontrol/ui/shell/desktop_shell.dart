@@ -690,51 +690,133 @@ class _ParamsSection extends StatelessWidget {
   }
 }
 
+/// EBU R128 Ziellautstärke für Theater.
+const _kTargetLufs = -23.0;
+
 class _AudioParamsEditor extends ConsumerWidget {
   final AudioParams params;
   final ValueChanged<CueParams> onChanged;
 
   const _AudioParamsEditor({required this.params, required this.onChanged});
 
+  /// Berechnet volumeDb sodass das Asset mit [lufs] auf [_kTargetLufs] normiert
+  /// gespielt wird. Ergibt z.B. −5.0 dB wenn Asset −18 LUFS hat.
+  static double _autoVolume(double lufs) =>
+      (_kTargetLufs - lufs).clamp(-40.0, 20.0);
+
+  void _pickAsset(Asset asset, AudioParams current) {
+    final lufs = asset.audio?.loudnessLufs;
+    onChanged(current.copyWith(
+      assetId:  asset.id,
+      volumeDb: lufs != null ? _autoVolume(lufs) : current.volumeDb,
+    ));
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final audioNotifier = ref.read(audioNodeProvider.notifier);
+    final audioNotifier    = ref.read(audioNodeProvider.notifier);
     final isAudioConnected =
         ref.watch(audioNodeProvider).state == AudioNodeState.connected;
-    final asset = ref.watch(assetWithReadinessProvider(params.assetId));
+    final asset   = ref.watch(assetWithReadinessProvider(params.assetId));
+    final allAssets = ref.watch(enrichedAssetsProvider)
+        .where((a) => a.mimeType.startsWith('audio/'))
+        .toList();
+
+    // Ist der aktuelle volumeDb eine Auto-Normierung?
+    final lufs = asset?.audio?.loudnessLufs;
+    final autoVolDb = lufs != null ? _autoVolume(lufs) : null;
+    final isAutoVol = autoVolDb != null &&
+        (params.volumeDb - autoVolDb).abs() < 0.05;
 
     return _Section(title: 'AUDIO', children: [
-      // Asset-Readiness Badge
+      // ── Asset-Picker ───────────────────────────────────────────────
       if (asset != null) _AssetReadinessBadge(asset: asset),
       if (asset != null) const SizedBox(height: 6),
-      ScInlineField(
-        label: 'Asset-ID',
-        value: params.assetId.isEmpty ? '—' : params.assetId,
-        readOnly: true,
-        tooltip: asset != null
-            ? '${asset.name}  •  ${_formatSize(asset.sizeBytes)}'
-                '${asset.audio != null ? "  •  ${asset.audio!.channelLabel}  •  ${asset.audio!.sampleRateHz} Hz" : ""}'
-            : 'SHA-256 des Audio-Assets (noch nicht auf Server)',
+      _AssetPicker(
+        current: asset,
+        allAssets: allAssets,
+        onPick: (a) => _pickAsset(a, params),
+        onClear: () => onChanged(params.copyWith(assetId: '')),
       ),
-      if (asset?.audio?.loudnessLufs != null) ...[
+      // Lautheit & Technische Infos (read-only)
+      if (asset?.audio != null) ...[
         const SizedBox(height: 6),
         ScInlineField(
           label: 'Lautheit',
-          value: asset!.audio!.loudnessLufs!.toStringAsFixed(1),
+          value: lufs != null ? lufs.toStringAsFixed(1) : '—',
           suffix: 'LUFS',
           readOnly: true,
           tooltip: 'EBU R128 integrierte Lautheit (K-gewichtet)',
         ),
+        const SizedBox(height: 4),
+        ScInlineField(
+          label: 'Format',
+          value: '${asset!.audio!.channelLabel}  '
+              '${asset.audio!.sampleRateHz} Hz  '
+              '${asset.audio!.codec.toUpperCase()}',
+          readOnly: true,
+        ),
       ],
       const SizedBox(height: 6),
-      ScInlineField(
-        label: 'Volume',
-        value: params.volumeDb.toStringAsFixed(1),
-        suffix: 'dB',
-        keyboardType: TextInputType.numberWithOptions(signed: true, decimal: true),
-        onChanged: (v) => onChanged(params.copyWith(
-          volumeDb: double.tryParse(v) ?? params.volumeDb,
-        )),
+      // ── Volume mit Auto-Badge ──────────────────────────────────────
+      Row(
+        children: [
+          Expanded(
+            child: ScInlineField(
+              label: 'Volume',
+              value: params.volumeDb.toStringAsFixed(1),
+              suffix: 'dB',
+              keyboardType:
+                  TextInputType.numberWithOptions(signed: true, decimal: true),
+              onChanged: (v) => onChanged(params.copyWith(
+                volumeDb: double.tryParse(v) ?? params.volumeDb,
+              )),
+            ),
+          ),
+          if (isAutoVol) ...[
+            const SizedBox(width: 6),
+            Tooltip(
+              message: 'Automatisch normiert auf $_kTargetLufs LUFS (EBU R128)',
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: BoxDecoration(
+                  color: ScColors.active.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'EBU',
+                  style: ScText.label.copyWith(
+                      color: ScColors.active,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w800),
+                ),
+              ),
+            ),
+          ] else if (autoVolDb != null) ...[
+            const SizedBox(width: 6),
+            Tooltip(
+              message: 'Auf EBU R128 normieren (${autoVolDb.toStringAsFixed(1)} dB)',
+              child: GestureDetector(
+                onTap: () => onChanged(params.copyWith(volumeDb: autoVolDb)),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: ScColors.textDim),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    'EBU',
+                    style: ScText.label.copyWith(
+                        color: ScColors.textDim,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
       const SizedBox(height: 6),
       ScInlineField(
@@ -785,7 +867,7 @@ class _AudioParamsEditor extends ConsumerWidget {
       const SizedBox(height: 8),
       AudioCueMinibar(params: params),
       const SizedBox(height: 8),
-      // ── Audition (Vorhören) ────────────────────────────────────────
+      // ── Audition ──────────────────────────────────────────────────
       Row(
         children: [
           ScButton(
@@ -814,6 +896,111 @@ class _AudioParamsEditor extends ConsumerWidget {
         ],
       ),
     ]);
+  }
+}
+
+/// Dropdown-Picker für Audio-Assets.
+/// Zeigt Dateinamen statt SHA-256. SHA-256 + technische Infos als Tooltip.
+class _AssetPicker extends StatelessWidget {
+  final Asset? current;
+  final List<Asset> allAssets;
+  final ValueChanged<Asset> onPick;
+  final VoidCallback onClear;
+
+  const _AssetPicker({
+    required this.current,
+    required this.allAssets,
+    required this.onPick,
+    required this.onClear,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              border: Border.all(color: ScColors.divider),
+              borderRadius: BorderRadius.circular(6),
+              color: ScColors.surface,
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                isExpanded: true,
+                value: current != null &&
+                        allAssets.any((a) => a.id == current!.id)
+                    ? current!.id
+                    : null,
+                hint: Text(
+                  current != null
+                      ? current!.name
+                      : 'Asset auswählen…',
+                  style: ScText.label.copyWith(
+                    color: current != null
+                        ? ScColors.textPrimary
+                        : ScColors.textDim,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                dropdownColor: ScColors.surface,
+                icon: const Icon(Icons.unfold_more,
+                    size: 16, color: ScColors.textDim),
+                items: allAssets.map((a) {
+                  final lufs = a.audio?.loudnessLufs;
+                  final info = [
+                    if (a.audio != null) a.audio!.channelLabel,
+                    if (a.audio?.sampleRateHz != null)
+                      '${a.audio!.sampleRateHz} Hz',
+                    if (lufs != null) '${lufs.toStringAsFixed(1)} LUFS',
+                  ].join(' · ');
+                  return DropdownMenuItem<String>(
+                    value: a.id,
+                    child: Tooltip(
+                      message: '${a.id.substring(0, 12)}…  ${_formatSize(a.sizeBytes)}',
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            a.name,
+                            style: ScText.label
+                                .copyWith(color: ScColors.textPrimary),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (info.isNotEmpty)
+                            Text(
+                              info,
+                              style: ScText.label.copyWith(
+                                  color: ScColors.textDim, fontSize: 10),
+                            ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+                onChanged: (id) {
+                  if (id == null) return;
+                  final picked = allAssets.firstWhere((a) => a.id == id);
+                  onPick(picked);
+                },
+              ),
+            ),
+          ),
+        ),
+        if (current != null) ...[
+          const SizedBox(width: 6),
+          Tooltip(
+            message: 'Asset entfernen',
+            child: GestureDetector(
+              onTap: onClear,
+              child: const Icon(Icons.close, size: 14, color: ScColors.textDim),
+            ),
+          ),
+        ],
+      ],
+    );
   }
 }
 

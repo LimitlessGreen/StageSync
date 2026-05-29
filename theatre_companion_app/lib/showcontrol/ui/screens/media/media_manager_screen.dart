@@ -87,9 +87,15 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
                         final isConnected = ref.read(audioNodeProvider).state ==
                             AudioNodeState.connected;
                         if (isConnected && asset.id.isNotEmpty) {
+                          // Vorhören auf EBU R128 −23 LUFS normiert,
+                          // damit der Vergleich zwischen Assets einheitlich ist.
+                          final lufs = asset.audio?.loudnessLufs;
+                          final volumeDb = lufs != null
+                              ? (-23.0 - lufs).clamp(-40.0, 20.0)
+                              : 0.0;
                           audioNotifier.auditionPlay(
                             assetId: asset.id,
-                            volumeDb: 0,
+                            volumeDb: volumeDb,
                           );
                         }
                       },
