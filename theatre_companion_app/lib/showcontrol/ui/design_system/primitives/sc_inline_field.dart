@@ -44,7 +44,15 @@ class _ScInlineFieldState extends State<ScInlineField> {
     _ctrl = TextEditingController(text: widget.value);
     _focus = FocusNode()
       ..addListener(() {
-        if (!_focus.hasFocus && _editing) {
+        if (_focus.hasFocus && !widget.readOnly) {
+          // Start editing immediately on focus (Tab navigation works)
+          if (!_editing) {
+            setState(() => _editing = true);
+            // Select all text for quick replacement
+            _ctrl.selection =
+                TextSelection(baseOffset: 0, extentOffset: _ctrl.text.length);
+          }
+        } else if (!_focus.hasFocus && _editing) {
           _commit();
         }
       });
@@ -53,6 +61,7 @@ class _ScInlineFieldState extends State<ScInlineField> {
   @override
   void didUpdateWidget(ScInlineField old) {
     super.didUpdateWidget(old);
+    // Update displayed value if changed externally while not editing
     if (old.value != widget.value && !_editing) {
       _ctrl.text = widget.value;
     }
@@ -72,11 +81,8 @@ class _ScInlineFieldState extends State<ScInlineField> {
 
   @override
   Widget build(BuildContext context) {
-    final field = InkWell(
-      onTap: widget.readOnly ? null : () {
-        setState(() => _editing = true);
-        _focus.requestFocus();
-      },
+    final field = GestureDetector(
+      onTap: widget.readOnly ? null : () => _focus.requestFocus(),
       child: Container(
         height: 28,
         padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -95,12 +101,17 @@ class _ScInlineFieldState extends State<ScInlineField> {
                       focusNode: _focus,
                       style: ScText.number.copyWith(fontSize: 13),
                       keyboardType: widget.keyboardType,
+                      textInputAction: TextInputAction.next,
                       decoration: const InputDecoration(
                         isDense: true,
                         border: InputBorder.none,
                         contentPadding: EdgeInsets.zero,
                       ),
-                      onSubmitted: (_) => _commit(),
+                      onSubmitted: (_) {
+                        _commit();
+                        // Move focus to next field
+                        FocusScope.of(context).nextFocus();
+                      },
                     )
                   : Text(
                       widget.value,

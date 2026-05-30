@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../../domain/playhead.dart';
 import '../../../domain/show.dart';
@@ -5,9 +7,9 @@ import '../../../session/clock_sync.dart';
 import '../sc_colors.dart';
 import '../sc_typography.dart';
 
-/// Live active-cue monitor — shows cue progress and per-node execution state.
-/// No gRPC/proto knowledge; receives domain types only.
-class ActiveCueMonitor extends StatelessWidget {
+/// Live active-cue monitor — 60-fps progress bar, per-node execution detail.
+/// Receives domain types only; no gRPC/proto knowledge.
+class ActiveCueMonitor extends StatefulWidget {
   final PlayheadState playhead;
   final CueList? cueList;
 
@@ -18,60 +20,97 @@ class ActiveCueMonitor extends StatelessWidget {
   });
 
   @override
+  State<ActiveCueMonitor> createState() => _ActiveCueMonitorState();
+}
+
+class _ActiveCueMonitorState extends State<ActiveCueMonitor> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncTimer();
+  }
+
+  @override
+  void didUpdateWidget(ActiveCueMonitor old) {
+    super.didUpdateWidget(old);
+    _syncTimer();
+  }
+
+  void _syncTimer() {
+    final needsTick = widget.playhead.isRunning;
+    if (needsTick && _timer == null) {
+      _timer = Timer.periodic(const Duration(milliseconds: 50), (_) {
+        if (mounted) setState(() {});
+      });
+    } else if (!needsTick && _timer != null) {
+      _timer!.cancel();
+      _timer = null;
+    }
+  }
+
+  @override
+  void deactivate() {
+    _timer?.cancel();
+    _timer = null;
+    super.deactivate();
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final activeId = playhead.activeCueId;
-    if (activeId == null || playhead.isIdle) {
-      return Center(
-        child: Text('Kein aktiver Cue', style: ScText.label),
-      );
+    final activeId = widget.playhead.activeCueId;
+    if (activeId == null || widget.playhead.isIdle) {
+      return Center(child: Text('Kein aktiver Cue', style: ScText.label));
     }
 
-    final cue = cueList?.cueById(activeId);
-    final runState = playhead.runStateFor(activeId);
-    final nextCue = playhead.nextCueId != null
-        ? cueList?.cueById(playhead.nextCueId!)
+    final cue = widget.cueList?.cueById(activeId);
+    final runState = widget.playhead.runStateFor(activeId);
+    final nextCue = widget.playhead.nextCueId != null
+        ? widget.cueList?.cueById(widget.playhead.nextCueId!)
         : null;
 
-    // Parallel children = running IDs minus the group/active cue itself
-    final childIds = playhead.runningCueIds
+    final childIds = widget.playhead.runningCueIds
         .where((id) => id != activeId)
         .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Active cue header ────────────────────────────────────────
-        _ActiveCueHeader(cue: cue, runState: runState, playhead: playhead),
+        _ActiveCueHeader(
+            cue: cue, runState: runState, playhead: widget.playhead),
         const SizedBox(height: 8),
-        // ── Progress bar ──────────────────────────────────────────────
         if (cue?.displayDurationMs != null)
-          _ProgressBar(playhead: playhead, cue: cue!),
+          _ProgressBar(playhead: widget.playhead, cue: cue!),
         const SizedBox(height: 12),
-        // ── Parallel group children ───────────────────────────────────
         if (childIds.isNotEmpty) ...[
           Text('PARALLEL', style: ScText.panelTitle),
           const SizedBox(height: 6),
           ...childIds.map((childId) {
-            final childCue = cueList?.cueById(childId);
-            final childState = playhead.runStateFor(childId);
+            final childCue = widget.cueList?.cueById(childId);
+            final childState = widget.playhead.runStateFor(childId);
             return _ChildCueRow(
               childId: childId,
               cue: childCue,
               runState: childState,
+              playhead: widget.playhead,
             );
           }),
           const SizedBox(height: 8),
         ],
-        // ── Per-node state ────────────────────────────────────────────
         if (runState != null && runState.nodes.isNotEmpty) ...[
           Text('NODES', style: ScText.panelTitle),
           const SizedBox(height: 6),
-          ...runState.nodes.entries.map(
-            (e) => _NodeRow(nodeId: e.key, state: e.value),
-          ),
+          ...runState.nodes.entries
+              .map((e) => _NodeRow(nodeId: e.key, state: e.value)),
         ],
         const Spacer(),
-        // ── Next cue ─────────────────────────────────────────────────
         if (nextCue != null) ...[
           const Divider(color: ScColors.divider, height: 1),
           const SizedBox(height: 8),
@@ -95,6 +134,8 @@ class ActiveCueMonitor extends StatelessWidget {
     );
   }
 }
+
+// ── Active cue header ─────────────────────────────────────────────────────────
 
 class _ActiveCueHeader extends StatelessWidget {
   final Cue? cue;
@@ -154,50 +195,45 @@ class _ActiveCueHeader extends StatelessWidget {
   }
 }
 
-class _ElapsedTimer extends StatefulWidget {
+// ── Elapsed timer — driven by parent ticker ───────────────────────────────────
+
+class _ElapsedTimer extends StatelessWidget {
   final PlayheadState playhead;
   const _ElapsedTimer({required this.playhead});
 
-  @override
-  State<_ElapsedTimer> createState() => _ElapsedTimerState();
-}
+  String _format(int ms) {
+    final s = ms ~/ 1000;
+    final m = s ~/ 60;
+    final rs = (s % 60).toString().padLeft(2, '0');
+    return '$m:$rs';
+  }
 
-class _ElapsedTimerState extends State<_ElapsedTimer> {
   @override
   Widget build(BuildContext context) {
-    if (widget.playhead.isRunning) {
-      Future.delayed(const Duration(seconds: 1), () {
-        if (mounted) setState(() {});
-      });
-    }
+    final start = playhead.startedServerMs;
+    if (start == null) return Text('0:00', style: ScText.timer);
 
-    final start = widget.playhead.startedServerMs;
-    final pause = widget.playhead.pausedAtServerMs;
-    String elapsed = '0:00';
-    if (start != null) {
-      final int now;
-      if (widget.playhead.isPaused) {
-        now = pause ?? ClockSync.instance.serverNow();
-      } else if (widget.playhead.isDone) {
-        now = widget.playhead.doneServerMs ?? ClockSync.instance.serverNow();
-      } else {
-        now = ClockSync.instance.serverNow();
-      }
-      final ms = (now - start).clamp(0, 99 * 60 * 1000);
-      final s = ms ~/ 1000;
-      final m = s ~/ 60;
-      final rs = (s % 60).toString().padLeft(2, '0');
-      elapsed = '$m:$rs';
-    }
+    final now = playhead.isPaused
+        ? (playhead.pausedAtServerMs ?? ClockSync.instance.serverNow())
+        : playhead.isDone
+            ? (playhead.doneServerMs ?? ClockSync.instance.serverNow())
+            : ClockSync.instance.serverNow();
+    final ms = (now - start).clamp(0, 99 * 60 * 1000);
 
     return Text(
-      elapsed,
+      _format(ms),
       style: ScText.timer.copyWith(
-        color: widget.playhead.isPaused ? ScColors.warn : widget.playhead.isDone ? ScColors.textDim : ScColors.active,
+        color: playhead.isPaused
+            ? ScColors.warn
+            : playhead.isDone
+                ? ScColors.textDim
+                : ScColors.active,
       ),
     );
   }
 }
+
+// ── Progress bar — 60fps via parent ticker ────────────────────────────────────
 
 class _ProgressBar extends StatelessWidget {
   final PlayheadState playhead;
@@ -208,7 +244,7 @@ class _ProgressBar extends StatelessWidget {
   double get _fraction {
     final start = playhead.startedServerMs;
     final duration = cue.displayDurationMs;
-    if (start == null || duration == null || duration == 0) return 0;
+    if (start == null || duration == null || duration == 0) return 0.0;
     final now = playhead.isPaused
         ? (playhead.pausedAtServerMs ?? ClockSync.instance.serverNow())
         : playhead.isDone
@@ -219,29 +255,83 @@ class _ProgressBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(4),
-      child: LinearProgressIndicator(
-        value: _fraction,
-        backgroundColor: ScColors.divider,
-        valueColor: AlwaysStoppedAnimation(
-          playhead.isPaused ? ScColors.warn : playhead.isDone ? ScColors.textDim : ScColors.active,
+    final fraction = _fraction;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: fraction,
+            backgroundColor: ScColors.divider,
+            valueColor: AlwaysStoppedAnimation(
+              playhead.isPaused
+                  ? ScColors.warn
+                  : playhead.isDone
+                      ? ScColors.textDim
+                      : ScColors.active,
+            ),
+            minHeight: 6,
+          ),
         ),
-        minHeight: 6,
-      ),
+        const SizedBox(height: 2),
+        Row(
+          children: [
+            Text(
+              _elapsedText,
+              style: ScText.statusSmall,
+            ),
+            const Spacer(),
+            Text(
+              _totalText,
+              style: ScText.statusSmall,
+            ),
+          ],
+        ),
+      ],
     );
   }
+
+  String get _elapsedText {
+    final start = playhead.startedServerMs;
+    if (start == null) return '';
+    final now = playhead.isPaused
+        ? (playhead.pausedAtServerMs ?? ClockSync.instance.serverNow())
+        : playhead.isDone
+            ? (playhead.doneServerMs ?? ClockSync.instance.serverNow())
+            : ClockSync.instance.serverNow();
+    return _fmtMs((now - start).clamp(0, 99 * 60 * 1000).toDouble());
+  }
+
+  String get _totalText {
+    final d = cue.displayDurationMs;
+    if (d == null) return '';
+    return _fmtMs(d);
+  }
+
+  static String _fmtMs(double ms) {
+    if (ms < 1000) return '${ms.toInt()}ms';
+    final s = ms / 1000;
+    if (s < 60) return '${s.toStringAsFixed(1)}s';
+    final m = (s / 60).floor();
+    final rs = (s % 60).toStringAsFixed(0).padLeft(2, '0');
+    return '$m:$rs';
+  }
 }
+
+// ── Parallel child row ────────────────────────────────────────────────────────
 
 class _ChildCueRow extends StatelessWidget {
   final String childId;
   final Cue? cue;
   final CueRunState? runState;
+  final PlayheadState playhead;
 
   const _ChildCueRow({
     required this.childId,
     required this.cue,
     required this.runState,
+    required this.playhead,
   });
 
   Color get _color => switch (runState?.lifecycle) {
@@ -261,27 +351,28 @@ class _ChildCueRow extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(color: _color, shape: BoxShape.circle),
+            width: 6, height: 6,
+            decoration:
+                BoxDecoration(color: _color, shape: BoxShape.circle),
           ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
-              label,
-              style: ScText.label.copyWith(color: _color),
-              overflow: TextOverflow.ellipsis,
-            ),
+            child: Text(label,
+                style: ScText.label.copyWith(color: _color),
+                overflow: TextOverflow.ellipsis),
           ),
           Text(
             runState?.lifecycle.name ?? '',
-            style: ScText.label.copyWith(color: ScColors.textDim, fontSize: 10),
+            style: ScText.label.copyWith(
+                color: ScColors.textDim, fontSize: 10),
           ),
         ],
       ),
     );
   }
 }
+
+// ── Node row ──────────────────────────────────────────────────────────────────
 
 class _NodeRow extends StatelessWidget {
   final String nodeId;
@@ -290,12 +381,12 @@ class _NodeRow extends StatelessWidget {
   const _NodeRow({required this.nodeId, required this.state});
 
   Color get _color => switch (state.phase) {
-        NodeExecPhase.error    => ScColors.error,
-        NodeExecPhase.degraded => ScColors.warn,
-        NodeExecPhase.playing  => ScColors.active,
-        NodeExecPhase.buffering => ScColors.warn,
+        NodeExecPhase.error        => ScColors.error,
+        NodeExecPhase.degraded     => ScColors.warn,
+        NodeExecPhase.playing      => ScColors.active,
+        NodeExecPhase.buffering    => ScColors.warn,
         NodeExecPhase.awaitingAsset => Colors.orange,
-        _                     => ScColors.textDim,
+        _                         => ScColors.textDim,
       };
 
   String get _phaseLabel => switch (state.phase) {
@@ -318,12 +409,9 @@ class _NodeRow extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 6,
-            height: 6,
-            decoration: BoxDecoration(
-              color: _color,
-              shape: BoxShape.circle,
-            ),
+            width: 6, height: 6,
+            decoration:
+                BoxDecoration(color: _color, shape: BoxShape.circle),
           ),
           const SizedBox(width: 8),
           Expanded(

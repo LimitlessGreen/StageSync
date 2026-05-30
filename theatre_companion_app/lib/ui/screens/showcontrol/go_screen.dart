@@ -51,23 +51,21 @@ class _GoScreenState extends ConsumerState<GoScreen> {
     super.dispose();
   }
 
-  /// Tickt nur das Neuzeichnen an; der Zeitwert selbst wird aus der vom Master
-  /// gelieferten Server-Startzeit berechnet (s. [_elapsedSeconds]).
+  /// 50 ms Ticker → fließende Progress-Balken, server-synchronisiert.
   void _startTicker() {
-    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+    _ticker = Timer.periodic(const Duration(milliseconds: 50), (_) {
       if (mounted) setState(() {});
     });
   }
 
-  /// Verstrichene Sekunden der aktiven Cue, abgeleitet aus der Server-Startzeit.
-  /// Dadurch zeigen alle Geräte denselben Wert (statt lokal hochzuzählen).
-  int _elapsedSeconds(ShowControlState show) {
+  /// Verstrichene Millisekunden, abgeleitet aus Server-Startzeit.
+  /// Alle Geräte zeigen denselben Wert.
+  int _elapsedMs(ShowControlState show) {
     final startMs = show.activeCueStartedServerMs;
     if (startMs == null || show.activeCue == null) return 0;
-    // Bei Pause auf der eingefrorenen Server-Zeit stehen bleiben.
     final endMs = show.pausedAtServerMs ?? ClockSync.instance.serverNow();
     final ms = endMs - startMs;
-    return ms <= 0 ? 0 : ms ~/ 1000;
+    return ms <= 0 ? 0 : ms;
   }
 
   void _handleAutoReconnectNodeStart() {
@@ -124,7 +122,7 @@ class _GoScreenState extends ConsumerState<GoScreen> {
       }
     });
 
-    final elapsedSeconds = _elapsedSeconds(show);
+    final elapsedMs = _elapsedMs(show);
 
     final cues = show.cueList?.cues ?? [];
     final activeIdx = cues.indexWhere((c) => c.cueId == show.activeCue?.cueId);
@@ -168,7 +166,8 @@ class _GoScreenState extends ConsumerState<GoScreen> {
                         cue: cue,
                         isActive: isActive,
                         isPast: isPast,
-                        elapsedSeconds: isActive ? elapsedSeconds : 0,
+                        elapsedMs: isActive ? elapsedMs : 0,
+                        isPaused: show.isPaused,
                         onTap: () => ref.read(showControlProvider.notifier).go(cueId: cue.cueId),
                       );
                     },
@@ -333,14 +332,16 @@ class _CueRow extends StatelessWidget {
   final Cue cue;
   final bool isActive;
   final bool isPast;
-  final int elapsedSeconds;
+  final int elapsedMs;
+  final bool isPaused;
   final VoidCallback onTap;
 
   const _CueRow({
     required this.cue,
     required this.isActive,
     required this.isPast,
-    required this.elapsedSeconds,
+    required this.elapsedMs,
+    required this.isPaused,
     required this.onTap,
   });
 
@@ -357,70 +358,115 @@ class _CueRow extends StatelessWidget {
             ? _dimText
             : Colors.white70;
 
+    final typeColor = _typeColorFor(cue);
+    final durationMs = _cueDurationMs(cue);
+    final fraction = durationMs != null && durationMs > 0
+        ? (elapsedMs / durationMs).clamp(0.0, 1.0)
+        : 0.0;
+
     return InkWell(
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
-        height: isActive ? 80 : 60,
-        decoration: BoxDecoration(
-          color: isActive ? _green.withValues(alpha: 0.08) : Colors.transparent,
-          border: Border(
-            left: BorderSide(
-              color: isActive ? _green : Colors.transparent,
-              width: 3,
-            ),
-          ),
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        child: Row(
+        duration: const Duration(milliseconds: 200),
+        height: isActive ? 80 : 56,
+        child: Stack(
           children: [
-            // Cue-Nummer (Gleis-Stil)
-            SizedBox(
-              width: 48,
-              child: Text(
-                cue.number,
-                style: TextStyle(
-                  color: numberColor,
-                  fontSize: isActive ? 18 : 14,
-                  fontWeight: FontWeight.bold,
-                  fontFeatures: const [FontFeature.tabularFigures()],
+            // QLab-style: type-colored background sweep
+            if (isActive && fraction > 0)
+              Positioned.fill(
+                child: FractionallySizedBox(
+                  alignment: Alignment.centerLeft,
+                  widthFactor: fraction,
+                  child: Container(
+                    color: typeColor.withValues(alpha: isPaused ? 0.06 : 0.09),
+                  ),
                 ),
               ),
-            ),
-
-            // Typ-Icon
-            SizedBox(
-              width: 28,
-              child: Icon(
-                _typeIcon(cue),
-                size: 16,
-                color: isActive ? _green : (isPast ? _dimText : Colors.white24),
+            // Left accent bar
+            Positioned(
+              left: 0, top: 0, bottom: 0,
+              child: Container(
+                width: 3,
+                color: isActive
+                    ? (isPaused ? _amber : typeColor)
+                    : Colors.transparent,
               ),
             ),
-
-            // Label
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    cue.label,
-                    style: TextStyle(
-                      color: labelColor,
-                      fontSize: isActive ? 16 : 14,
-                      decoration: isPast ? TextDecoration.lineThrough : null,
-                      decorationColor: _dimText,
-                    ),
-                    overflow: TextOverflow.ellipsis,
+            // Bottom progress line
+            if (isActive && durationMs != null)
+              Positioned(
+                left: 0, right: 0, bottom: 0,
+                child: LinearProgressIndicator(
+                  value: fraction,
+                  backgroundColor: Colors.transparent,
+                  valueColor: AlwaysStoppedAnimation(
+                    isPaused ? _amber : typeColor,
                   ),
-                  if (isActive) _ActiveCountdown(cue: cue, elapsedSeconds: elapsedSeconds),
+                  minHeight: 2,
+                ),
+              ),
+            // Content
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                children: [
+                  // Number
+                  SizedBox(
+                    width: 44,
+                    child: Text(
+                      cue.number,
+                      style: TextStyle(
+                        color: numberColor,
+                        fontSize: isActive ? 18 : 14,
+                        fontWeight: FontWeight.bold,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                      textAlign: TextAlign.right,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  // Type icon
+                  SizedBox(
+                    width: 20,
+                    child: Icon(
+                      _typeIcon(cue),
+                      size: 14,
+                      color: isActive ? typeColor : (isPast ? _dimText : Colors.white24),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  // Label + countdown
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          cue.label.isEmpty ? '—' : cue.label,
+                          style: TextStyle(
+                            color: labelColor,
+                            fontSize: isActive ? 15 : 14,
+                            decoration: isPast ? TextDecoration.lineThrough : null,
+                            decorationColor: _dimText,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (isActive)
+                          _CountdownRow(
+                            elapsedMs: elapsedMs,
+                            durationMs: durationMs,
+                            fraction: fraction,
+                            isPaused: isPaused,
+                            typeColor: typeColor,
+                          ),
+                      ],
+                    ),
+                  ),
+                  // Duration label
+                  _DurationLabel(cue: cue, isActive: isActive, isPast: isPast),
                 ],
               ),
             ),
-
-            // Dauer rechts
-            _DurationLabel(cue: cue, isActive: isActive, isPast: isPast),
           ],
         ),
       ),
@@ -434,66 +480,79 @@ class _CueRow extends StatelessWidget {
         5 => Icons.skip_next,
         _ => Icons.play_arrow,
       };
-}
 
-class _ActiveCountdown extends StatelessWidget {
-  final Cue cue;
-  final int elapsedSeconds;
+  Color _typeColorFor(Cue c) => switch (c.cueType.value) {
+        2 => const Color(0xFF1E88E5), // audio: blue
+        3 => const Color(0xFFF4511E), // MA: orange
+        4 => const Color(0xFF8E24AA), // wait: purple
+        5 => const Color(0xFF00ACC1), // goto: cyan
+        _ => _green,
+      };
 
-  const _ActiveCountdown({required this.cue, required this.elapsedSeconds});
-
-  @override
-  Widget build(BuildContext context) {
-    final total = _cueDurationSeconds(cue);
-    if (total == null) {
-      return Text(
-        _elapsedLabel(elapsedSeconds),
-        style: const TextStyle(color: _green, fontSize: 11),
-      );
-    }
-    final remaining = (total - elapsedSeconds).clamp(0, total);
-    final frac = total > 0 ? (elapsedSeconds / total).clamp(0.0, 1.0) : 1.0;
-
-    return Row(
-      children: [
-        Text(
-          _formatSeconds(remaining),
-          style: const TextStyle(color: _green, fontSize: 11, fontFeatures: [FontFeature.tabularFigures()]),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(2),
-            child: LinearProgressIndicator(
-              value: frac,
-              backgroundColor: Colors.white10,
-              valueColor: const AlwaysStoppedAnimation<Color>(_green),
-              minHeight: 3,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  int? _cueDurationSeconds(Cue c) {
-    if (c.cueType.value == 4 && c.hasWait()) {
-      return (c.wait.durationMs / 1000).round();
-    }
+  double? _cueDurationMs(Cue c) {
+    if (c.cueType.value == 4 && c.hasWait()) return c.wait.durationMs;
     if (c.cueType.value == 2 && c.hasAudio()) {
       final end = c.audio.endTimeMs;
       final start = c.audio.startTimeMs;
-      if (end > start && end > 0) return ((end - start) / 1000).round();
+      if (end > start && end > 0) return end - start;
+      final declared = c.audio.declaredDurationMs;
+      if (declared > 0) return declared;
     }
     return null;
   }
+}
 
-  String _elapsedLabel(int s) => '+${_formatSeconds(s)}';
+// ── Countdown row (shown below label for active cue) ─────────────────────────
 
-  String _formatSeconds(int s) {
+class _CountdownRow extends StatelessWidget {
+  final int elapsedMs;
+  final double? durationMs;
+  final double fraction;
+  final bool isPaused;
+  final Color typeColor;
+
+  const _CountdownRow({
+    required this.elapsedMs,
+    required this.durationMs,
+    required this.fraction,
+    required this.isPaused,
+    required this.typeColor,
+  });
+
+  static String _fmtMs(double ms) {
+    if (ms <= 0) return '0.0s';
+    if (ms < 1000) return '${(ms / 1000).toStringAsFixed(1)}s';
+    final s = ms / 1000;
+    if (s < 60) return '${s.toStringAsFixed(1)}s';
     final m = s ~/ 60;
-    final sec = s % 60;
-    return '$m:${sec.toString().padLeft(2, '0')}';
+    final rs = (s % 60).toStringAsFixed(0).padLeft(2, '0');
+    return '$m:$rs';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isPaused ? _amber : typeColor;
+
+    if (durationMs == null) {
+      // No known duration — show elapsed in dim style (not a "happy counting" timer)
+      final elapsed = elapsedMs / 1000.0;
+      final s = elapsed < 60
+          ? '+${elapsed.toStringAsFixed(0)}s'
+          : '+${(elapsed ~/ 60)}:${(elapsed % 60).toStringAsFixed(0).padLeft(2, "0")}';
+      return Text(s,
+          style: TextStyle(color: color.withValues(alpha: 0.6), fontSize: 10));
+    }
+
+    final remainingMs = (durationMs! - elapsedMs).clamp(0.0, durationMs!);
+    return Text(
+      '-${_fmtMs(remainingMs)}',
+      style: TextStyle(
+        color: color,
+        fontSize: 11,
+        fontWeight: FontWeight.w600,
+        fontFeatures: const [FontFeature.tabularFigures()],
+      ),
+    );
   }
 }
 

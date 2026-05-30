@@ -6,6 +6,7 @@ import '../sc_spacing.dart';
 /// Dark-surface panel container — no domain knowledge.
 class ScPanel extends StatelessWidget {
   final String? title;
+  final Widget? trailing;
   final Widget child;
   final EdgeInsetsGeometry? padding;
   final Color? backgroundColor;
@@ -13,6 +14,7 @@ class ScPanel extends StatelessWidget {
   const ScPanel({
     super.key,
     this.title,
+    this.trailing,
     required this.child,
     this.padding,
     this.backgroundColor,
@@ -25,7 +27,7 @@ class ScPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (title != null)
+          if (title != null || trailing != null)
             Padding(
               padding: const EdgeInsets.fromLTRB(
                 ScSpacing.panelPad,
@@ -33,7 +35,15 @@ class ScPanel extends StatelessWidget {
                 ScSpacing.panelPad,
                 4,
               ),
-              child: Text(title!.toUpperCase(), style: ScText.panelTitle),
+              child: Row(
+                children: [
+                  if (title != null)
+                    Expanded(
+                      child: Text(title!.toUpperCase(), style: ScText.panelTitle),
+                    ),
+                  if (trailing != null) trailing!,
+                ],
+              ),
             ),
           Expanded(
             child: Padding(

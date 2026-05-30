@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'sc_shortcuts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/show_control_provider.dart';
 import '../../providers/show_control_domain_provider.dart';
@@ -96,13 +99,35 @@ void _handleAutoReconnectNodeStart() {
     super.dispose();
   }
 
+  void _selectOffset(int delta) {
+    final cues = ref.read(showControlDomainProvider).cueList?.cues ?? [];
+    if (cues.isEmpty) return;
+    final idx = cues.indexWhere((c) => c.id == _selectedCueId);
+    final next = (idx + delta).clamp(0, cues.length - 1);
+    setState(() => _selectedCueId = cues[next].id);
+  }
+
   @override
   Widget build(BuildContext context) {
     final domainState  = ref.watch(showControlDomainProvider);
     final sessionState = ref.watch(sessionProvider);
     final notifier     = ref.read(showControlProvider.notifier);
 
-    return Scaffold(
+    // Override the noop nav/select/delete shortcuts with real desktop behavior.
+    return Actions(
+      actions: {
+        PrevCueIntent:   CallbackAction<PrevCueIntent>(onInvoke: (_) { _selectOffset(-1); return null; }),
+        NextCueIntent:   CallbackAction<NextCueIntent>(onInvoke: (_) { _selectOffset(1); return null; }),
+        SelectCueIntent: CallbackAction<SelectCueIntent>(onInvoke: (_) {
+          if (_selectedCueId != null) notifier.goToCue(_selectedCueId!);
+          return null;
+        }),
+        DeleteCueIntent: CallbackAction<DeleteCueIntent>(onInvoke: (_) {
+          if (_selectedCueId != null) notifier.deleteCueById(_selectedCueId!);
+          return null;
+        }),
+      },
+      child: Scaffold(
       backgroundColor: ScColors.bg,
       body: Column(
         children: [
@@ -170,7 +195,7 @@ void _handleAutoReconnectNodeStart() {
           ),
         ],
       ),
-    );
+    )); // Actions + Scaffold
   }
 }
 
@@ -386,7 +411,7 @@ class _CueListPanel extends StatelessWidget {
   }
 }
 
-class _CueListView extends StatelessWidget {
+class _CueListView extends StatefulWidget {
   final CueList cueList;
   final PlayheadState playhead;
   final String? selectedCueId;
@@ -402,36 +427,108 @@ class _CueListView extends StatelessWidget {
   });
 
   @override
+  State<_CueListView> createState() => _CueListViewState();
+}
+
+class _CueListViewState extends State<_CueListView> {
+  final Set<String> _expandedGroups = {};
+
+  /// Cue IDs that are children of any group (hidden from top-level list).
+  Set<String> _childIds(List<Cue> cues) {
+    final s = <String>{};
+    for (final c in cues) {
+      if (c.params case GroupParams gp) s.addAll(gp.childCueIds);
+    }
+    return s;
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final cues = widget.cueList.cues;
+    final childIds = _childIds(cues);
+    final topLevel = cues.where((c) => !childIds.contains(c.id)).toList();
+
     return ReorderableListView.builder(
-      itemCount: cueList.cues.length,
+      itemCount: topLevel.length,
       onReorder: (oldIndex, newIndex) {
         if (newIndex > oldIndex) newIndex--;
-        final ids = cueList.cues.map((c) => c.id).toList();
-        final moved = ids.removeAt(oldIndex);
-        ids.insert(newIndex, moved);
-        notifier.reorderCue(orderedIds: ids);
+        // Map top-level reorder back to full ordered ID list
+        final tlIds = topLevel.map((c) => c.id).toList();
+        final moved = tlIds.removeAt(oldIndex);
+        tlIds.insert(newIndex, moved);
+        // Rebuild full list: top-level in new order + children (preserved)
+        final childCues = cues.where((c) => childIds.contains(c.id)).toList();
+        widget.notifier.reorderCue(orderedIds: [...tlIds, ...childCues.map((c) => c.id)]);
       },
+      proxyDecorator: (child, _, __) => Material(
+        elevation: 4, color: ScColors.surface2,
+        borderRadius: BorderRadius.circular(4), child: child,
+      ),
       itemBuilder: (context, i) {
-        final cue = cueList.cues[i];
-        final isActive = playhead.activeCueId == cue.id;
-        final isPast = _isCuePast(cue, cueList, playhead);
+        final cue = topLevel[i];
+        final isGroup = cue.params is GroupParams;
+        final isExpanded = _expandedGroups.contains(cue.id);
+        final isActive = widget.playhead.activeCueId == cue.id;
+        final isPast = _isCuePast(cue, widget.cueList, widget.playhead);
+
+        final groupChildren = isGroup
+            ? (cue.params as GroupParams)
+                .childCueIds
+                .map((id) => cues.firstWhere((c) => c.id == id,
+                    orElse: () => cue))
+                .where((c) => c.id != cue.id)
+                .toList()
+            : null;
 
         return CueListRow(
           key: ValueKey(cue.id),
           cue: cue,
-          runState: playhead.runStateFor(cue.id),
+          runState: widget.playhead.runStateFor(cue.id),
+          playhead: widget.playhead,
           isActive: isActive,
           isPast: isPast,
-          isSelected: selectedCueId == cue.id,
+          isSelected: widget.selectedCueId == cue.id,
           showDragHandle: true,
           dragIndex: i,
-          onTap: () => onCueSelected(cue.id),
-          onDelete: () => notifier.deleteCueById(cue.id),
-          onGo: () => notifier.goToCue(cue.id),
+          groupChildren: groupChildren,
+          isGroupExpanded: isExpanded,
+          childRunStates: {
+            for (final child in groupChildren ?? <Cue>[])
+              if (widget.playhead.runStateFor(child.id) != null)
+                child.id: widget.playhead.runStateFor(child.id)!,
+          },
+          onToggleExpand: isGroup
+              ? () => setState(() {
+                    if (_expandedGroups.contains(cue.id)) {
+                      _expandedGroups.remove(cue.id);
+                    } else {
+                      _expandedGroups.add(cue.id);
+                    }
+                  })
+              : null,
+          onTap: () => widget.onCueSelected(cue.id),
+          onDelete: () => widget.notifier.deleteCueById(cue.id),
+          onGo: () => widget.notifier.goToCue(cue.id),
+          onInsertBefore: () => _insertCue(context, afterId: null, beforeId: cue.id),
+          onInsertAfter: () => _insertCue(context, afterId: cue.id),
+          onDuplicate: () => widget.notifier.duplicateDomainCue(cue.id),
+          onGroup: () => widget.notifier.wrapInGroup(cue.id),
         );
       },
     );
+  }
+
+  Future<void> _insertCue(BuildContext context, {String? afterId, String? beforeId}) async {
+    final params = await showCueTypePicker(context);
+    if (params == null) return;
+    // If beforeId, find the cue before it and insert after that
+    if (beforeId != null) {
+      final idx = widget.cueList.cues.indexWhere((c) => c.id == beforeId);
+      final prevId = idx > 0 ? widget.cueList.cues[idx - 1].id : null;
+      await widget.notifier.insertDomainCue(params, afterId: prevId);
+    } else {
+      await widget.notifier.insertDomainCue(params, afterId: afterId);
+    }
   }
 
   static bool _isCuePast(Cue cue, CueList list, PlayheadState playhead) {
@@ -491,9 +588,12 @@ class _CueInspector extends StatefulWidget {
 }
 
 class _CueInspectorState extends State<_CueInspector> {
-  // Track unsaved edits locally; commit via [_save].
   late Cue _draft;
-  bool _dirty = false;
+  bool _saving = false;
+  Timer? _debounce;
+
+  /// Saves params per type so switching types and back restores previous values.
+  final Map<Type, CueParams> _paramsCache = {};
 
   @override
   void initState() {
@@ -504,136 +604,119 @@ class _CueInspectorState extends State<_CueInspector> {
   @override
   void didUpdateWidget(_CueInspector old) {
     super.didUpdateWidget(old);
-    // Reset draft when a different cue is selected (discard unsaved changes).
     if (old.cue.id != widget.cue.id) {
-      setState(() {
-        _draft = widget.cue;
-        _dirty = false;
-      });
+      // Different cue selected — reset everything.
+      _debounce?.cancel();
+      _paramsCache.clear();
+      setState(() { _draft = widget.cue; _saving = false; });
+    } else if (_debounce?.isActive != true && !_saving && widget.cue != _draft) {
+      // Same cue, no pending local edit, server sent updated data
+      // → accept server version so other devices' changes appear immediately.
+      setState(() => _draft = widget.cue);
     }
   }
 
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    super.dispose();
+  }
+
   void _update(Cue updated) {
-    setState(() {
-      _draft = updated;
-      _dirty = true;
-    });
+    setState(() => _draft = updated);
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 350), _flush);
   }
 
-  Future<void> _save() async {
+  /// Called by _ParamsSection for both type switches and param edits.
+  void _onParamsChanged(CueParams newParams) {
+    if (newParams.runtimeType != _draft.params.runtimeType) {
+      // Type switch: cache current params, restore if user comes back.
+      _paramsCache[_draft.params.runtimeType] = _draft.params;
+      final restored = _paramsCache[newParams.runtimeType];
+      _update(_draft.copyWith(params: restored ?? newParams));
+    } else {
+      _update(_draft.copyWith(params: newParams));
+    }
+  }
+
+  Future<void> _flush() async {
+    _debounce = null; // mark as no longer pending so sync can resume
+    if (!mounted) return;
+    setState(() => _saving = true);
     await widget.notifier.upsertDomainCue(_draft);
-    if (mounted) setState(() => _dirty = false);
-  }
-
-  void _discard() {
-    setState(() {
-      _draft = widget.cue;
-      _dirty = false;
-    });
+    if (mounted) setState(() => _saving = false);
   }
 
   @override
   Widget build(BuildContext context) {
     return ScPanel(
       title: '${_draft.number} · ${_draft.label}',
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(ScSpacing.panelPad),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ── General ───────────────────────────────────────────
-                  _Section(title: 'ALLGEMEIN', children: [
-                    ScInlineField(
-                      label: 'Nummer',
-                      value: _draft.number,
-                      onChanged: (v) => _update(_draft.copyWith(number: v)),
-                    ),
-                    const SizedBox(height: 6),
-                    ScInlineField(
-                      label: 'Label',
-                      value: _draft.label,
-                      onChanged: (v) => _update(_draft.copyWith(label: v)),
-                    ),
-                  ]),
-                  const SizedBox(height: 12),
-                  // ── Timing ────────────────────────────────────────────
-                  _Section(title: 'TIMING', children: [
-                    ScInlineField(
-                      label: 'Pre-Wait',
-                      value: _draft.timing.preWaitMs.toStringAsFixed(0),
-                      suffix: 'ms',
-                      keyboardType: TextInputType.number,
-                      onChanged: (v) => _update(_draft.copyWith(
-                        timing: _draft.timing.copyWith(
-                          preWaitMs: double.tryParse(v) ?? _draft.timing.preWaitMs,
-                        ),
-                      )),
-                    ),
-                    const SizedBox(height: 6),
-                    ScInlineField(
-                      label: 'Post-Wait',
-                      value: _draft.timing.postWaitMs.toStringAsFixed(0),
-                      suffix: 'ms',
-                      keyboardType: TextInputType.number,
-                      onChanged: (v) => _update(_draft.copyWith(
-                        timing: _draft.timing.copyWith(
-                          postWaitMs: double.tryParse(v) ?? _draft.timing.postWaitMs,
-                        ),
-                      )),
-                    ),
-                    const SizedBox(height: 6),
-                    _BoolField(
-                      label: 'Auto-Continue',
-                      value: _draft.timing.autoContinue,
-                      onChanged: (v) => _update(_draft.copyWith(
-                        timing: _draft.timing.copyWith(autoContinue: v),
-                      )),
-                    ),
-                  ]),
-                  const SizedBox(height: 12),
-                  // ── Params ────────────────────────────────────────────
-                  _ParamsSection(
-                    params: _draft.params,
-                    onChanged: (p) => _update(_draft.copyWith(params: p)),
-                  ),
-                ],
+      trailing: _saving
+          ? const SizedBox(
+              width: 12, height: 12,
+              child: CircularProgressIndicator(strokeWidth: 1.5, color: ScColors.active),
+            )
+          : null,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(ScSpacing.panelPad),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _Section(title: 'ALLGEMEIN', children: [
+              ScInlineField(
+                label: 'Nummer',
+                value: _draft.number,
+                onChanged: (v) => _update(_draft.copyWith(number: v)),
               ),
+              const SizedBox(height: 6),
+              ScInlineField(
+                label: 'Label',
+                value: _draft.label,
+                onChanged: (v) => _update(_draft.copyWith(label: v)),
+              ),
+            ]),
+            const SizedBox(height: 12),
+            _Section(title: 'TIMING', children: [
+              ScInlineField(
+                label: 'Pre-Wait',
+                value: _draft.timing.preWaitMs.toStringAsFixed(0),
+                suffix: 'ms',
+                keyboardType: TextInputType.number,
+                onChanged: (v) => _update(_draft.copyWith(
+                  timing: _draft.timing.copyWith(
+                    preWaitMs: double.tryParse(v) ?? _draft.timing.preWaitMs,
+                  ),
+                )),
+              ),
+              const SizedBox(height: 6),
+              ScInlineField(
+                label: 'Post-Wait',
+                value: _draft.timing.postWaitMs.toStringAsFixed(0),
+                suffix: 'ms',
+                keyboardType: TextInputType.number,
+                onChanged: (v) => _update(_draft.copyWith(
+                  timing: _draft.timing.copyWith(
+                    postWaitMs: double.tryParse(v) ?? _draft.timing.postWaitMs,
+                  ),
+                )),
+              ),
+              const SizedBox(height: 6),
+              _BoolField(
+                label: 'Auto-Continue',
+                value: _draft.timing.autoContinue,
+                onChanged: (v) => _update(_draft.copyWith(
+                  timing: _draft.timing.copyWith(autoContinue: v),
+                )),
+              ),
+            ]),
+            const SizedBox(height: 12),
+            _ParamsSection(
+              params: _draft.params,
+              onChanged: _onParamsChanged,
             ),
-          ),
-          // ── Action bar ────────────────────────────────────────────────
-          if (_dirty)
-            Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: ScSpacing.panelPad,
-                vertical: 8,
-              ),
-              decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: ScColors.divider)),
-                color: ScColors.surface,
-              ),
-              child: Row(
-                children: [
-                  ScButton(
-                    label: 'Speichern',
-                    variant: ScButtonVariant.primary,
-                    size: ScButtonSize.compact,
-                    onPressed: _save,
-                  ),
-                  const SizedBox(width: 8),
-                  ScButton(
-                    label: 'Verwerfen',
-                    variant: ScButtonVariant.ghost,
-                    size: ScButtonSize.compact,
-                    onPressed: _discard,
-                  ),
-                ],
-              ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -717,6 +800,8 @@ class _ParamsSection extends StatelessWidget {
           WaitParams  p => _WaitParamsEditor(params: p, onChanged: onChanged),
           MaOscParams p => _MaOscParamsEditor(params: p, onChanged: onChanged),
           GotoParams  p => _GotoParamsEditor(params: p, onChanged: onChanged),
+          NoteParams  p => _NoteParamsEditor(params: p, onChanged: onChanged),
+          FadeParams  p => _FadeParamsEditor(params: p, onChanged: onChanged),
           _             => const SizedBox.shrink(),
         },
       ],
@@ -733,10 +818,12 @@ class _CueTypeSwitcher extends StatelessWidget {
 
   static const _types = [
     (icon: Icons.volume_up,            label: 'Audio', key: 'audio'),
-    (icon: Icons.timer_outlined,        label: 'Wait',  key: 'wait'),
-    (icon: Icons.settings_remote,       label: 'MA',    key: 'maOsc'),
-    (icon: Icons.redo,                  label: 'GOTO',  key: 'goto'),
-    (icon: Icons.account_tree_outlined, label: 'Group', key: 'group'),
+    (icon: Icons.timer_outlined,       label: 'Wait',  key: 'wait'),
+    (icon: Icons.tune,                 label: 'Fade',  key: 'fade'),
+    (icon: Icons.settings_remote,      label: 'MA',    key: 'maOsc'),
+    (icon: Icons.redo,                 label: 'GOTO',  key: 'goto'),
+    (icon: Icons.account_tree_outlined,label: 'Group', key: 'group'),
+    (icon: Icons.text_fields,          label: 'Note',  key: 'note'),
   ];
 
   String get _currentKey => switch (current) {
@@ -745,6 +832,8 @@ class _CueTypeSwitcher extends StatelessWidget {
     MaOscParams() => 'maOsc',
     GotoParams()  => 'goto',
     GroupParams() => 'group',
+    NoteParams()  => 'note',
+    FadeParams()  => 'fade',
     _             => '',
   };
 
@@ -754,6 +843,8 @@ class _CueTypeSwitcher extends StatelessWidget {
     'maOsc' => const MaOscParams(oscAddress: '/gma2/cmd'),
     'goto'  => const GotoParams(targetCueId: ''),
     'group' => const GroupParams(childCueIds: [], sequential: false),
+    'note'  => const NoteParams(text: ''),
+    'fade'  => const FadeParams(),
     _       => const AudioParams(assetId: ''),
   };
 
@@ -986,6 +1077,50 @@ class _AudioParamsEditor extends ConsumerWidget {
         value: params.loop,
         onChanged: (v) => onChanged(params.copyWith(loop: v)),
       ),
+      const SizedBox(height: 12),
+      // ── Pause / Resume ─────────────────────────────────────────────
+      _Section(title: 'PAUSE / RESUME', children: [
+        _EnumField<PauseBehavior>(
+          label: 'Bei Pause',
+          value: params.pauseBehavior,
+          items: const [
+            (PauseBehavior.hard,    'Hart (sofort)'),
+            (PauseBehavior.fadeOut, 'Ausblenden'),
+          ],
+          onChanged: (v) => onChanged(params.copyWith(pauseBehavior: v)),
+        ),
+        if (params.pauseBehavior == PauseBehavior.fadeOut) ...[
+          const SizedBox(height: 6),
+          ScDragField(
+            label: 'Pause-Fade',
+            value: params.pauseFadeMs,
+            min: 0, max: 10000, step: 50,
+            suffix: 'ms', decimalPlaces: 0,
+            onChanged: (v) => onChanged(params.copyWith(pauseFadeMs: v)),
+          ),
+        ],
+        const SizedBox(height: 6),
+        _EnumField<ResumeBehavior>(
+          label: 'Fortsetzen',
+          value: params.resumeBehavior,
+          items: const [
+            (ResumeBehavior.continuePlaying, 'Nahtlos weiter'),
+            (ResumeBehavior.fadeIn,          'Einblenden'),
+            (ResumeBehavior.fromStart,       'Von vorne'),
+          ],
+          onChanged: (v) => onChanged(params.copyWith(resumeBehavior: v)),
+        ),
+        if (params.resumeBehavior == ResumeBehavior.fadeIn) ...[
+          const SizedBox(height: 6),
+          ScDragField(
+            label: 'Resume-Fade',
+            value: params.resumeFadeMs,
+            min: 0, max: 10000, step: 50,
+            suffix: 'ms', decimalPlaces: 0,
+            onChanged: (v) => onChanged(params.copyWith(resumeFadeMs: v)),
+          ),
+        ],
+      ]),
       const SizedBox(height: 8),
       AudioCueMinibar(params: params, asset: asset),
       const SizedBox(height: 8),
@@ -1214,6 +1349,260 @@ class _GotoParamsEditor extends StatelessWidget {
         tooltip: 'Cue-ID: ${params.targetCueId}',
       ),
     ]);
+  }
+}
+
+// ── Note Params Editor ────────────────────────────────────────────────────────
+
+class _NoteParamsEditor extends StatefulWidget {
+  final NoteParams params;
+  final ValueChanged<CueParams> onChanged;
+  const _NoteParamsEditor({required this.params, required this.onChanged});
+  @override
+  State<_NoteParamsEditor> createState() => _NoteParamsEditorState();
+}
+
+class _NoteParamsEditorState extends State<_NoteParamsEditor> {
+  late TextEditingController _textCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _textCtrl = TextEditingController(text: widget.params.text);
+  }
+
+  @override
+  void didUpdateWidget(_NoteParamsEditor old) {
+    super.didUpdateWidget(old);
+    if (old.params.text != widget.params.text) _textCtrl.text = widget.params.text;
+  }
+
+  @override
+  void dispose() { _textCtrl.dispose(); super.dispose(); }
+
+  static const _palette = [
+    null,                        // default grey
+    Color(0xFFEF5350),           // red
+    Color(0xFFFF9800),           // orange
+    Color(0xFFFFEE58),           // yellow
+    Color(0xFF66BB6A),           // green
+    Color(0xFF42A5F5),           // blue
+    Color(0xFFAB47BC),           // purple
+    Color(0xFFFFFFFF),           // white
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return _Section(title: 'NOTE', children: [
+      ScInlineField(
+        label: 'Text',
+        value: widget.params.text,
+        onChanged: (v) => widget.onChanged(widget.params.copyWith(text: v)),
+      ),
+      const SizedBox(height: 8),
+      Row(
+        children: [
+          SizedBox(
+            width: ScSpacing.inspectorLabelWidth,
+            child: Text('Farbe', style: ScText.label),
+          ),
+          const SizedBox(width: 6),
+          Wrap(
+            spacing: 6,
+            children: _palette.map((c) {
+              final isSelected = c == widget.params.color ||
+                  (c == null && widget.params.color == null);
+              return GestureDetector(
+                onTap: () => widget.onChanged(widget.params.copyWith(color: c)),
+                child: Container(
+                  width: 20, height: 20,
+                  decoration: BoxDecoration(
+                    color: c ?? ScColors.textDim,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: isSelected ? ScColors.active : Colors.transparent,
+                      width: 2,
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    ]);
+  }
+}
+
+// ── Fade Params Editor ────────────────────────────────────────────────────────
+
+class _FadeParamsEditor extends ConsumerWidget {
+  final FadeParams params;
+  final ValueChanged<CueParams> onChanged;
+  const _FadeParamsEditor({required this.params, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final cueList = ref.watch(domainCueListProvider);
+    final cues = cueList?.cues ?? [];
+
+    return _Section(title: 'FADE / CONTROL', children: [
+      // Target cue picker
+      Row(
+        children: [
+          SizedBox(
+            width: ScSpacing.inspectorLabelWidth,
+            child: Text('Ziel', style: ScText.label),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: ScColors.bg,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: ScColors.divider),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  value: cues.any((c) => c.id == params.targetCueId)
+                      ? params.targetCueId
+                      : '',
+                  isDense: true,
+                  isExpanded: true,
+                  dropdownColor: ScColors.surface2,
+                  style: ScText.cueLabel.copyWith(fontSize: 13),
+                  items: [
+                    const DropdownMenuItem(value: '', child: Text('— Keine —')),
+                    ...cues.where((c) => c.params is AudioParams).map((c) =>
+                        DropdownMenuItem(
+                          value: c.id,
+                          child: Text('${c.number}  ${c.label}',
+                              overflow: TextOverflow.ellipsis),
+                        )),
+                  ],
+                  onChanged: (id) {
+                    if (id == null) return;
+                    final cue = cues.firstWhere((c) => c.id == id,
+                        orElse: () => cues.first);
+                    onChanged(params.copyWith(
+                      targetCueId: id,
+                      targetCueNumber: id.isEmpty ? '' : cue.number,
+                    ));
+                  },
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 6),
+      _EnumField<FadeAction>(
+        label: 'Aktion',
+        value: params.action,
+        items: const [
+          (FadeAction.volume, 'Lautstärke'),
+          (FadeAction.stop,   'Mit Fade stoppen'),
+          (FadeAction.pause,  'Mit Fade pausieren'),
+          (FadeAction.resume, 'Mit Fade fortsetzen'),
+        ],
+        onChanged: (v) => onChanged(params.copyWith(action: v)),
+      ),
+      if (params.action != FadeAction.resume) ...[
+        const SizedBox(height: 6),
+        ScDragField(
+          label: 'Ziel-Vol.',
+          value: params.targetVolumeDb,
+          min: -60, max: 6, step: 0.5,
+          suffix: 'dB', decimalPlaces: 1,
+          onChanged: (v) => onChanged(params.copyWith(targetVolumeDb: v)),
+        ),
+      ],
+      const SizedBox(height: 6),
+      ScDragField(
+        label: 'Dauer',
+        value: params.durationMs,
+        min: 0, max: 30000, step: 100,
+        suffix: 'ms', decimalPlaces: 0,
+        onChanged: (v) => onChanged(params.copyWith(durationMs: v)),
+      ),
+      if (params.action == FadeAction.volume) ...[
+        const SizedBox(height: 6),
+        _BoolField(
+          label: 'Stopp danach',
+          value: params.stopWhenDone,
+          onChanged: (v) => onChanged(params.copyWith(stopWhenDone: v)),
+        ),
+      ],
+      const SizedBox(height: 8),
+      Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: ScColors.warn.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: ScColors.warn.withValues(alpha: 0.3)),
+        ),
+        child: Text(
+          'Fade-Cues benötigen Server-Unterstützung (v2). '
+          'Aktuell wird die Konfiguration gespeichert; '
+          'Ausführung ab nächstem Server-Update.',
+          style: ScText.statusSmall.copyWith(color: ScColors.warn),
+        ),
+      ),
+    ]);
+  }
+}
+
+// ── Generic enum dropdown field ───────────────────────────────────────────────
+
+class _EnumField<T> extends StatelessWidget {
+  final String label;
+  final T value;
+  final List<(T, String)> items;
+  final ValueChanged<T> onChanged;
+
+  const _EnumField({
+    required this.label,
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: ScSpacing.inspectorLabelWidth,
+          child: Text(label, style: ScText.label),
+        ),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            decoration: BoxDecoration(
+              color: ScColors.bg,
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: ScColors.divider),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<T>(
+                value: value,
+                isDense: true,
+                isExpanded: true,
+                dropdownColor: ScColors.surface2,
+                style: ScText.cueLabel.copyWith(fontSize: 13),
+                items: items.map((e) => DropdownMenuItem(
+                  value: e.$1,
+                  child: Text(e.$2),
+                )).toList(),
+                onChanged: (v) { if (v != null) onChanged(v); },
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 

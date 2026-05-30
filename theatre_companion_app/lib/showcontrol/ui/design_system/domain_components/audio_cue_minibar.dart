@@ -196,20 +196,27 @@ class _ReadinessBadge extends StatelessWidget {
         AssetReadiness.patched    => ScColors.active,
         AssetReadiness.renderable => ScColors.warn,
         AssetReadiness.validated  => const Color(0xFF42A5F5),
-        AssetReadiness.present    => ScColors.error,
+        AssetReadiness.present    => ScColors.warn,
       };
 
   String get _label => switch (readiness) {
         AssetReadiness.patched    => '✓',
         AssetReadiness.renderable => '▶',
         AssetReadiness.validated  => '✓',
-        AssetReadiness.present    => '⚠',
+        AssetReadiness.present    => '↑',
+      };
+
+  String get _tooltip => switch (readiness) {
+        AssetReadiness.patched    => 'Bereit auf allen Nodes',
+        AssetReadiness.renderable => 'Abspielbar (nicht vollständig verteilt)',
+        AssetReadiness.validated  => 'Geprüft',
+        AssetReadiness.present    => 'Auf Server – wird auf Nodes verteilt',
       };
 
   @override
   Widget build(BuildContext context) {
     return Tooltip(
-      message: readiness.name,
+      message: _tooltip,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
         decoration: BoxDecoration(

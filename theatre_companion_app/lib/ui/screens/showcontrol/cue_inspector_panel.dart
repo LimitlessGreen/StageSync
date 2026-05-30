@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -10,13 +11,16 @@ import '../../../showcontrol/grpc/generated/stagesync/v1/showcontrol.pb.dart';
 import '../../../showcontrol/grpc/generated/stagesync/v1/common.pb.dart';
 import '../../../showcontrol/media/media_grpc_client.dart';
 import '../../../showcontrol/media/server_media_client.dart' show MediaFile;
+import '../../../showcontrol/ui/design_system/sc_colors.dart';
+import '../../../showcontrol/ui/design_system/sc_typography.dart';
 
-/// Inspector-Panel für eine Cue — zeigt typspezifische Parameter.
-/// Änderungen werden erst auf "Speichern" via [onSave] gemeldet.
+// ── Inspector panel ───────────────────────────────────────────────────────────
+
+/// Inspector for a single cue — shows type-specific parameters.
+/// Changes are auto-saved after a 350 ms debounce; no save button needed.
 class CueInspectorPanel extends StatefulWidget {
   final Cue cue;
   final ValueChanged<Cue> onSave;
-  /// Alle verbundenen Nodes (für Target-Picker und Medienbrowser).
   final List<NodeInfo> connectedNodes;
 
   const CueInspectorPanel({
@@ -33,11 +37,11 @@ class CueInspectorPanel extends StatefulWidget {
 class _CueInspectorPanelState extends State<CueInspectorPanel> {
   late Cue _working;
   bool _dirty = false;
+  bool _saving = false;
+  Timer? _debounce;
 
-  // Gemeinsame Controller
   late TextEditingController _numberCtrl;
   late TextEditingController _labelCtrl;
-  late TextEditingController _targetNodeCtrl;
   late TextEditingController _preWaitCtrl;
   late TextEditingController _postWaitCtrl;
 
@@ -51,6 +55,7 @@ class _CueInspectorPanelState extends State<CueInspectorPanel> {
   void didUpdateWidget(CueInspectorPanel old) {
     super.didUpdateWidget(old);
     if (old.cue.cueId != widget.cue.cueId) {
+      _debounce?.cancel();
       _disposeControllers();
       _initFrom(widget.cue);
     }
@@ -59,9 +64,9 @@ class _CueInspectorPanelState extends State<CueInspectorPanel> {
   void _initFrom(Cue cue) {
     _working = cue.deepCopy();
     _dirty = false;
+    _saving = false;
     _numberCtrl = TextEditingController(text: cue.number);
     _labelCtrl = TextEditingController(text: cue.label);
-    _targetNodeCtrl = TextEditingController(text: cue.targetNodeId);
     _preWaitCtrl = TextEditingController(text: cue.preWaitMs.toString());
     _postWaitCtrl = TextEditingController(text: cue.postWaitMs.toString());
   }
@@ -69,95 +74,64 @@ class _CueInspectorPanelState extends State<CueInspectorPanel> {
   void _disposeControllers() {
     _numberCtrl.dispose();
     _labelCtrl.dispose();
-    _targetNodeCtrl.dispose();
     _preWaitCtrl.dispose();
     _postWaitCtrl.dispose();
   }
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _disposeControllers();
     super.dispose();
   }
 
-  void _mark() => setState(() => _dirty = true);
+  void _change(void Function() mutate) {
+    setState(() {
+      mutate();
+      _dirty = true;
+    });
+    _scheduleSave();
+  }
+
+  void _scheduleSave() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 350), _flush);
+  }
+
+  Future<void> _flush() async {
+    if (!_dirty || !mounted) return;
+    setState(() { _saving = true; _dirty = false; });
+    widget.onSave(_working.deepCopy());
+    await Future.delayed(const Duration(milliseconds: 400));
+    if (mounted) setState(() => _saving = false);
+  }
 
   @override
   Widget build(BuildContext context) {
+    final audioNodes = widget.connectedNodes
+        .where((n) =>
+            n.tasks.contains(NodeTask.NODE_TASK_AUDIO_OUTPUT) &&
+            n.mediaServerUrl.isNotEmpty)
+        .toList();
+
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // ── Header ──────────────────────────────────────────────────────────
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          child: Row(
-            children: [
-              Text('Cue ${_working.number}',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              const SizedBox(width: 8),
-              _TypeBadge(type: _working.cueType),
-              const Spacer(),
-              if (_dirty)
-                FilledButton.icon(
-                  icon: const Icon(Icons.save, size: 16),
-                  label: const Text('Speichern'),
-                  onPressed: _save,
-                ),
-            ],
-          ),
+        _Header(
+          cue: _working,
+          dirty: _dirty,
+          saving: _saving,
         ),
-        const Divider(height: 1),
-        // ── Formular ────────────────────────────────────────────────────────
+        const Divider(height: 1, color: ScColors.divider),
         Expanded(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _Section('Allgemein', [
-                  Row(children: [
-                    SizedBox(
-                      width: 80,
-                      child: _Field('Nr.', _numberCtrl,
-                          onChanged: (v) { _working.number = v; _mark(); }),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _Field('Bezeichnung', _labelCtrl,
-                          onChanged: (v) { _working.label = v; _mark(); }),
-                    ),
-                  ]),
-                  _NodePicker(
-                    currentId: _working.targetNodeId,
-                    nodes: widget.connectedNodes,
-                    onChanged: (id) {
-                      setState(() {
-                        _working.targetNodeId = id;
-                        _targetNodeCtrl.text = id;
-                        _dirty = true;
-                      });
-                    },
-                  ),
-                  Row(children: [
-                    Expanded(child: _Field('Pre-Wait (ms)', _preWaitCtrl,
-                        keyboardType: TextInputType.number,
-                        onChanged: (v) { _working.preWaitMs = double.tryParse(v) ?? 0; _mark(); })),
-                    const SizedBox(width: 12),
-                    Expanded(child: _Field('Post-Wait (ms)', _postWaitCtrl,
-                        keyboardType: TextInputType.number,
-                        onChanged: (v) { _working.postWaitMs = double.tryParse(v) ?? 0; _mark(); })),
-                  ]),
-                  SwitchListTile(
-                    title: const Text('Auto-Continue'),
-                    subtitle: const Text('Nächste Cue automatisch starten'),
-                    value: _working.autoContinue,
-                    onChanged: (v) { setState(() { _working.autoContinue = v; _dirty = true; }); },
-                  ),
-                ]),
-                const SizedBox(height: 16),
-                // Typ-spezifische Parameter
-                _buildTypeParams(widget.connectedNodes.where((n) =>
-            n.tasks.contains(NodeTask.NODE_TASK_AUDIO_OUTPUT) &&
-            n.mediaServerUrl.isNotEmpty).toList()),
+                _generalSection(),
+                const SizedBox(height: 8),
+                _buildTypeSection(audioNodes),
               ],
             ),
           ),
@@ -166,57 +140,175 @@ class _CueInspectorPanelState extends State<CueInspectorPanel> {
     );
   }
 
-  Widget _buildTypeParams(List<NodeInfo> audioNodes) {
-    return switch (_working.cueType) {
-      CueType.CUE_TYPE_AUDIO => _AudioParams(
-          params: _working.hasAudio() ? _working.audio : AudioCueParams(),
-          onChanged: (p) { setState(() { _working.audio = p; _dirty = true; }); },
-          audioNodes: audioNodes,
+  Widget _generalSection() {
+    return _Section(
+      title: 'GENERAL',
+      children: [
+        _PropRow(
+          label: 'Number',
+          child: _InlineField(
+            controller: _numberCtrl,
+            onChanged: (v) => _change(() => _working.number = v),
+          ),
         ),
-      CueType.CUE_TYPE_MA_OSC => _MaOscParams(
-          params: _working.hasMaOsc() ? _working.maOsc : MaOscCueParams(),
-          onChanged: (p) { setState(() { _working.maOsc = p; _dirty = true; }); },
+        _PropRow(
+          label: 'Label',
+          child: _InlineField(
+            controller: _labelCtrl,
+            onChanged: (v) => _change(() => _working.label = v),
+          ),
         ),
-      CueType.CUE_TYPE_WAIT => _WaitParams(
-          params: _working.hasWait() ? _working.wait : WaitCueParams(),
-          onChanged: (p) { setState(() { _working.wait = p; _dirty = true; }); },
+        _PropRow(
+          label: 'Pre-Wait',
+          child: _DurationField(
+            value: _working.preWaitMs,
+            controller: _preWaitCtrl,
+            onChanged: (v) => _change(() => _working.preWaitMs = v),
+          ),
         ),
-      CueType.CUE_TYPE_GOTO => _GotoParams(
-          params: _working.hasGotoP() ? _working.gotoP : GotoCueParams(),
-          onChanged: (p) { setState(() { _working.gotoP = p; _dirty = true; }); },
+        _PropRow(
+          label: 'Post-Wait',
+          child: _DurationField(
+            value: _working.postWaitMs,
+            controller: _postWaitCtrl,
+            onChanged: (v) => _change(() => _working.postWaitMs = v),
+          ),
         ),
-      _ => const SizedBox.shrink(),
-    };
+        _PropRow(
+          label: 'Auto-Cont.',
+          child: _Toggle(
+            value: _working.autoContinue,
+            onChanged: (v) => _change(() => _working.autoContinue = v),
+          ),
+        ),
+        if (widget.connectedNodes.isNotEmpty)
+          _PropRow(
+            label: 'Target',
+            child: _NodeDropdown(
+              currentId: _working.targetNodeId,
+              nodes: widget.connectedNodes,
+              onChanged: (id) => _change(() => _working.targetNodeId = id),
+            ),
+          ),
+      ],
+    );
   }
 
-  void _save() {
-    widget.onSave(_working.deepCopy());
-    setState(() => _dirty = false);
-  }
+  Widget _buildTypeSection(List<NodeInfo> audioNodes) => switch (_working.cueType) {
+        CueType.CUE_TYPE_AUDIO => _AudioSection(
+            params: _working.hasAudio() ? _working.audio : AudioCueParams(),
+            audioNodes: audioNodes,
+            onChanged: (p) => _change(() => _working.audio = p),
+          ),
+        CueType.CUE_TYPE_MA_OSC => _MaOscSection(
+            params: _working.hasMaOsc() ? _working.maOsc : MaOscCueParams(),
+            onChanged: (p) => _change(() => _working.maOsc = p),
+          ),
+        CueType.CUE_TYPE_WAIT => _WaitSection(
+            params: _working.hasWait() ? _working.wait : WaitCueParams(),
+            onChanged: (p) => _change(() => _working.wait = p),
+          ),
+        CueType.CUE_TYPE_GOTO => _GotoSection(
+            params: _working.hasGotoP() ? _working.gotoP : GotoCueParams(),
+            onChanged: (p) => _change(() => _working.gotoP = p),
+          ),
+        _ => const SizedBox.shrink(),
+      };
 }
 
-// ── Audio-Parameter ───────────────────────────────────────────────────────────
+// ── Header ────────────────────────────────────────────────────────────────────
 
-class _AudioParams extends StatefulWidget {
+class _Header extends StatelessWidget {
+  final Cue cue;
+  final bool dirty;
+  final bool saving;
+
+  const _Header({
+    required this.cue,
+    required this.dirty,
+    required this.saving,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final (typeLabel, typeColor) = _typeInfo(cue.cueType);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      color: ScColors.surface,
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+            decoration: BoxDecoration(
+              color: typeColor.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: typeColor.withValues(alpha: 0.4)),
+            ),
+            child: Text(typeLabel,
+                style: TextStyle(
+                    color: typeColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5)),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Cue ${cue.number}${cue.label.isNotEmpty ? " — ${cue.label}" : ""}',
+              style: ScText.sectionTitle,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          // Auto-save indicator
+          if (saving)
+            const SizedBox(
+              width: 12, height: 12,
+              child: CircularProgressIndicator(strokeWidth: 1.5, color: ScColors.active),
+            )
+          else if (dirty)
+            Container(
+              width: 6, height: 6,
+              decoration: const BoxDecoration(
+                  color: ScColors.warn, shape: BoxShape.circle),
+            ),
+        ],
+      ),
+    );
+  }
+
+  static (String, Color) _typeInfo(CueType t) => switch (t) {
+        CueType.CUE_TYPE_AUDIO  => ('AUDIO', const Color(0xFF1E88E5)),
+        CueType.CUE_TYPE_MA_OSC => ('MA',    const Color(0xFFF4511E)),
+        CueType.CUE_TYPE_WAIT   => ('WAIT',  const Color(0xFF8E24AA)),
+        CueType.CUE_TYPE_GOTO   => ('GOTO',  const Color(0xFF00ACC1)),
+        CueType.CUE_TYPE_GROUP  => ('GROUP', const Color(0xFF00897B)),
+        _                       => ('?',     ScColors.textDim),
+      };
+}
+
+// ── Audio section ─────────────────────────────────────────────────────────────
+
+class _AudioSection extends StatefulWidget {
   final AudioCueParams params;
   final ValueChanged<AudioCueParams> onChanged;
   final List<NodeInfo> audioNodes;
 
-  const _AudioParams({
+  const _AudioSection({
     required this.params,
     required this.onChanged,
     required this.audioNodes,
   });
 
   @override
-  State<_AudioParams> createState() => _AudioParamsState();
+  State<_AudioSection> createState() => _AudioSectionState();
 }
 
-class _AudioParamsState extends State<_AudioParams> {
+class _AudioSectionState extends State<_AudioSection> {
   late AudioCueParams _p;
-  late TextEditingController _fileCtrl;
   late TextEditingController _fadeInCtrl;
   late TextEditingController _fadeOutCtrl;
+  late TextEditingController _startCtrl;
+  late TextEditingController _endCtrl;
   bool _uploading = false;
   String? _uploadStatus;
 
@@ -224,80 +316,157 @@ class _AudioParamsState extends State<_AudioParams> {
   void initState() {
     super.initState();
     _p = widget.params.deepCopy();
-    _fileCtrl = TextEditingController(text: _p.filePath);
-    _fadeInCtrl = TextEditingController(text: _p.fadeInMs.toString());
-    _fadeOutCtrl = TextEditingController(text: _p.fadeOutMs.toString());
+    _fadeInCtrl = TextEditingController(text: _p.fadeInMs.toStringAsFixed(0));
+    _fadeOutCtrl = TextEditingController(text: _p.fadeOutMs.toStringAsFixed(0));
+    _startCtrl = TextEditingController(text: _p.startTimeMs.toStringAsFixed(0));
+    _endCtrl = TextEditingController(text: _p.endTimeMs.toStringAsFixed(0));
   }
 
   @override
   void dispose() {
-    _fileCtrl.dispose();
     _fadeInCtrl.dispose();
     _fadeOutCtrl.dispose();
+    _startCtrl.dispose();
+    _endCtrl.dispose();
     super.dispose();
   }
 
   void _emit() => widget.onChanged(_p.deepCopy());
 
+  String get _durationHint {
+    if (_p.declaredDurationMs > 0) {
+      final s = _p.declaredDurationMs / 1000;
+      return s < 60
+          ? '${s.toStringAsFixed(1)}s'
+          : '${(s / 60).floor()}:${(s % 60).toStringAsFixed(0).padLeft(2, "0")}';
+    }
+    return '';
+  }
+
   @override
   Widget build(BuildContext context) {
-    return _Section('Audio-Parameter', [
-      // Datei-Zeile mit Upload-Status
-      Row(children: [
-        Expanded(child: _Field('Datei', _fileCtrl, onChanged: (v) { _p.filePath = v; _emit(); })),
-        const SizedBox(width: 8),
-        if (_uploading)
-          const SizedBox(width: 36, height: 36,
-              child: CircularProgressIndicator(strokeWidth: 2))
-        else ...[
-          IconButton.filled(
-            icon: const Icon(Icons.folder_open),
-            tooltip: 'Lokale Datei wählen & auf alle Nodes hochladen',
-            onPressed: widget.audioNodes.isEmpty ? null : _pickAndUpload,
-          ),
-          if (widget.audioNodes.isNotEmpty) ...[
-            const SizedBox(width: 4),
-            IconButton.outlined(
-              icon: const Icon(Icons.cloud_download_outlined),
-              tooltip: 'AudioNode-Bibliothek durchsuchen',
-              onPressed: () => _openMediaBrowser(context),
+    return _Section(
+      title: 'AUDIO',
+      children: [
+        // File row
+        Row(
+          children: [
+            Expanded(
+              child: _FilenameDisplay(
+                filename: _p.filePath,
+                duration: _durationHint,
+              ),
+            ),
+            const SizedBox(width: 6),
+            if (_uploading)
+              const SizedBox(
+                  width: 28,
+                  height: 28,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+            else ...[
+              _IconBtn(
+                icon: Icons.folder_open,
+                tooltip: 'Lokale Datei wählen',
+                enabled: widget.audioNodes.isNotEmpty,
+                onPressed: _pickAndUpload,
+              ),
+              const SizedBox(width: 4),
+              _IconBtn(
+                icon: Icons.cloud_download_outlined,
+                tooltip: 'Server-Bibliothek',
+                enabled: widget.audioNodes.isNotEmpty,
+                onPressed: () => _openMediaBrowser(context),
+              ),
+            ],
+          ],
+        ),
+        if (_uploadStatus != null)
+          Text(_uploadStatus!,
+              style: TextStyle(
+                fontSize: 10,
+                color: _uploadStatus!.startsWith('✓')
+                    ? ScColors.active
+                    : _uploadStatus!.startsWith('✗')
+                        ? ScColors.error
+                        : ScColors.warn,
+              )),
+        if (widget.audioNodes.isEmpty)
+          Text('Kein Audio-Node verbunden.',
+              style: ScText.label.copyWith(color: ScColors.warn)),
+        const SizedBox(height: 4),
+        // Volume
+        _VolumeRow(
+          volumeDb: _p.volumeDb,
+          onChanged: (v) {
+            setState(() => _p.volumeDb = v);
+            _emit();
+          },
+        ),
+        const SizedBox(height: 2),
+        // Fades in one row
+        Row(
+          children: [
+            Expanded(
+              child: _PropRow(
+                label: 'Fade In',
+                child: _DurationField(
+                  value: _p.fadeInMs,
+                  controller: _fadeInCtrl,
+                  onChanged: (v) { _p.fadeInMs = v; _emit(); },
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _PropRow(
+                label: 'Fade Out',
+                child: _DurationField(
+                  value: _p.fadeOutMs,
+                  controller: _fadeOutCtrl,
+                  onChanged: (v) { _p.fadeOutMs = v; _emit(); },
+                ),
+              ),
             ),
           ],
-        ],
-      ]),
-      if (_uploadStatus != null)
-        Text(_uploadStatus!,
-            style: TextStyle(
-                fontSize: 11,
-                color: _uploadStatus!.startsWith('✓')
-                    ? Colors.green
-                    : _uploadStatus!.startsWith('✗')
-                        ? Colors.red
-                        : Colors.orange)),
-      if (widget.audioNodes.isEmpty)
-        const Text(
-          'Kein Audio-Node verbunden. Verbinde zuerst einen Node mit Audio-Task.',
-          style: TextStyle(color: Colors.orange, fontSize: 11),
         ),
-      _VolumeSlider(
-        volumeDb: _p.volumeDb,
-        onChanged: (v) { setState(() { _p.volumeDb = v; _emit(); }); },
-      ),
-      Row(children: [
-        Expanded(child: _Field('Fade-In (ms)', _fadeInCtrl,
-            keyboardType: TextInputType.number,
-            onChanged: (v) { _p.fadeInMs = double.tryParse(v) ?? 0; _emit(); })),
-        const SizedBox(width: 12),
-        Expanded(child: _Field('Fade-Out (ms)', _fadeOutCtrl,
-            keyboardType: TextInputType.number,
-            onChanged: (v) { _p.fadeOutMs = double.tryParse(v) ?? 0; _emit(); })),
-      ]),
-      SwitchListTile(
-        title: const Text('Loop'),
-        value: _p.loop,
-        onChanged: (v) { setState(() { _p.loop = v; _emit(); }); },
-      ),
-    ]);
+        // Trim
+        Row(
+          children: [
+            Expanded(
+              child: _PropRow(
+                label: 'Start',
+                child: _DurationField(
+                  value: _p.startTimeMs,
+                  controller: _startCtrl,
+                  onChanged: (v) { _p.startTimeMs = v; _emit(); },
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _PropRow(
+                label: 'End',
+                child: _DurationField(
+                  value: _p.endTimeMs,
+                  controller: _endCtrl,
+                  onChanged: (v) { _p.endTimeMs = v; _emit(); },
+                ),
+              ),
+            ),
+          ],
+        ),
+        _PropRow(
+          label: 'Loop',
+          child: _Toggle(
+            value: _p.loop,
+            onChanged: (v) {
+              setState(() => _p.loop = v);
+              _emit();
+            },
+          ),
+        ),
+      ],
+    );
   }
 
   Future<void> _pickAndUpload() async {
@@ -309,148 +478,52 @@ class _AudioParamsState extends State<_AudioParams> {
     if (file.path != null) {
       bytes = await File(file.path!).readAsBytes();
     } else if (file.bytes != null) {
-      // Web/memory: PlatformFile liefert Bytes direkt (kein readAsBytes())
       bytes = file.bytes!;
     } else {
-      return; // Keine Bytes verfügbar (sollte nicht vorkommen)
+      return;
     }
-
-    setState(() { _uploading = true; _uploadStatus = 'Lade auf Server hoch…'; });
-
-    // Medien liegen IMMER auf dem Sync-Server. Ein einziger Upload genügt;
-    // die Audio-Nodes spiegeln die Datei selbstständig.
+    setState(() { _uploading = true; _uploadStatus = 'Lade hoch…'; });
     try {
-      await MediaGrpcClient().uploadFile(filename, Uint8List.fromList(bytes));
+      await MediaGrpcClient().uploadFile(filename, bytes);
       setState(() {
         _uploading = false;
-        _uploadStatus = '✓ "$filename" auf Server hochgeladen';
+        _uploadStatus = '✓ "$filename" gespeichert';
         _p.filePath = filename;
-        _fileCtrl.text = filename;
         _emit();
       });
     } catch (e) {
-      setState(() { _uploading = false; _uploadStatus = '✗ Upload-Fehler: $e'; });
+      setState(() { _uploading = false; _uploadStatus = '✗ $e'; });
     }
   }
 
   Future<void> _openMediaBrowser(BuildContext context) async {
-    // Medienbibliothek liegt auf dem Server. Vorhören passiert auf einem
-    // Audio-Node (der die Datei gespiegelt hat) — falls einer verbunden ist.
     final previewUrl = widget.audioNodes
         .map((n) => n.mediaServerUrl)
         .firstWhere((u) => u.isNotEmpty, orElse: () => '');
-
     final selected = await showDialog<String>(
       context: context,
       builder: (_) => _MediaBrowserDialog(
-        previewBaseUrl: previewUrl.isEmpty ? null : previewUrl,
-      ),
+          previewBaseUrl: previewUrl.isEmpty ? null : previewUrl),
     );
     if (selected != null) {
-      setState(() {
-        _p.filePath = selected;
-        _fileCtrl.text = selected;
-      });
+      setState(() { _p.filePath = selected; });
       _emit();
     }
   }
 }
 
-// ── Lautstärke-Slider ─────────────────────────────────────────────────────────
+// ── MA-OSC section ────────────────────────────────────────────────────────────
 
-class _VolumeSlider extends StatelessWidget {
-  final double volumeDb;
-  final ValueChanged<double> onChanged;
-
-  const _VolumeSlider({required this.volumeDb, required this.onChanged});
-
-  String _label(double db) {
-    if (db <= -60) return '−∞ dB';
-    if (db == 0) return '0 dB';
-    return '${db > 0 ? '+' : ''}${db.toStringAsFixed(1)} dB';
-  }
-
-  Color _color(double db) {
-    if (db > 3) return Colors.red;
-    if (db > 0) return Colors.orange;
-    return Colors.green;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final clamped = volumeDb.clamp(-60.0, 6.0);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(children: [
-          const Text('Lautstärke',
-              style: TextStyle(fontSize: 13, color: Colors.black87)),
-          const Spacer(),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-            decoration: BoxDecoration(
-              color: _color(clamped).withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: _color(clamped).withValues(alpha: 0.4)),
-            ),
-            child: Text(
-              _label(clamped),
-              style: TextStyle(
-                color: _color(clamped),
-                fontWeight: FontWeight.bold,
-                fontFamily: 'monospace',
-                fontSize: 13,
-              ),
-            ),
-          ),
-        ]),
-        const SizedBox(height: 4),
-        Row(children: [
-          const Text('−∞', style: TextStyle(fontSize: 10, color: Colors.grey)),
-          Expanded(
-            child: Slider(
-              value: clamped,
-              min: -60,
-              max: 6,
-              divisions: 66,   // 1 dB Schritte
-              onChanged: onChanged,
-              activeColor: _color(clamped),
-            ),
-          ),
-          const Text('+6', style: TextStyle(fontSize: 10, color: Colors.grey)),
-        ]),
-        // Markierungen
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: const [
-              Text('−60', style: TextStyle(fontSize: 9, color: Colors.grey)),
-              Text('−40', style: TextStyle(fontSize: 9, color: Colors.grey)),
-              Text('−20', style: TextStyle(fontSize: 9, color: Colors.grey)),
-              Text('0',   style: TextStyle(fontSize: 9, color: Colors.grey)),
-              Text('+6',  style: TextStyle(fontSize: 9, color: Colors.grey)),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ── MA-OSC-Parameter ──────────────────────────────────────────────────────────
-
-class _MaOscParams extends StatefulWidget {
+class _MaOscSection extends StatefulWidget {
   final MaOscCueParams params;
   final ValueChanged<MaOscCueParams> onChanged;
-
-  const _MaOscParams({required this.params, required this.onChanged});
+  const _MaOscSection({required this.params, required this.onChanged});
 
   @override
-  State<_MaOscParams> createState() => _MaOscParamsState();
+  State<_MaOscSection> createState() => _MaOscSectionState();
 }
 
-class _MaOscParamsState extends State<_MaOscParams> {
+class _MaOscSectionState extends State<_MaOscSection> {
   late MaOscCueParams _p;
   late TextEditingController _addrCtrl;
   late TextEditingController _argCtrl;
@@ -480,56 +553,78 @@ class _MaOscParamsState extends State<_MaOscParams> {
 
   @override
   Widget build(BuildContext context) {
-    return _Section('GrandMA-OSC-Parameter', [
-      const Text('Direkte OSC-Nachricht:', style: TextStyle(fontWeight: FontWeight.w500)),
-      _Field('/gma3/cmd', _addrCtrl, onChanged: (v) { _p.oscAddress = v; _emit(); }),
-      _Field('Argument (z.B. "Executor 1 Go")', _argCtrl,
-          onChanged: (v) { _p.oscArgument = v; _emit(); }),
-      const Divider(),
-      const Text('Executor-Steuerung:', style: TextStyle(fontWeight: FontWeight.w500)),
+    return _Section(title: 'MA-OSC', children: [
+      _PropRow(
+        label: 'Address',
+        child: _InlineField(
+          controller: _addrCtrl,
+          hint: '/gma3/cmd',
+          onChanged: (v) { _p.oscAddress = v; _emit(); },
+        ),
+      ),
+      _PropRow(
+        label: 'Argument',
+        child: _InlineField(
+          controller: _argCtrl,
+          hint: 'Executor 1 Go',
+          onChanged: (v) { _p.oscArgument = v; _emit(); },
+        ),
+      ),
       Row(children: [
-        Expanded(child: _Field('Page', _pageCtrl,
-            keyboardType: TextInputType.number,
-            onChanged: (v) { _p.executorPage = int.tryParse(v) ?? 0; _emit(); })),
-        const SizedBox(width: 12),
-        Expanded(child: _Field('Executor', _execCtrl,
-            keyboardType: TextInputType.number,
-            onChanged: (v) { _p.executorNo = int.tryParse(v) ?? 0; _emit(); })),
+        Expanded(child: _PropRow(
+          label: 'Page',
+          child: _InlineField(
+            controller: _pageCtrl,
+            numeric: true,
+            onChanged: (v) { _p.executorPage = int.tryParse(v) ?? 0; _emit(); },
+          ),
+        )),
+        const SizedBox(width: 8),
+        Expanded(child: _PropRow(
+          label: 'Executor',
+          child: _InlineField(
+            controller: _execCtrl,
+            numeric: true,
+            onChanged: (v) { _p.executorNo = int.tryParse(v) ?? 0; _emit(); },
+          ),
+        )),
       ]),
-      DropdownButtonFormField<MaOscCueParams_MaCommand>(
-        decoration: const InputDecoration(labelText: 'Befehl', border: OutlineInputBorder()),
-        initialValue: _p.command,
-        items: const [
-          DropdownMenuItem(value: MaOscCueParams_MaCommand.MA_CMD_GO, child: Text('Go')),
-          DropdownMenuItem(value: MaOscCueParams_MaCommand.MA_CMD_OFF, child: Text('Off')),
-          DropdownMenuItem(value: MaOscCueParams_MaCommand.MA_CMD_PAUSE, child: Text('Pause')),
-          DropdownMenuItem(value: MaOscCueParams_MaCommand.MA_CMD_GOTO, child: Text('Goto Cue')),
-        ],
-        onChanged: (v) { if (v != null) { setState(() { _p.command = v; _emit(); }); } },
+      _PropRow(
+        label: 'Command',
+        child: _CompactDropdown<MaOscCueParams_MaCommand>(
+          value: _p.command,
+          items: const [
+            (MaOscCueParams_MaCommand.MA_CMD_GO, 'Go'),
+            (MaOscCueParams_MaCommand.MA_CMD_OFF, 'Off'),
+            (MaOscCueParams_MaCommand.MA_CMD_PAUSE, 'Pause'),
+            (MaOscCueParams_MaCommand.MA_CMD_GOTO, 'Goto Cue'),
+          ],
+          onChanged: (v) { if (v != null) { setState(() => _p.command = v); _emit(); } },
+        ),
       ),
     ]);
   }
 }
 
-// ── Wait-Parameter ────────────────────────────────────────────────────────────
+// ── Wait section ──────────────────────────────────────────────────────────────
 
-class _WaitParams extends StatefulWidget {
+class _WaitSection extends StatefulWidget {
   final WaitCueParams params;
   final ValueChanged<WaitCueParams> onChanged;
-
-  const _WaitParams({required this.params, required this.onChanged});
+  const _WaitSection({required this.params, required this.onChanged});
 
   @override
-  State<_WaitParams> createState() => _WaitParamsState();
+  State<_WaitSection> createState() => _WaitSectionState();
 }
 
-class _WaitParamsState extends State<_WaitParams> {
+class _WaitSectionState extends State<_WaitSection> {
   late TextEditingController _ctrl;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = TextEditingController(text: widget.params.durationMs.toString());
+    _ctrl = TextEditingController(
+        text: widget.params.durationMs.toStringAsFixed(0));
   }
 
   @override
@@ -540,62 +635,503 @@ class _WaitParamsState extends State<_WaitParams> {
 
   @override
   Widget build(BuildContext context) {
-    return _Section('Warte-Parameter', [
-      _Field('Dauer (ms)', _ctrl,
-          keyboardType: TextInputType.number,
+    final ms = double.tryParse(_ctrl.text) ?? 0;
+    return _Section(title: 'WAIT', children: [
+      _PropRow(
+        label: 'Duration',
+        child: _DurationField(
+          value: widget.params.durationMs,
+          controller: _ctrl,
           onChanged: (v) {
-            final p = WaitCueParams()..durationMs = double.tryParse(v) ?? 0;
-            widget.onChanged(p);
-          }),
-      Text('${(double.tryParse(_ctrl.text) ?? 0) / 1000} Sekunden',
-          style: const TextStyle(color: Colors.grey)),
+            widget.onChanged(WaitCueParams()..durationMs = v);
+          },
+        ),
+      ),
+      Text(
+        '${(ms / 1000).toStringAsFixed(2)} s',
+        style: ScText.label,
+      ),
     ]);
   }
 }
 
-// ── Goto-Parameter ────────────────────────────────────────────────────────────
+// ── Goto section ──────────────────────────────────────────────────────────────
 
-class _GotoParams extends StatefulWidget {
+class _GotoSection extends StatefulWidget {
   final GotoCueParams params;
   final ValueChanged<GotoCueParams> onChanged;
-
-  const _GotoParams({required this.params, required this.onChanged});
+  const _GotoSection({required this.params, required this.onChanged});
 
   @override
-  State<_GotoParams> createState() => _GotoParamsState();
+  State<_GotoSection> createState() => _GotoSectionState();
 }
 
-class _GotoParamsState extends State<_GotoParams> {
-  late TextEditingController _numCtrl;
+class _GotoSectionState extends State<_GotoSection> {
+  late TextEditingController _ctrl;
 
   @override
   void initState() {
     super.initState();
-    _numCtrl = TextEditingController(text: widget.params.targetNumber);
+    _ctrl = TextEditingController(text: widget.params.targetNumber);
   }
 
   @override
   void dispose() {
-    _numCtrl.dispose();
+    _ctrl.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return _Section('Goto-Parameter', [
-      _Field('Ziel-Cue-Nummer', _numCtrl,
-          onChanged: (v) {
-            final p = GotoCueParams()..targetNumber = v;
-            widget.onChanged(p);
-          }),
+    return _Section(title: 'GOTO', children: [
+      _PropRow(
+        label: 'Target',
+        child: _InlineField(
+          controller: _ctrl,
+          hint: 'Cue-Nummer',
+          onChanged: (v) =>
+              widget.onChanged(GotoCueParams()..targetNumber = v),
+        ),
+      ),
     ]);
   }
 }
 
-// ── Media Browser Dialog ──────────────────────────────────────────────────────
+// ── Volume row ────────────────────────────────────────────────────────────────
+
+class _VolumeRow extends StatelessWidget {
+  final double volumeDb;
+  final ValueChanged<double> onChanged;
+
+  const _VolumeRow({required this.volumeDb, required this.onChanged});
+
+  Color _color(double db) {
+    if (db > 3) return ScColors.error;
+    if (db > 0) return ScColors.warn;
+    return ScColors.active;
+  }
+
+  String _label(double db) {
+    if (db <= -60) return '−∞ dB';
+    return '${db > 0 ? "+" : ""}${db.toStringAsFixed(1)} dB';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final clamped = volumeDb.clamp(-60.0, 6.0);
+    return _PropRow(
+      label: 'Volume',
+      child: Row(
+        children: [
+          Expanded(
+            child: SliderTheme(
+              data: SliderThemeData(
+                trackHeight: 3,
+                thumbShape:
+                    const RoundSliderThumbShape(enabledThumbRadius: 6),
+                overlayShape:
+                    const RoundSliderOverlayShape(overlayRadius: 10),
+                activeTrackColor: _color(clamped),
+                thumbColor: _color(clamped),
+                inactiveTrackColor: ScColors.divider,
+              ),
+              child: Slider(
+                value: clamped,
+                min: -60,
+                max: 6,
+                divisions: 66,
+                onChanged: onChanged,
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Container(
+            width: 58,
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: _color(clamped).withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(4),
+              border:
+                  Border.all(color: _color(clamped).withValues(alpha: 0.4)),
+            ),
+            child: Text(
+              _label(clamped),
+              style: TextStyle(
+                color: _color(clamped),
+                fontWeight: FontWeight.bold,
+                fontFeatures: const [FontFeature.tabularFigures()],
+                fontSize: 11,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Filename display ──────────────────────────────────────────────────────────
+
+class _FilenameDisplay extends StatelessWidget {
+  final String filename;
+  final String duration;
+  const _FilenameDisplay({required this.filename, required this.duration});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: ScColors.surface,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: ScColors.divider),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.audio_file_outlined, size: 14, color: ScColors.textDim),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              filename.isEmpty ? 'No file' : filename,
+              style: ScText.label.copyWith(
+                color: filename.isEmpty
+                    ? ScColors.textDim
+                    : ScColors.textSecondary,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          if (duration.isNotEmpty) ...[
+            const SizedBox(width: 6),
+            Text(duration, style: ScText.numberSmall),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ── Shared layout primitives ──────────────────────────────────────────────────
+
+class _Section extends StatelessWidget {
+  final String title;
+  final List<Widget> children;
+
+  const _Section({required this.title, required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Text(title, style: ScText.panelTitle),
+        ),
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: ScColors.surface,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: ScColors.divider),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (int i = 0; i < children.length; i++) ...[
+                children[i],
+                if (i < children.length - 1) const SizedBox(height: 6),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Two-column property row: [label] [control].
+class _PropRow extends StatelessWidget {
+  final String label;
+  final Widget child;
+
+  const _PropRow({required this.label, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        SizedBox(
+          width: 68,
+          child: Text(label, style: ScText.label),
+        ),
+        const SizedBox(width: 6),
+        Expanded(child: child),
+      ],
+    );
+  }
+}
+
+/// Compact single-line text field (no label decoration — label is in _PropRow).
+class _InlineField extends StatelessWidget {
+  final TextEditingController controller;
+  final String? hint;
+  final bool numeric;
+  final ValueChanged<String>? onChanged;
+
+  const _InlineField({
+    required this.controller,
+    this.hint,
+    this.numeric = false,
+    this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextField(
+      controller: controller,
+      onChanged: onChanged,
+      keyboardType: numeric ? TextInputType.number : TextInputType.text,
+      style: ScText.cueLabel.copyWith(fontSize: 13),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: ScText.label,
+        isDense: true,
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+        filled: true,
+        fillColor: ScColors.bg,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(4),
+          borderSide: const BorderSide(color: ScColors.divider),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(4),
+          borderSide: const BorderSide(color: ScColors.divider),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(4),
+          borderSide:
+              const BorderSide(color: ScColors.active, width: 1.5),
+        ),
+      ),
+    );
+  }
+}
+
+/// Duration field: shows ms value, accepts numeric input.
+class _DurationField extends StatelessWidget {
+  final double value;
+  final TextEditingController controller;
+  final ValueChanged<double> onChanged;
+
+  const _DurationField({
+    required this.value,
+    required this.controller,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: _InlineField(
+            controller: controller,
+            numeric: true,
+            onChanged: (v) => onChanged(double.tryParse(v) ?? 0),
+          ),
+        ),
+        const SizedBox(width: 4),
+        Text('ms', style: ScText.statusSmall),
+      ],
+    );
+  }
+}
+
+/// Compact on/off toggle.
+class _Toggle extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _Toggle({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        GestureDetector(
+          onTap: () => onChanged(!value),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            width: 36,
+            height: 18,
+            decoration: BoxDecoration(
+              color: value ? ScColors.active : ScColors.divider,
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Align(
+              alignment:
+                  value ? Alignment.centerRight : Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.all(2),
+                child: Container(
+                  width: 14,
+                  height: 14,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          value ? 'On' : 'Off',
+          style: ScText.label.copyWith(
+              color: value ? ScColors.active : ScColors.textDim),
+        ),
+      ],
+    );
+  }
+}
+
+/// Compact dropdown.
+class _CompactDropdown<T> extends StatelessWidget {
+  final T value;
+  final List<(T, String)> items;
+  final ValueChanged<T?> onChanged;
+
+  const _CompactDropdown({
+    required this.value,
+    required this.items,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: ScColors.bg,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: ScColors.divider),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: value,
+          isDense: true,
+          dropdownColor: ScColors.surface2,
+          style: ScText.cueLabel.copyWith(fontSize: 13),
+          items: items
+              .map((e) => DropdownMenuItem(
+                    value: e.$1,
+                    child: Text(e.$2),
+                  ))
+              .toList(),
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
+}
+
+/// Node dropdown (target-node picker).
+class _NodeDropdown extends StatelessWidget {
+  final String currentId;
+  final List<NodeInfo> nodes;
+  final ValueChanged<String> onChanged;
+
+  const _NodeDropdown({
+    required this.currentId,
+    required this.nodes,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedId = nodes.any((n) => n.nodeId == currentId) ? currentId : '';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      decoration: BoxDecoration(
+        color: ScColors.bg,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: ScColors.divider),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          value: selectedId,
+          isDense: true,
+          isExpanded: true,
+          dropdownColor: ScColors.surface2,
+          style: ScText.label.copyWith(fontSize: 12),
+          items: [
+            const DropdownMenuItem(
+                value: '', child: Text('— Automatisch —')),
+            ...nodes.map((n) => DropdownMenuItem(
+                  value: n.nodeId,
+                  child: Row(
+                    children: [
+                      Icon(
+                        n.tasks.contains(NodeTask.NODE_TASK_AUDIO_OUTPUT)
+                            ? Icons.volume_up
+                            : Icons.devices,
+                        size: 12,
+                        color: n.online ? ScColors.active : ScColors.textDim,
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                          child: Text(n.name,
+                              overflow: TextOverflow.ellipsis)),
+                    ],
+                  ),
+                )),
+          ],
+          onChanged: (v) => onChanged(v ?? ''),
+        ),
+      ),
+    );
+  }
+}
+
+class _IconBtn extends StatelessWidget {
+  final IconData icon;
+  final String tooltip;
+  final bool enabled;
+  final VoidCallback? onPressed;
+
+  const _IconBtn({
+    required this.icon,
+    required this.tooltip,
+    this.enabled = true,
+    this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(4),
+        onTap: enabled ? onPressed : null,
+        child: Padding(
+          padding: const EdgeInsets.all(6),
+          child: Icon(icon,
+              size: 18,
+              color: enabled ? ScColors.textSecondary : ScColors.textDim),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Media browser dialog ──────────────────────────────────────────────────────
 
 class _MediaBrowserDialog extends StatefulWidget {
-  /// Basis-URL eines Audio-Nodes für die Vorschau (null = keine Vorschau).
   final String? previewBaseUrl;
   const _MediaBrowserDialog({this.previewBaseUrl});
 
@@ -620,7 +1156,6 @@ class _MediaBrowserDialogState extends State<_MediaBrowserDialog> {
   Future<void> _loadFiles() async {
     setState(() { _loading = true; _error = null; });
     try {
-      // Einmaligen Snapshot via WatchManifest holen (erstes Event = Snapshot)
       final snapshot = await _grpc.watchManifest().first;
       setState(() { _files = snapshot.assets; _loading = false; });
     } catch (e) {
@@ -631,7 +1166,6 @@ class _MediaBrowserDialogState extends State<_MediaBrowserDialog> {
   Future<void> _uploadFile() async {
     final result = await FilePicker.pickFiles(type: FileType.audio);
     if (result == null || result.files.single.path == null) return;
-
     setState(() => _uploading = true);
     try {
       final file = File(result.files.single.path!);
@@ -640,7 +1174,7 @@ class _MediaBrowserDialogState extends State<_MediaBrowserDialog> {
       await _grpc.uploadFile(filename, bytes);
       await _loadFiles();
     } catch (e) {
-      setState(() => _error = 'Upload-Fehler: $e');
+      setState(() => _error = 'Upload: $e');
     } finally {
       if (mounted) setState(() => _uploading = false);
     }
@@ -650,7 +1184,7 @@ class _MediaBrowserDialogState extends State<_MediaBrowserDialog> {
     try {
       await _grpc.deleteFile(filename);
     } catch (e) {
-      setState(() => _error = 'Löschen fehlgeschlagen: $e');
+      setState(() => _error = 'Löschen: $e');
     }
     if (_previewing == filename) setState(() => _previewing = null);
     await _loadFiles();
@@ -661,24 +1195,22 @@ class _MediaBrowserDialogState extends State<_MediaBrowserDialog> {
     if (base == null) return;
     setState(() => _previewing = filename);
     try {
-      await http.get(Uri.parse(
-          '$base/media/preview/${Uri.encodeComponent(filename)}'));
+      await http.get(
+          Uri.parse('$base/media/preview/${Uri.encodeComponent(filename)}'));
     } catch (e) {
-      if (mounted) setState(() => _error = 'Vorhören fehlgeschlagen: $e');
+      if (mounted) setState(() => _error = 'Vorhören: $e');
     }
   }
 
   Future<void> _stopPreview() async {
     final base = widget.previewBaseUrl;
     if (base != null) {
-      try {
-        await http.delete(Uri.parse('$base/media/preview'));
-      } catch (_) {}
+      try { await http.delete(Uri.parse('$base/media/preview')); } catch (_) {}
     }
     if (mounted) setState(() => _previewing = null);
   }
 
-  String _formatSize(int bytes) {
+  String _fmtSize(int bytes) {
     if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(0)} KB';
     return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
@@ -692,30 +1224,27 @@ class _MediaBrowserDialogState extends State<_MediaBrowserDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      backgroundColor: ScColors.surface,
       title: Row(
         children: [
-          const Expanded(child: Text('Server-Medienbibliothek')),
+          const Expanded(child: Text('Medienbibliothek')),
           if (_uploading)
             const SizedBox(
-              width: 20, height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
+                width: 20, height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2))
           else
             IconButton(
-              icon: const Icon(Icons.upload_file),
-              tooltip: 'Datei hochladen',
-              onPressed: _uploadFile,
-            ),
+                icon: const Icon(Icons.upload_file),
+                tooltip: 'Hochladen',
+                onPressed: _uploadFile),
           IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Aktualisieren',
-            onPressed: _loadFiles,
-          ),
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Aktualisieren',
+              onPressed: _loadFiles),
         ],
       ),
       content: SizedBox(
-        width: 480,
-        height: 440,
+        width: 480, height: 420,
         child: _loading
             ? const Center(child: CircularProgressIndicator())
             : Column(
@@ -725,11 +1254,12 @@ class _MediaBrowserDialogState extends State<_MediaBrowserDialog> {
                       padding: const EdgeInsets.all(8),
                       margin: const EdgeInsets.only(bottom: 8),
                       decoration: BoxDecoration(
-                        color: Colors.red.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(8),
+                        color: ScColors.error.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(_error!,
-                          style: const TextStyle(color: Colors.red, fontSize: 12)),
+                          style: const TextStyle(
+                              color: ScColors.error, fontSize: 12)),
                     ),
                   Expanded(
                     child: _files.isEmpty
@@ -737,15 +1267,15 @@ class _MediaBrowserDialogState extends State<_MediaBrowserDialog> {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                const Icon(Icons.audio_file_outlined,
-                                    size: 48, color: Colors.grey),
+                                Icon(Icons.audio_file_outlined,
+                                    size: 48, color: ScColors.textDim),
                                 const SizedBox(height: 8),
-                                const Text('Keine Audiodateien vorhanden',
-                                    style: TextStyle(color: Colors.grey)),
+                                Text('Keine Dateien',
+                                    style: ScText.label),
                                 const SizedBox(height: 16),
                                 FilledButton.icon(
                                   icon: const Icon(Icons.upload_file),
-                                  label: const Text('Erste Datei hochladen'),
+                                  label: const Text('Datei hochladen'),
                                   onPressed: _uploading ? null : _uploadFile,
                                 ),
                               ],
@@ -755,19 +1285,24 @@ class _MediaBrowserDialogState extends State<_MediaBrowserDialog> {
                             itemCount: _files.length,
                             itemBuilder: (ctx, i) {
                               final f = _files[i];
-                              final name = f.name;
-                              final size = _formatSize(f.sizeBytes);
-                              final ext = name.contains('.')
-                                  ? name.split('.').last.toLowerCase()
-                                  : '';
-                              final isPreviewing = _previewing == name;
+                              final isPreviewing = _previewing == f.name;
                               return ListTile(
+                                dense: true,
                                 leading: Icon(
-                                  isPreviewing ? Icons.volume_up : Icons.audio_file,
-                                  color: isPreviewing ? Colors.green : null,
+                                  isPreviewing
+                                      ? Icons.volume_up
+                                      : Icons.audio_file,
+                                  color: isPreviewing
+                                      ? ScColors.active
+                                      : ScColors.textDim,
+                                  size: 18,
                                 ),
-                                title: Text(name, overflow: TextOverflow.ellipsis),
-                                subtitle: Text('$size · $ext'),
+                                title: Text(f.name,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: ScText.cueLabel
+                                        .copyWith(fontSize: 13)),
+                                subtitle: Text(_fmtSize(f.sizeBytes),
+                                    style: ScText.statusSmall),
                                 trailing: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
@@ -775,26 +1310,25 @@ class _MediaBrowserDialogState extends State<_MediaBrowserDialog> {
                                       IconButton(
                                         icon: Icon(isPreviewing
                                             ? Icons.stop
-                                            : Icons.play_arrow),
-                                        tooltip: isPreviewing ? 'Stoppen' : 'Vorhören',
+                                            : Icons.play_arrow,
+                                            size: 18),
                                         onPressed: isPreviewing
                                             ? _stopPreview
-                                            : () => _preview(name),
+                                            : () => _preview(f.name),
                                       ),
                                     IconButton(
                                       icon: const Icon(Icons.check,
-                                          color: Colors.green),
-                                      tooltip: 'Auswählen',
+                                          color: ScColors.active, size: 18),
                                       onPressed: () =>
-                                          Navigator.of(context).pop(name),
+                                          Navigator.of(context).pop(f.name),
                                     ),
                                     IconButton(
-                                      icon: Icon(Icons.delete_outline,
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .error),
-                                      tooltip: 'Löschen',
-                                      onPressed: () => _confirmDelete(ctx, name),
+                                      icon: const Icon(
+                                          Icons.delete_outline,
+                                          color: ScColors.error,
+                                          size: 18),
+                                      onPressed: () =>
+                                          _confirmDelete(ctx, f.name),
                                     ),
                                   ],
                                 ),
@@ -809,7 +1343,7 @@ class _MediaBrowserDialogState extends State<_MediaBrowserDialog> {
         if (_previewing != null)
           TextButton.icon(
             icon: const Icon(Icons.stop),
-            label: const Text('Vorhören stoppen'),
+            label: const Text('Stoppen'),
             onPressed: _stopPreview,
           ),
         TextButton(
@@ -825,14 +1359,14 @@ class _MediaBrowserDialogState extends State<_MediaBrowserDialog> {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Datei löschen?'),
-        content: Text('"$filename" wird vom Server gelöscht (alle Nodes entfernen sie beim Sync).'),
+        content: Text('"$filename" wird vom Server gelöscht.'),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context, false),
               child: const Text('Abbrechen')),
           FilledButton(
             style: FilledButton.styleFrom(
-                backgroundColor: Theme.of(context).colorScheme.error),
+                backgroundColor: ScColors.error),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Löschen'),
           ),
@@ -840,182 +1374,5 @@ class _MediaBrowserDialogState extends State<_MediaBrowserDialog> {
       ),
     );
     if (ok == true) await _deleteFile(filename);
-  }
-}
-
-// ── Shared Helpers ────────────────────────────────────────────────────────────
-
-class _Section extends StatelessWidget {
-  final String title;
-  final List<Widget> children;
-
-  const _Section(this.title, this.children);
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(title,
-            style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.primary)),
-        const SizedBox(height: 12),
-        ...children.map((c) => Padding(padding: const EdgeInsets.only(bottom: 12), child: c)),
-      ],
-    );
-  }
-}
-
-class _Field extends StatelessWidget {
-  final String label;
-  final TextEditingController controller;
-  final TextInputType? keyboardType;
-  final ValueChanged<String>? onChanged;
-
-  const _Field(this.label, this.controller, {this.keyboardType, this.onChanged});
-
-  @override
-  Widget build(BuildContext context) => TextField(
-        controller: controller,
-        keyboardType: keyboardType,
-        onChanged: onChanged,
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-          isDense: true,
-        ),
-      );
-}
-
-// ── Node-Picker ───────────────────────────────────────────────────────────────
-
-class _NodePicker extends StatelessWidget {
-  final String currentId;
-  final List<NodeInfo> nodes;
-  final ValueChanged<String> onChanged;
-
-  const _NodePicker({
-    required this.currentId,
-    required this.nodes,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    // Wenn keine Nodes bekannt: normales Textfeld als Fallback
-    if (nodes.isEmpty) {
-      return TextField(
-        controller: TextEditingController(text: currentId),
-        decoration: const InputDecoration(
-          labelText: 'Target-Node (kein Node verbunden)',
-          border: OutlineInputBorder(),
-        ),
-        onChanged: onChanged,
-      );
-    }
-
-    final items = <DropdownMenuItem<String>>[
-      const DropdownMenuItem(value: '', child: Text('— Automatisch (Task-Routing) —')),
-      ...nodes.map((n) => DropdownMenuItem(
-            value: n.nodeId,
-            child: Row(
-              children: [
-                Icon(_nodeIcon(n), size: 16, color: n.online ? Colors.green : Colors.grey),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    n.name,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: n.online ? null : Colors.grey),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  _nodeTypeLabel(n),
-                  style: const TextStyle(fontSize: 11, color: Colors.grey),
-                ),
-              ],
-            ),
-          )),
-    ];
-
-    final selectedId = nodes.any((n) => n.nodeId == currentId) ? currentId : '';
-
-    return InputDecorator(
-      decoration: const InputDecoration(
-        labelText: 'Target-Node',
-        border: OutlineInputBorder(),
-        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: selectedId,
-          isExpanded: true,
-          items: items,
-          onChanged: (v) => onChanged(v ?? ''),
-        ),
-      ),
-    );
-  }
-
-  IconData _nodeIcon(NodeInfo n) {
-    if (n.tasks.contains(NodeTask.NODE_TASK_AUDIO_OUTPUT)) return Icons.volume_up;
-    if (n.tasks.contains(NodeTask.NODE_TASK_MA_OSC)) return Icons.light_mode;
-    if (n.tasks.contains(NodeTask.NODE_TASK_MASTER)) return Icons.laptop;
-    return switch (n.nodeType) {
-      NodeType.NODE_TYPE_AUDIO => Icons.volume_up,
-      NodeType.NODE_TYPE_MA => Icons.light_mode,
-      NodeType.NODE_TYPE_MASTER => Icons.laptop,
-      _ => Icons.devices,
-    };
-  }
-
-  String _nodeTypeLabel(NodeInfo n) {
-    if (n.tasks.isNotEmpty) {
-      return n.tasks
-          .where((t) => t != NodeTask.NODE_TASK_UNSPECIFIED)
-          .map((t) => switch (t) {
-                NodeTask.NODE_TASK_AUDIO_OUTPUT => 'Audio',
-                NodeTask.NODE_TASK_MA_OSC => 'MA',
-                NodeTask.NODE_TASK_MASTER => 'Master',
-                NodeTask.NODE_TASK_EDITOR => 'Editor',
-                NodeTask.NODE_TASK_VIEWER => 'Viewer',
-                _ => '',
-              })
-          .where((s) => s.isNotEmpty)
-          .join('+');
-    }
-    return switch (n.nodeType) {
-      NodeType.NODE_TYPE_AUDIO => 'Audio',
-      NodeType.NODE_TYPE_MA => 'MA',
-      NodeType.NODE_TYPE_MASTER => 'Master',
-      _ => 'Viewer',
-    };
-  }
-}
-
-class _TypeBadge extends StatelessWidget {
-  final CueType type;
-  const _TypeBadge({required this.type});
-
-  @override
-  Widget build(BuildContext context) {
-    final (label, color) = switch (type) {
-      CueType.CUE_TYPE_AUDIO => ('AUDIO', Colors.blue),
-      CueType.CUE_TYPE_MA_OSC => ('MA', Colors.orange),
-      CueType.CUE_TYPE_WAIT => ('WAIT', Colors.purple),
-      CueType.CUE_TYPE_GOTO => ('GOTO', Colors.teal),
-      _ => ('?', Colors.grey),
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(label,
-          style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold)),
-    );
   }
 }

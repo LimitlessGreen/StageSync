@@ -240,10 +240,10 @@ class _MobileCueListState extends State<_MobileCueList> {
           key: ValueKey(cue.id),
           cue: cue,
           runState: widget.playhead.runStateFor(cue.id),
+          playhead: widget.playhead,
           isActive: isActive,
           isPast: isPast,
           expanded: isActive,
-          // Mobile: tap to jump to cue; no drag/delete/context actions
           showDragHandle: false,
           onTap: () => widget.notifier.goToCue(cue.id),
         );
