@@ -343,6 +343,7 @@ class AudioCueParams extends $pb.GeneratedMessage {
     $core.double? endTimeMs,
     $core.String? outputDevice,
     $core.String? assetId,
+    $core.double? declaredDurationMs,
   }) {
     final result = create();
     if (filePath != null) result.filePath = filePath;
@@ -354,6 +355,7 @@ class AudioCueParams extends $pb.GeneratedMessage {
     if (endTimeMs != null) result.endTimeMs = endTimeMs;
     if (outputDevice != null) result.outputDevice = outputDevice;
     if (assetId != null) result.assetId = assetId;
+    if (declaredDurationMs != null) result.declaredDurationMs = declaredDurationMs;
     return result;
   }
 
@@ -379,6 +381,7 @@ class AudioCueParams extends $pb.GeneratedMessage {
     ..aD(7, _omitFieldNames ? '' : 'endTimeMs')
     ..aOS(8, _omitFieldNames ? '' : 'outputDevice')
     ..aOS(9, _omitFieldNames ? '' : 'assetId')
+    ..aD(10, _omitFieldNames ? '' : 'declaredDurationMs')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -480,6 +483,15 @@ class AudioCueParams extends $pb.GeneratedMessage {
   $core.bool hasAssetId() => $_has(8);
   @$pb.TagNumber(9)
   void clearAssetId() => $_clearField(9);
+
+  @$pb.TagNumber(10)
+  $core.double get declaredDurationMs => $_getN(9);
+  @$pb.TagNumber(10)
+  set declaredDurationMs($core.double value) => $_setDouble(9, value);
+  @$pb.TagNumber(10)
+  $core.bool hasDeclaredDurationMs() => $_has(9);
+  @$pb.TagNumber(10)
+  void clearDeclaredDurationMs() => $_clearField(10);
 }
 
 class MaOscCueParams extends $pb.GeneratedMessage {

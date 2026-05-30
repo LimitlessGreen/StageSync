@@ -411,12 +411,12 @@ class _NodeDetailColumnState extends ConsumerState<_NodeDetailColumn> {
                         ? () {
                             if (isLocalNode) {
                               ref.read(audioNodeProvider.notifier)
-                                  .selectDevice(devices[effectiveIdx!]);
+                                  .selectDevice(devices[effectiveIdx]);
                             }
                             ref.read(nodeManagementProvider.notifier).setAudioDevice(
                                   targetNodeId: node.nodeId,
-                                  deviceIndex: devices[effectiveIdx!].index,
-                                  deviceName: devices[effectiveIdx!].name,
+                                  deviceIndex: devices[effectiveIdx].index,
+                                  deviceName: devices[effectiveIdx].name,
                                 );
                           }
                         : null,

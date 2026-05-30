@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_soloud/flutter_soloud.dart';
 import 'package:path/path.dart' as p;
 
 import 'package:meta/meta.dart';
@@ -15,7 +14,9 @@ import '../../media/media_sync.dart';
 import '../../media/server_media_client.dart';
 import '../../providers/session_provider.dart';
 import 'abstract_audio_engine.dart';
+// ignore: unused_import
 import 'audio_engine.dart';
+import 'miniaudio_engine.dart';
 import 'media_server.dart';
 import 'sweep_generator.dart';
 
@@ -25,8 +26,8 @@ class AudioNodeStatus {
   final AudioNodeState state;
   final String? errorMessage;
   final List<String> playingCueIds;
-  final List<PlaybackDevice> availableDevices;
-  final PlaybackDevice? selectedDevice;
+  final List<AudioDevice> availableDevices;
+  final AudioDevice? selectedDevice;
   final List<NetworkInterfaceInfo> availableInterfaces;
   final NetworkInterfaceInfo? selectedInterface;
 
@@ -44,8 +45,8 @@ class AudioNodeStatus {
     AudioNodeState? state,
     String? errorMessage,
     List<String>? playingCueIds,
-    List<PlaybackDevice>? availableDevices,
-    PlaybackDevice? selectedDevice,
+    List<AudioDevice>? availableDevices,
+    AudioDevice? selectedDevice,
     List<NetworkInterfaceInfo>? availableInterfaces,
     NetworkInterfaceInfo? selectedInterface,
   }) =>
@@ -87,7 +88,7 @@ class AudioNodeService {
   AudioNodeService._internal(this._ref, this._engine, this._mediaServer);
 
   factory AudioNodeService(Ref ref) {
-    final engine = AudioEngine();
+    final engine = MiniaudioEngine();
     return AudioNodeService._internal(ref, engine, MediaServer(engine));
   }
 
@@ -117,7 +118,7 @@ class AudioNodeService {
       }
 
       // Verfügbare Geräte und Netzwerk-Interfaces lesen
-      final devices = _engine.listDevices();
+      final devices = await _engine.listDevices();
       final interfaces = await MediaServer.listInterfaces();
       final selectedIface = _status.selectedInterface ??
           (interfaces.isNotEmpty ? interfaces.first : null);
@@ -132,7 +133,7 @@ class AudioNodeService {
 
       final audioDevices = devices.asMap().entries.map((e) {
         return AudioDeviceInfo()
-          ..index = e.value.id
+          ..index = e.value.index >= 0 ? e.value.index : e.key
           ..name = e.value.name
           ..isDefault = e.key == 0;
       }).toList();
@@ -143,7 +144,7 @@ class AudioNodeService {
           ..supportedFormats.addAll(['wav', 'mp3', 'flac', 'aac', 'ogg', 'm4a', 'aiff'])
           ..mediaServerUrl = _mediaServer.serverUrl ?? ''
           ..availableDevices.addAll(audioDevices)
-          ..selectedDevice = _status.selectedDevice?.id ?? 0)
+          ..selectedDevice = _status.selectedDevice?.index ?? 0)
         ..auditionSupported = true
         ..auditionDevice = _status.selectedDevice?.name ?? '';
 
@@ -232,7 +233,7 @@ class AudioNodeService {
   ///   - Alle geladenen AudioSources bleiben gültig → kein erneutes PRELOAD nötig
   ///   - Die gRPC-Verbindung bleibt unberührt → kein Ton-Ausfall nach Wechsel
   ///   - Auf Android/Web (kein changeDevice) fällt es still auf System-Default zurück
-  Future<void> switchDevice(PlaybackDevice device) async {
+  Future<void> switchDevice(AudioDevice device) async {
     // Wunsch-Gerät vormerken für UI-Feedback
     _updateStatus(_status.copyWith(selectedDevice: device));
     // HOT-Wechsel via changeDevice() – kein Stop, kein Restart
@@ -241,7 +242,7 @@ class AudioNodeService {
       // actual == null → Fallback auf Default, zeige trotzdem Wunsch-Gerät
       // damit der User sieht was er gewählt hat (auch wenn es Default ist)
       selectedDevice: actual,
-      availableDevices: _engine.listDevices(),
+      availableDevices: await _engine.listDevices(),
     ));
   }
 
@@ -256,7 +257,7 @@ class AudioNodeService {
     // Geräteliste im Status befüllen, damit die UI Geräte zeigen kann
     // – auch wenn der Node noch nicht als Audio-Node verbunden ist.
     if (_status.availableDevices.isEmpty) {
-      final devices = _engine.listDevices();
+      final devices = await _engine.listDevices();
       if (devices.isNotEmpty) {
         _updateStatus(_status.copyWith(
           availableDevices: devices,
@@ -375,7 +376,7 @@ class AudioNodeService {
 
     // Audio-Gerät remote setzen
     if (cmd.hasAudioDeviceIndex() && cmd.audioDeviceIndex >= 0) {
-      final devices = _engine.listDevices();
+      final devices = await _engine.listDevices();
       final match = devices.where((d) => d.id == cmd.audioDeviceIndex).firstOrNull
           ?? (cmd.audioDeviceName.isNotEmpty
               ? devices.where((d) => d.name == cmd.audioDeviceName).firstOrNull
@@ -411,10 +412,10 @@ class AudioNodeService {
     final session = _ref.read(sessionProvider);
     if (!session.isInSession || _status.state != AudioNodeState.connected) return;
     try {
-      final devices = _engine.listDevices();
+      final devices = await _engine.listDevices();
       final audioDevices = devices.asMap().entries.map((e) {
         return AudioDeviceInfo()
-          ..index = e.value.id
+          ..index = e.value.index >= 0 ? e.value.index : e.key
           ..name = e.value.name
           ..isDefault = e.key == 0;
       }).toList();
@@ -425,7 +426,7 @@ class AudioNodeService {
           ..supportedFormats.addAll(['wav', 'mp3', 'flac', 'aac', 'ogg', 'm4a', 'aiff'])
           ..mediaServerUrl = _mediaServer.serverUrl ?? ''
           ..availableDevices.addAll(audioDevices)
-          ..selectedDevice = _status.selectedDevice?.id ?? 0)
+          ..selectedDevice = _status.selectedDevice?.index ?? 0)
         ..auditionSupported = true
         ..auditionDevice = _status.selectedDevice?.name ?? '';
 

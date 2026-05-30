@@ -1,54 +1,54 @@
-import 'package:flutter_soloud/flutter_soloud.dart';
+import 'audio_device.dart';
 
-/// Abstrakte Schnittstelle für die Audio-Engine.
+export 'audio_device.dart';
+
+/// Platform-independent audio engine interface.
 ///
-/// Ermöglicht das Austauschen der echten [AudioEngine]-Implementierung
-/// durch einen Fake oder Mock in Unit-Tests (Dependency Inversion).
-///
-/// Implementierungen:
-/// - [AudioEngine] – echte SoLoud-Implementierung
-/// - In Tests: Mock via `FakeAudioEngine extends Fake implements AbstractAudioEngine`
+/// Implementations:
+/// - [MiniaudioEngine] — miniaudio via dart:ffi (recommended: ASIO/WASAPI
+///   exclusive, CoreAudio, AAudio; reliable device selection, low latency)
+/// - [SoLoudAudioEngine] — legacy SoLoud wrapper (kept for fallback/migration)
+/// - In tests: `FakeAudioEngine extends Fake implements AbstractAudioEngine`
 abstract class AbstractAudioEngine {
-  // ── Zustand ───────────────────────────────────────────────────────────────
+  // ── State ─────────────────────────────────────────────────────────────────
 
-  /// Gibt an ob die Engine erfolgreich initialisiert ist.
   bool get isInitialized;
 
-  /// Das aktuell aktive Ausgabegerät, oder `null` wenn System-Default aktiv ist.
-  PlaybackDevice? get selectedDevice;
+  /// Currently active output device, null = system default.
+  AudioDevice? get selectedDevice;
 
-  /// Alle Cue-IDs die gerade eine aktive (gültige) Voice haben.
+  /// All cue IDs with an active (playing or preloaded) handle.
   List<String> get activeCueIds;
 
-  // ── Lebenszyklus ──────────────────────────────────────────────────────────
+  // ── Lifecycle ─────────────────────────────────────────────────────────────
 
-  /// Initialisiert SoLoud mit dem optionalen [device].
-  /// Fällt automatisch auf den System-Default zurück wenn [device] nicht
-  /// initialisierbar ist.
-  Future<void> init({PlaybackDevice? device});
+  /// Initialises the engine on [device]. Falls back to system default if
+  /// [device] is null or cannot be opened.
+  Future<void> init({AudioDevice? device});
 
-  /// Gibt alle Ressourcen frei und deinitialisiert SoLoud.
+  /// Stops all playback and releases native resources.
   Future<void> deinit();
 
-  /// Wechselt das Ausgabegerät.
+  /// Switches to [device] without restarting the session.
   ///
-  /// Sucht das Gerät per Name in der aktuellen Geräteliste (stabiler als
-  /// Index-Lookup) und führt dann ein deinit+reinit durch.
-  /// Gibt das tatsächlich aktivierte Gerät zurück, oder `null` für Default.
-  Future<PlaybackDevice?> switchDevice(PlaybackDevice device);
+  /// A miniaudio-based implementation can do this without audible interruption
+  /// to handles that are already loaded. Returns the device that was actually
+  /// activated (may differ if [device] is unavailable).
+  Future<AudioDevice?> switchDevice(AudioDevice device);
 
-  /// Listet alle verfügbaren Wiedergabegeräte auf.
-  List<PlaybackDevice> listDevices();
+  /// Returns all available output devices on this machine, grouped by backend.
+  Future<List<AudioDevice>> listDevices();
 
-  // ── Wiedergabe ────────────────────────────────────────────────────────────
+  // ── Playback ──────────────────────────────────────────────────────────────
 
-  /// Lädt [filePath] für [cueId] in den Speicher vor (kein Abspielen).
+  /// Pre-decodes [filePath] into memory under [cueId]. Fast-path for [playAt].
   Future<void> preload(String cueId, String filePath);
 
-  /// Spielt [cueId] ab. Wenn noch nicht vorgeladen, wird [filePath] sofort geladen.
-  /// [startUnixMillis] ist die Serverzeit des gewünschten Starts (Clock-Sync).
-  /// [startTimeMs] = Seek-Position in der Datei (0 = Anfang).
-  /// [endTimeMs] = Stopp-Position (0 = Dateiende); bei Loop wird hier neu gestartet.
+  /// Plays [cueId].
+  ///
+  /// If [startUnixMillis] > 0 the engine schedules playback at that server
+  /// timestamp (clock-sync). If the timestamp is already in the past the
+  /// engine seeks to the correct position so the timeline stays aligned.
   Future<void> playAt({
     required String cueId,
     required String filePath,
@@ -61,22 +61,22 @@ abstract class AbstractAudioEngine {
     double endTimeMs = 0.0,
   });
 
-  /// Lädt WAV-Bytes direkt (ohne Datei) und spielt sie ab.
-  Future<void> playWavBytes(String cueId, List<int> wavBytes, {double volumeDb = 0.0});
+  /// Plays raw WAV bytes (used for test signals and audition).
+  Future<void> playWavBytes(String cueId, List<int> wavBytes,
+      {double volumeDb = 0.0});
 
-  /// Stoppt [cueId]. Mit [fadeOutMs] > 0 wird ein Fade-Out ausgeführt.
+  /// Stops [cueId], optionally with a fade-out.
   Future<void> stop(String cueId, {double fadeOutMs = 0.0});
 
-  /// Stoppt ALLE aktiven Cues. Für Notfall-Stop ohne cueId-Kenntnis.
+  /// Stops all active cues (panic/emergency stop).
   Future<void> stopAll({double fadeOutMs = 0.0});
 
-  /// Pausiert [cueId] (Playhead bleibt stehen).
+  /// Pauses [cueId] (playhead stays at current position).
   Future<void> pause(String cueId, {double fadeOutMs = 0.0});
 
-  /// Setzt eine angehaltene Voice fort.
+  /// Resumes a paused cue.
   Future<void> resume(String cueId, {double fadeInMs = 0.0});
 
-  /// Gibt alle geladenen Sources und Handles frei, lässt SoLoud aber laufen.
+  /// Releases all preloaded handles without deinitialising the engine.
   Future<void> disposeAll();
 }
-

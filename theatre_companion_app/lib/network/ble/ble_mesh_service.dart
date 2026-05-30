@@ -81,6 +81,12 @@ class BleMeshService implements AbstractBleService {
   StreamSubscription<GATTCharacteristicNotifyStateChangedEventArgs>? _notifyStateSub;
   BleMeshService({required PeerRegistry peers, required AesGcmService crypto})
       : _peers = peers, _crypto = crypto;
+
+    // Workaround: bluetooth_low_energy_windows sends discovered callbacks from
+    // a non-platform thread in 6.2.1. Disable Windows central scan temporarily
+    // to avoid runtime channel thread violations/crashes.
+    bool get _windowsCentralScanDisabled =>
+      defaultTargetPlatform == TargetPlatform.windows;
   // ─── Status-Getter ────────────────────────────────────────────────────────
   @override bool get isAdvertising        => _peripheralStarted;
   @override bool get isScanning           => _isScanning;
@@ -134,7 +140,14 @@ class BleMeshService implements AbstractBleService {
       'BLE-Adapter-State: Central=${centralState.name}, '
       'Peripheral=${peripheralState.name}',
     );
-    if (centralState == BluetoothLowEnergyState.poweredOn) {
+    if (_windowsCentralScanDisabled) {
+      _emitStatus(
+        'Windows-Workaround aktiv: Central-Scan ist vorübergehend deaktiviert '
+        '(Plugin-Threading-Bug in bluetooth_low_energy_windows).',
+      );
+    }
+    if (centralState == BluetoothLowEnergyState.poweredOn &&
+        !_windowsCentralScanDisabled) {
       _subscribeConnectionEvents();
       _subscribeNotifyEvents();
       _startScan().ignore();        // fire-and-forget – kein await
@@ -186,6 +199,13 @@ class BleMeshService implements AbstractBleService {
   void _onCentralStateChanged(BluetoothLowEnergyStateChangedEventArgs args) {
     _emitStatus('Central-State: ${args.state.name}');
     if (_stopped) return;
+    if (_windowsCentralScanDisabled) {
+      _isScanning = false;
+      _isFallbackScanMode = false;
+      _scanRestartTimer?.cancel();
+      _fallbackScanTimer?.cancel();
+      return;
+    }
     if (args.state == BluetoothLowEnergyState.poweredOn) {
       _subscribeConnectionEvents();
       _subscribeNotifyEvents();

@@ -1,6 +1,6 @@
 # Project-level configuration.
 cmake_minimum_required(VERSION 3.14)
-project(theatre_companion_app LANGUAGES CXX)
+project(theatre_companion_app LANGUAGES CXX C)
 
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
@@ -51,6 +51,16 @@ add_subdirectory(${FLUTTER_MANAGED_DIR})
 
 # Application build; see runner/CMakeLists.txt.
 add_subdirectory("runner")
+
+# ── miniaudio_wrapper native library ─────────────────────────────────────────
+# Output the DLL directly into the runner's per-config directory so Flutter
+# finds it at runtime (same directory as the .exe). This avoids needing an
+# explicit install() step that can fail on locked files or path issues.
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY
+    "${CMAKE_BINARY_DIR}/runner/$<CONFIG>")
+add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../native"
+                 "${CMAKE_CURRENT_BINARY_DIR}/native")
+unset(CMAKE_RUNTIME_OUTPUT_DIRECTORY)
 
 
 # Generated plugin build rules, which manage building the plugins and adding

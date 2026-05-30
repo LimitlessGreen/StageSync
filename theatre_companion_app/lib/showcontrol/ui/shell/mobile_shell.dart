@@ -27,6 +27,8 @@ class MobileShell extends ConsumerStatefulWidget {
 }
 
 class _MobileShellState extends ConsumerState<MobileShell> {
+  late final AppLifecycleListener _lifecycleListener;
+
   @override
   void initState() {
     super.initState();
@@ -35,6 +37,20 @@ class _MobileShellState extends ConsumerState<MobileShell> {
       if (!ref.read(sessionProvider).isInSession) return;
       ref.read(showControlProvider.notifier).initialize();
     });
+    _lifecycleListener = AppLifecycleListener(
+      onResume: () {
+        if (!mounted) return;
+        if (ref.read(sessionProvider).isInSession) {
+          ref.read(showControlProvider.notifier).initialize();
+        }
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _lifecycleListener.dispose();
+    super.dispose();
   }
 
   Future<void> _leaveSession() async {
@@ -70,6 +86,7 @@ class _MobileShellState extends ConsumerState<MobileShell> {
               child: _MobileCueList(
                 cueList: domainState.cueList,
                 playhead: domainState.playhead,
+                notifier: notifier,
               ),
             ),
             const Divider(height: 1, color: ScColors.divider),
@@ -114,7 +131,7 @@ class _StatusStrip extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          if ((nodes as List).isNotEmpty)
+          if (nodes.isNotEmpty)
             NodeHealthStrip(nodes: nodes.cast()),
         ],
       ),
@@ -127,8 +144,9 @@ class _StatusStrip extends StatelessWidget {
 class _MobileCueList extends StatelessWidget {
   final CueList? cueList;
   final PlayheadState playhead;
+  final ShowControlNotifier notifier;
 
-  const _MobileCueList({required this.cueList, required this.playhead});
+  const _MobileCueList({required this.cueList, required this.playhead, required this.notifier});
 
   @override
   Widget build(BuildContext context) {
@@ -157,8 +175,9 @@ class _MobileCueList extends StatelessWidget {
           isActive: isActive,
           isPast: isPast,
           expanded: isActive,
-          // Mobile: read-only, no drag/delete/context actions
+          // Mobile: tap to jump to cue; no drag/delete/context actions
           showDragHandle: false,
+          onTap: () => notifier.goToCue(cue.id),
         );
       },
     );

@@ -136,9 +136,7 @@ class MediaSync {
     final dst = _pathFor(name);
     final tmp = '$dst.part';
     try {
-      final resp = await http
-          .get(_client.downloadUri(name))
-          .timeout(const Duration(seconds: 60));
+      final resp = await _client.download(name);
       if (resp.statusCode != 200) {
         debugPrint('[MediaSync] Download $name → HTTP ${resp.statusCode}');
         return null;

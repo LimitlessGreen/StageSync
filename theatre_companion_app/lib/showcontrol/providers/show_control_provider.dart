@@ -302,6 +302,13 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
     state = state.copyWith(cueList: resp.cueList);
   }
 
+  void _scheduleReconnect() {
+    if (!_session.isInSession) return;
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted && _session.isInSession) initialize();
+    });
+  }
+
   // ── Stream 1: Show-Definition ───────────────────────────────────────────────
 
   void _subscribeToDefinition() {
@@ -314,7 +321,9 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
 
     _defSub = StageSyncClient.instance.showControl
         .watchShowDefinition(req)
-        .listen(_handleDefinitionEvent);
+        .listen(_handleDefinitionEvent,
+            onError: (_) => _scheduleReconnect(),
+            onDone: () => _scheduleReconnect());
   }
 
   void _handleDefinitionEvent(ShowDefinitionEvent event) {
@@ -346,7 +355,9 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
 
     _execSub = StageSyncClient.instance.showControl
         .watchShowExecution(req)
-        .listen(_handleExecutionEvent);
+        .listen(_handleExecutionEvent,
+            onError: (_) => _scheduleReconnect(),
+            onDone: () => _scheduleReconnect());
   }
 
   void _handleExecutionEvent(ShowExecutionEvent event) {
@@ -421,7 +432,9 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
 
     _healthSub = StageSyncClient.instance.showControl
         .watchNodeHealth(req)
-        .listen(_handleNodeHealthEvent);
+        .listen(_handleNodeHealthEvent,
+            onError: (_) => _scheduleReconnect(),
+            onDone: () => _scheduleReconnect());
   }
 
   void _handleNodeHealthEvent(NodeHealthEvent event) {
@@ -489,7 +502,9 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
     // Jeder MEDIA_SNAPSHOT triggert einen Media-Manifest-Refresh.
     StageSyncClient.instance.showControl
         .watchMediaSync(req)
-        .listen((_) => _ref.read(mediaProvider.notifier).refresh());
+        .listen((_) => _ref.read(mediaProvider.notifier).refresh(),
+            onError: (_) => _scheduleReconnect(),
+            onDone: () => _scheduleReconnect());
   }
 
   int _eventServerMs(ShowExecutionEvent event) {

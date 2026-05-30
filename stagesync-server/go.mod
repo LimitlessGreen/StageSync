@@ -11,6 +11,11 @@ require (
 
 require (
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
+	github.com/gen2brain/malgo v0.11.25 // indirect
+	github.com/go-audio/audio v1.0.0 // indirect
+	github.com/go-audio/riff v1.0.0 // indirect
+	github.com/go-audio/wav v1.1.0 // indirect
+	github.com/hajimehoshi/go-mp3 v0.3.4 // indirect
 	github.com/miekg/dns v1.1.27 // indirect
 	golang.org/x/crypto v0.25.0 // indirect
 	golang.org/x/net v0.27.0 // indirect

@@ -45,6 +45,7 @@ class _DesktopShellState extends ConsumerState<DesktopShell>
     with SingleTickerProviderStateMixin {
   String? _selectedCueId;
   late TabController _tabController;
+  late final AppLifecycleListener _lifecycleListener;
   bool _bottomPanelOpen = false;
   int _lastOpenTab = 0;
 
@@ -56,6 +57,14 @@ class _DesktopShellState extends ConsumerState<DesktopShell>
       ref.read(showControlProvider.notifier).initialize();
       _handleAutoReconnectNodeStart();
     });
+    _lifecycleListener = AppLifecycleListener(
+      onResume: () {
+        if (!mounted) return;
+        if (ref.read(sessionProvider).isInSession) {
+          ref.read(showControlProvider.notifier).initialize();
+        }
+      },
+    );
   }
 
 void _handleAutoReconnectNodeStart() {
@@ -82,6 +91,7 @@ void _handleAutoReconnectNodeStart() {
   @override
   void dispose() {
     _tabController.dispose();
+    _lifecycleListener.dispose();
     super.dispose();
   }
 
@@ -801,6 +811,7 @@ class _AudioParamsEditor extends ConsumerWidget {
     onChanged(current.copyWith(
       assetId:  asset.id,
       volumeDb: lufs != null ? _autoVolume(lufs) : current.volumeDb,
+      declaredDurationMs: asset.audio?.declaredDurationMs,
     ));
   }
 

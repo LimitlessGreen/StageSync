@@ -346,6 +346,35 @@ func nowProto() *pb.Timestamp {
 	return &pb.Timestamp{UnixMillis: time.Now().UnixMilli()}
 }
 
+// AddInternalNode fügt einen server-internen Node direkt in eine Session ein,
+// ohne gRPC-Roundtrip. Wird für den optionalen --audio-node Modus genutzt.
+// Gibt nodeID und Token zurück.
+func (m *Manager) AddInternalNode(sessionID string, info *pb.NodeInfo) (nodeID, token string, err error) {
+	sess, err := m.GetSession(sessionID)
+	if err != nil {
+		return "", "", err
+	}
+	nodeID = ensureNodeID(info)
+	info.NodeId = nodeID
+	info.Online = true
+	tok := generateToken()
+	node := &Node{
+		Info:     info,
+		Token:    tok,
+		LastSeen: time.Now(),
+		Online:   true,
+	}
+	sess.AddNode(node)
+	sess.BroadcastEvent(&pb.SessionEvent{
+		Type:         pb.SessionEvent_TYPE_NODE_JOINED,
+		Session:      sess.ToProto(),
+		AffectedNode: info,
+		OccurredAt:   nowProto(),
+	})
+	log.Printf("[session] internal node added: %s (%s) in session %s", info.Name, info.NodeType, sessionID)
+	return nodeID, tok, nil
+}
+
 // NotifyNodeUpdated broadcastet ein Update-Event für einen Node (z.B. nach
 // RegisterNode, wenn sich Capabilities wie die MediaServerUrl ändern).
 func (m *Manager) NotifyNodeUpdated(sessionID string, nodeInfo *pb.NodeInfo) {

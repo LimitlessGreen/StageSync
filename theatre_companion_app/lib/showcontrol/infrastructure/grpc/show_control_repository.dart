@@ -60,6 +60,9 @@ class ShowControlRepository {
           loop: proto.audio.loop,
           startTimeMs: proto.audio.startTimeMs,
           endTimeMs: proto.audio.endTimeMs,
+          declaredDurationMs: proto.audio.declaredDurationMs > 0
+              ? proto.audio.declaredDurationMs
+              : null,
         ),
       pb.Cue_Params.wait => WaitParams(
           durationMs: proto.wait.durationMs,
@@ -211,7 +214,8 @@ class ShowControlRepository {
           ..fadeOutMs = ap.fadeOutMs
           ..loop = ap.loop
           ..startTimeMs = ap.startTimeMs
-          ..endTimeMs = ap.endTimeMs;
+          ..endTimeMs = ap.endTimeMs
+          ..declaredDurationMs = ap.declaredDurationMs ?? 0;
       case WaitParams wp:
         proto.wait = pb.WaitCueParams()..durationMs = wp.durationMs;
       case MaOscParams mp:

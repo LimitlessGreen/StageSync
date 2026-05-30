@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_soloud/flutter_soloud.dart';
 
 import '../../../showcontrol/grpc/generated/stagesync/v1/common.pb.dart';
 import '../../../showcontrol/grpc/generated/stagesync/v1/node.pb.dart';
@@ -713,10 +712,10 @@ class _SliderRow extends StatelessWidget {
 }
 
 class _DevicePicker extends StatelessWidget {
-  final List<PlaybackDevice> devices;
-  final PlaybackDevice? selectedDevice;
+  final List<AudioDevice> devices;
+  final AudioDevice? selectedDevice;
   final bool isReiniting;
-  final ValueChanged<PlaybackDevice> onSelect;
+  final ValueChanged<AudioDevice> onSelect;
 
   const _DevicePicker({
     required this.devices,
@@ -739,7 +738,7 @@ class _DevicePicker extends StatelessWidget {
           const Icon(Icons.speaker, size: 16, color: Colors.white38),
           const SizedBox(width: 8),
           Expanded(
-            child: DropdownButton<PlaybackDevice>(
+            child: DropdownButton<AudioDevice>(
               value: devices.contains(selectedDevice) ? selectedDevice : null,
               hint: Text(
                 selectedDevice?.name ?? 'System-Default',

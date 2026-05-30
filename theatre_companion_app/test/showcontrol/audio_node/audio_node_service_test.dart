@@ -1,11 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_soloud/flutter_soloud.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 
 import 'package:theatre_companion_app/showcontrol/nodes/audio_node/abstract_audio_engine.dart';
+import 'package:theatre_companion_app/showcontrol/nodes/audio_node/audio_device.dart';
 import 'package:theatre_companion_app/showcontrol/nodes/audio_node/audio_node_service.dart';
 import 'package:theatre_companion_app/showcontrol/nodes/audio_node/media_server.dart';
 import 'package:theatre_companion_app/showcontrol/grpc/generated/stagesync/v1/node.pb.dart';
@@ -25,22 +25,22 @@ class FakeAudioEngine extends Fake implements AbstractAudioEngine {
   final List<({String cueId, double fadeOutMs})> pauseCalls = [];
   final List<({String cueId, double fadeInMs})> resumeCalls = [];
   final List<({String cueId, List<int> wavBytes})> playWavCalls = [];
-  final List<PlaybackDevice> switchDeviceCalls = [];
+  final List<AudioDevice> switchDeviceCalls = [];
 
   bool _initialized = false;
-  PlaybackDevice? _selectedDevice;
+  AudioDevice? _selectedDevice;
 
   @override
   bool get isInitialized => _initialized;
 
   @override
-  PlaybackDevice? get selectedDevice => _selectedDevice;
+  AudioDevice? get selectedDevice => _selectedDevice;
 
   @override
   List<String> get activeCueIds => [];
 
   @override
-  Future<void> init({PlaybackDevice? device}) async {
+  Future<void> init({AudioDevice? device}) async {
     _initialized = true;
     _selectedDevice = device;
   }
@@ -52,14 +52,15 @@ class FakeAudioEngine extends Fake implements AbstractAudioEngine {
   }
 
   @override
-  List<PlaybackDevice> listDevices() => [
-        // PlaybackDevice(id, isDefault, name) — positionale Parameter in flutter_soloud 4.x
-        const PlaybackDevice(0, true, 'Lautsprecher (Realtek)'),
-        const PlaybackDevice(1, false, 'HDMI-Ausgang'),
+  Future<List<AudioDevice>> listDevices() async => [
+        const AudioDevice(id: 'Lautsprecher (Realtek)', name: 'Lautsprecher (Realtek)',
+            backend: AudioBackend.wasapi, index: 0),
+        const AudioDevice(id: 'HDMI-Ausgang', name: 'HDMI-Ausgang',
+            backend: AudioBackend.wasapi, index: 1),
       ];
 
   @override
-  Future<PlaybackDevice?> switchDevice(PlaybackDevice device) async {
+  Future<AudioDevice?> switchDevice(AudioDevice device) async {
     switchDeviceCalls.add(device);
     _selectedDevice = device;
     return device;
@@ -145,8 +146,7 @@ class FakeAudioEngine extends Fake implements AbstractAudioEngine {
 
 void main() {
   setUpAll(() {
-    // Mocktail benötigt Fallback-Werte für Typen, die als Argumente übergeben werden
-    registerFallbackValue(const PlaybackDevice(0, true, 'default'));
+    registerFallbackValue(const AudioDevice(id: '', name: 'default'));
   });
 
   // ── Gerätewahl ─────────────────────────────────────────────────────────────
@@ -154,27 +154,30 @@ void main() {
   group('AudioNodeService.switchDevice()', () {
     test('leitet Aufruf an Engine weiter', () async {
       final (service, engine, _) = _makeService();
-      const device = PlaybackDevice(1, false, 'HDMI-Ausgang');
+      const device = AudioDevice(id: 'HDMI-Ausgang', name: 'HDMI-Ausgang',
+          backend: AudioBackend.wasapi, index: 1);
 
       await service.switchDevice(device);
 
       expect(engine.switchDeviceCalls, hasLength(1));
-      expect(engine.switchDeviceCalls.first.id, 1);
+      expect(engine.switchDeviceCalls.first.index, 1);
     });
 
     test('Status.selectedDevice entspricht dem tatsächlichen Engine-Gerät', () async {
       final (service, engine, _) = _makeService();
-      const device = PlaybackDevice(1, false, 'HDMI-Ausgang');
+      const device = AudioDevice(id: 'HDMI-Ausgang', name: 'HDMI-Ausgang',
+          backend: AudioBackend.wasapi, index: 1);
 
       await service.switchDevice(device);
 
       // Engine gibt das Gerät zurück → Status muss es spiegeln
-      expect(service.status.selectedDevice?.id, engine.selectedDevice?.id);
+      expect(service.status.selectedDevice?.name, engine.selectedDevice?.name);
     });
 
     test('Status.availableDevices wird nach Gerätewechsel aktualisiert', () async {
       final (service, _, _) = _makeService();
-      const device = PlaybackDevice(0, true, 'Lautsprecher (Realtek)');
+      const device = AudioDevice(id: 'Lautsprecher (Realtek)', name: 'Lautsprecher (Realtek)',
+          backend: AudioBackend.wasapi, index: 0);
 
       await service.switchDevice(device);
 
@@ -368,7 +371,8 @@ void main() {
       final statusEvents = <AudioNodeStatus>[];
       final sub = service.statusStream.listen(statusEvents.add);
 
-      const device = PlaybackDevice(0, true, 'Lautsprecher (Realtek)');
+      const device = AudioDevice(id: 'Lautsprecher (Realtek)', name: 'Lautsprecher (Realtek)',
+          backend: AudioBackend.wasapi, index: 0);
       await service.switchDevice(device);
 
       // StreamController.broadcast() liefert Events asynchron (Microtask).

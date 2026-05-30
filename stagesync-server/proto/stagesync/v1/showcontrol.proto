@@ -94,6 +94,7 @@ message AudioCueParams {
   double  end_time_ms    = 7; // 0 = bis Ende
   string  output_device  = 8; // leer = System-Default
   string  asset_id       = 9; // SHA-256 des Assets (bevorzugt gegenüber file_path)
+  double  declared_duration_ms = 10; // deklarierte Abspieldauer aus Asset-Metadaten; 0 = unbekannt
 }
 
 message MaOscCueParams {

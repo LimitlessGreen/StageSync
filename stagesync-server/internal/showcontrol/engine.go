@@ -376,11 +376,31 @@ func (e *Engine) dispatchCue(ctx context.Context, cue *pb.Cue) {
 		ErrorMsg:    errMsg,
 	})
 
-	// Auto-Continue: automatisch nächste Cue nach PostWait
+	// Auto-Continue: automatisch nächste Cue nach PostWait (oder Audio-Ende)
 	if err == nil && cue.AutoContinue {
-		if cue.PostWaitMs > 0 {
+		waitMs := cue.PostWaitMs
+		// For audio cues: if PostWaitMs==0, wait for the audio to finish
+		// using declared_duration_ms (set by the client from asset metadata).
+		if waitMs == 0 {
+			if ap, ok := cue.Params.(*pb.Cue_Audio); ok && ap != nil {
+				dur := ap.Audio.DeclaredDurationMs
+				end := ap.Audio.EndTimeMs
+				start := ap.Audio.StartTimeMs
+				if end > 0 && end > start {
+					dur = end - start
+				}
+				if dur > 0 {
+					fade := ap.Audio.FadeOutMs
+					if fade > 0 && fade < dur {
+						dur -= fade / 2
+					}
+					waitMs = dur
+				}
+			}
+		}
+		if waitMs > 0 {
 			select {
-			case <-time.After(time.Duration(cue.PostWaitMs) * time.Millisecond):
+			case <-time.After(time.Duration(waitMs) * time.Millisecond):
 			case <-ctx.Done():
 				return
 			}

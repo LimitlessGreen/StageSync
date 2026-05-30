@@ -43,12 +43,38 @@ class AudioEngine implements AbstractAudioEngine {
   final Map<String, int> _fadeGen = {};
 
   bool _initialized = false;
-  PlaybackDevice? _selectedDevice;
+  AudioDevice? _selectedDevice;
+  // Internal SoLoud device handle — stored separately from AudioDevice
+  // because PlaybackDevice.id is an unstable sequential index.
+  // ignore: unused_field
+  PlaybackDevice? _soloudDevice;
+
+  // ── Conversion helpers ────────────────────────────────────────────────────
+
+  /// Converts a SoLoud [PlaybackDevice] to our [AudioDevice].
+  static AudioDevice _toAudioDevice(PlaybackDevice d) => AudioDevice(
+        id: d.name, // use name as stable key (SoLoud index is unstable)
+        name: d.name,
+        backend: AudioBackend.wasapi, // SoLoud on Windows = WASAPI
+        index: d.id,
+      );
+
+  /// Finds the SoLoud [PlaybackDevice] matching an [AudioDevice] by name.
+  PlaybackDevice? _toSoloudDevice(AudioDevice device) {
+    try {
+      return _soloud
+          .listPlaybackDevices()
+          .where((d) => d.name == device.name)
+          .firstOrNull;
+    } catch (_) {
+      return null;
+    }
+  }
 
   // ── Init / Gerät ──────────────────────────────────────────────────────────
 
   @override
-  Future<void> init({PlaybackDevice? device}) async {
+  Future<void> init({AudioDevice? device}) async {
     if (_soloud.isInitialized) {
       // BUG-FIX: Stale Sources/Handles VOR dem deinit() bereinigen.
       // Ohne disposeAll() bleiben ungültige AudioSource-Objekte in den Maps.
@@ -59,22 +85,23 @@ class AudioEngine implements AbstractAudioEngine {
       _initialized = false;
     }
 
-    // Strategie 1: gewünschtes Gerät.
-    // Hinweis: SoLoud v4 re-enumeriert Geräte intern und verwendet den
-    // PlaybackDevice.id als Index — daher sollte das Device-Objekt frisch
-    // aus listDevices() stammen (s. switchDevice).
-    if (device != null) {
-      try {
-        await _soloud.init(device: device, bufferSize: _bufferSize);
-        if (_soloud.isInitialized) {
-          _initialized = true;
-          _selectedDevice = device;
-          debugPrint('[AudioEngine] init OK device=${device.name}');
-          return;
+    // Strategie 1: gewünschtes Gerät per Name aus frischer Enumeration.
+    if (device != null && !device.isSystemDefault) {
+      final soloudDev = _toSoloudDevice(device);
+      if (soloudDev != null) {
+        try {
+          await _soloud.init(device: soloudDev, bufferSize: _bufferSize);
+          if (_soloud.isInitialized) {
+            _initialized = true;
+            _selectedDevice = device;
+            _soloudDevice = soloudDev;
+            debugPrint('[AudioEngine] init OK device=${device.name}');
+            return;
+          }
+        } catch (e) {
+          debugPrint('[AudioEngine] init mit "${device.name}" fehlgeschlagen: $e');
+          if (_soloud.isInitialized) _soloud.deinit();
         }
-      } catch (e) {
-        debugPrint('[AudioEngine] init mit "${device.name}" fehlgeschlagen: $e');
-        if (_soloud.isInitialized) _soloud.deinit();
       }
     }
 
@@ -92,17 +119,16 @@ class AudioEngine implements AbstractAudioEngine {
       if (_soloud.isInitialized) _soloud.deinit();
     }
 
-    // Strategie 3 (Windows-Fallback): explizit erstes Gerät aus der Liste.
-    // listDevices() kann auch ohne init() aufgerufen werden (miniaudio enumeriert
-    // unabhängig vom Playback-State).
+    // Strategie 3 (Windows-Fallback): erstes Gerät aus frischer Enumeration.
     try {
-      final devices = listDevices();
-      if (devices.isNotEmpty) {
-        await _soloud.init(device: devices.first, bufferSize: _bufferSize);
+      final soloudDevices = _soloud.listPlaybackDevices();
+      if (soloudDevices.isNotEmpty) {
+        await _soloud.init(device: soloudDevices.first, bufferSize: _bufferSize);
         if (_soloud.isInitialized) {
           _initialized = true;
-          _selectedDevice = devices.first;
-          debugPrint('[AudioEngine] init OK device=${devices.first.name} (Windows-Fallback)');
+          _soloudDevice = soloudDevices.first;
+          _selectedDevice = _toAudioDevice(soloudDevices.first);
+          debugPrint('[AudioEngine] init OK device=${soloudDevices.first.name} (Windows-Fallback)');
           return;
         }
       }
@@ -116,13 +142,14 @@ class AudioEngine implements AbstractAudioEngine {
 
   @override
   bool get isInitialized => _initialized && _soloud.isInitialized;
-  @override
-  PlaybackDevice? get selectedDevice => _selectedDevice;
 
   @override
-  List<PlaybackDevice> listDevices() {
+  AudioDevice? get selectedDevice => _selectedDevice;
+
+  @override
+  Future<List<AudioDevice>> listDevices() async {
     try {
-      return _soloud.listPlaybackDevices();
+      return _soloud.listPlaybackDevices().map(_toAudioDevice).toList();
     } catch (_) {
       return [];
     }
@@ -147,30 +174,17 @@ class AudioEngine implements AbstractAudioEngine {
   ///
   /// Gibt das tatsächlich aktivierte Gerät zurück, oder `null` für Default.
   @override
-  Future<PlaybackDevice?> switchDevice(PlaybackDevice device) async {
-    // Schritt 1: Frische Enumeration → Gerät per Name finden.
-    // PlaybackDevice.id ist ein sequenzieller Index der bei jeder Enumeration
-    // neu vergeben wird (s. player.cpp::listPlaybackDevices cd.id = i).
-    // Durch Name-Matching stellen wir sicher den richtigen Index zu verwenden.
-    final freshDevices = listDevices();
-    final freshDevice = freshDevices
-        .where((d) => d.name == device.name)
-        .firstOrNull ?? device;
-
-    // Schritt 2: Engine ordentlich herunterfahren (inkl. Sources/Handles).
+  Future<AudioDevice?> switchDevice(AudioDevice device) async {
+    // Ordentlich herunterfahren (Sources/Handles freigeben).
     await deinit();
-
-    // Schritt 3: Kurze Pause damit WASAPI das Gerät vollständig freigeben kann.
-    // Ohne diese Pause schlägt init() auf manchen Windows-Systemen fehl.
+    // WASAPI-Freigabe abwarten.
     await Future.delayed(const Duration(milliseconds: 80));
-
-    // Schritt 4: Neu-Init mit dem Zielgerät (mit automatischem Default-Fallback).
+    // Neu-Init mit Zielgerät (automatischer Default-Fallback eingebaut).
     try {
-      await init(device: freshDevice);
+      await init(device: device);
     } catch (e) {
       debugPrint('[AudioEngine] switchDevice init fehlgeschlagen: $e');
     }
-
     debugPrint('[AudioEngine] switchDevice Ergebnis: ${_selectedDevice?.name ?? "Default"}');
     return _selectedDevice;
   }
@@ -459,6 +473,7 @@ class AudioEngine implements AbstractAudioEngine {
     }
     _initialized = false;
     _selectedDevice = null;
+    _soloudDevice = null;
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────

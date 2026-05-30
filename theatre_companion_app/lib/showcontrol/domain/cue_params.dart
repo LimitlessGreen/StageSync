@@ -20,6 +20,10 @@ final class AudioParams extends CueParams {
   final double startTimeMs;
   final double endTimeMs;
 
+  /// Total playback duration from asset file header metadata (ms).
+  /// null = not known (old cue or asset not yet resolved).
+  final double? declaredDurationMs;
+
   const AudioParams({
     required this.assetId,
     this.volumeDb = 0.0,
@@ -28,6 +32,7 @@ final class AudioParams extends CueParams {
     this.loop = false,
     this.startTimeMs = 0.0,
     this.endTimeMs = 0.0,
+    this.declaredDurationMs,
   });
 
   AudioParams copyWith({
@@ -38,6 +43,7 @@ final class AudioParams extends CueParams {
     bool? loop,
     double? startTimeMs,
     double? endTimeMs,
+    double? declaredDurationMs,
   }) =>
       AudioParams(
         assetId: assetId ?? this.assetId,
@@ -47,6 +53,7 @@ final class AudioParams extends CueParams {
         loop: loop ?? this.loop,
         startTimeMs: startTimeMs ?? this.startTimeMs,
         endTimeMs: endTimeMs ?? this.endTimeMs,
+        declaredDurationMs: declaredDurationMs ?? this.declaredDurationMs,
       );
 
   /// Duration in ms derived from startTimeMs/endTimeMs.
