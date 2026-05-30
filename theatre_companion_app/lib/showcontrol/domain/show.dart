@@ -81,7 +81,7 @@ class Cue {
 
   /// Derived display duration in ms (from params).
   double? get displayDurationMs => switch (params) {
-        AudioParams p => p.effectiveDurationMs,
+        AudioParams p => p.effectiveDurationMs ?? p.declaredDurationMs,
         WaitParams p  => p.durationMs,
         _             => null,
       };

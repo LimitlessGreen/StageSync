@@ -10,12 +10,11 @@ import '../../grpc/stage_sync_client.dart';
 import '../../grpc/generated/stagesync/v1/common.pb.dart';
 import '../../grpc/generated/stagesync/v1/node.pb.dart';
 import '../../grpc/generated/stagesync/v1/node.pbgrpc.dart';
+import '../../media/media_grpc_client.dart';
 import '../../media/media_sync.dart';
-import '../../media/server_media_client.dart';
+import '../../media/server_media_client.dart' show mediaCacheDir;
 import '../../providers/session_provider.dart';
 import 'abstract_audio_engine.dart';
-// ignore: unused_import
-import 'audio_engine.dart';
 import 'miniaudio_engine.dart';
 import 'media_server.dart';
 import 'sweep_generator.dart';
@@ -213,17 +212,11 @@ class AudioNodeService {
   /// Richtet den Medien-Spiegel ein und startet ihn im Hintergrund.
   Future<void> _startMediaSync() async {
     await _mediaSync?.stop();
-    final client = ServerMediaClient.fromConnection();
-    if (client == null) {
-      _logCmd('MEDIA-SYNC: Server-Host unbekannt → übersprungen');
-      return;
-    }
     final dir = _mediaServer.cachedMediaDir ?? await mediaCacheDir();
-    final sync = MediaSync(client, dir);
+    final sync = MediaSync(MediaGrpcClient(), dir);
     _mediaSync = sync;
-    // Nicht awaiten: Voll-Sync läuft im Hintergrund; Preloads nutzen Lazy-Fetch.
-    sync.start().then((_) => _logCmd('MEDIA-SYNC: Voll-Sync abgeschlossen'))
-        .catchError((Object e) => _logCmd('MEDIA-SYNC FEHLER: $e'));
+    await sync.start();
+    _logCmd('MEDIA-SYNC: Manifest gestartet, Downloads laufen im Hintergrund');
   }
 
   /// Wechselt das Ausgabegerät via [AudioEngine.switchDevice()].
@@ -443,17 +436,45 @@ class AudioNodeService {
   }
 
   Future<void> _handlePreload(AudioPreloadCommand cmd) async {
-    final path = await _resolveMediaPath(cmd.filePath);
+    String? path;
+
+    if (cmd.filePath.isNotEmpty) {
+      // Legacy: server sent einen expliziten Dateinamen.
+      _logCmd('PRELOAD: filePath="${cmd.filePath}" cueId=${cmd.cueId}');
+      path = await _resolveMediaPath(cmd.filePath);
+
+    } else if (cmd.assetId.isNotEmpty) {
+      // Modern: SHA-256 asset_id — erst Manifest-Lookup (filename → local path),
+      // bei Miss direkt via assetId streamen (verhindert den SHA-256-als-Name-Bug).
+      final filename = _mediaSync?.filenameForSha256(cmd.assetId);
+      if (filename != null) {
+        _logCmd('PRELOAD: assetId=${cmd.assetId.substring(0, 8)}… → "$filename"');
+        path = await _resolveMediaPath(filename);
+      } else {
+        _logCmd('PRELOAD: assetId=${cmd.assetId.substring(0, 8)}… nicht im Manifest → Stream per assetId');
+        path = await _resolveMediaPathByAssetId(cmd.assetId);
+      }
+    }
+
     if (path == null) {
-      _logCmd('PRELOAD FEHLER: Datei nicht beschaffbar: "${cmd.filePath}"');
+      _logCmd('PRELOAD FEHLER: Datei nicht beschaffbar '
+          '(cueId=${cmd.cueId}, assetId=${cmd.assetId.isNotEmpty ? "${cmd.assetId.substring(0, 8)}…" : "-"})');
       return;
     }
     try {
       await _engine.preload(cmd.cueId, path);
-      _logCmd('PRELOAD OK: ${cmd.cueId}');
+      _logCmd('PRELOAD OK: ${cmd.cueId} → $path');
     } catch (e) {
-      _logCmd('PRELOAD FEHLER: $e');
+      _logCmd('PRELOAD FEHLER engine: $e');
     }
+  }
+
+  /// Löst eine Datei per SHA-256 asset_id auf.
+  /// Nutzt `assetId:` in streamFile — korrekte Server-Auflösung via SHA-256-Lookup.
+  Future<String?> _resolveMediaPathByAssetId(String assetId) async {
+    final sync = _mediaSync;
+    if (sync != null) return sync.ensureLocalByAssetId(assetId);
+    return null;
   }
 
   /// Liefert den lokalen Pfad einer Mediendatei und lädt sie bei Bedarf vom
@@ -621,9 +642,12 @@ class AudioNodeService {
 
   /// Startet einen lokalen Preview-Play, vollständig isoliert vom Show-Playback.
   ///
-  /// - Kein Server-Roundtrip, kein Command an ShowControlService.
+  /// Option 1: Bytes werden per gRPC gestreamt und in eine Temp-Datei geschrieben
+  /// (kein permanenter Disk-Cache, system temp dir). So kein Manifest-Lookup nötig
+  /// und kein falscher SHA-256-als-Name-Bug.
+  ///
+  /// - Kein ShowControlService-Roundtrip.
   /// - Eigener Handle-Prefix 'audition_' → kein Konflikt mit Show-Cues.
-  /// - Asynchron; Stoppen via [auditionStop].
   Future<void> auditionPlay({
     required String assetId,
     required double volumeDb,
@@ -632,26 +656,30 @@ class AudioNodeService {
     if (!_engine.isInitialized) {
       await _engine.init(device: _status.selectedDevice);
     }
-    final path = await _resolveMediaPath(assetId);
-    if (path == null) {
-      _logCmd('AUDITION FEHLER: Asset nicht lokal verfügbar: $assetId');
-      return;
-    }
     final handleId = 'audition_$assetId';
-    // Stoppe ggf. laufende Audition desselben Assets
     if (_engine.activeCueIds.contains(handleId)) {
       await _engine.stop(handleId, fadeOutMs: 50);
     }
     try {
-      await _engine.preload(handleId, path);
+      // Bytes per gRPC holen (aus RAM-Cache des Servers → schnell)
+      final bytes = await MediaGrpcClient().streamFile(assetId: assetId);
+
+      // Richtige Extension ermitteln (miniaudio braucht keine Extension,
+      // aber einige Plattformen mögen sie; Extension aus Manifest falls bekannt)
+      final knownName = _mediaSync?.filenameForSha256(assetId);
+      final ext = knownName != null ? p.extension(knownName) : '';
+      final tmp = '${Directory.systemTemp.path}/audition_${assetId.substring(0, 8)}$ext';
+      await File(tmp).writeAsBytes(bytes, flush: true);
+
+      await _engine.preload(handleId, tmp);
       await _engine.playAt(
         cueId: handleId,
-        filePath: path,
+        filePath: tmp,
         startUnixMillis: DateTime.now().millisecondsSinceEpoch,
         volumeDb: volumeDb,
         startTimeMs: startMs,
       );
-      _logCmd('AUDITION START: $assetId');
+      _logCmd('AUDITION START: ${assetId.substring(0, 8)}… (${bytes.length} B, ext=$ext)');
     } catch (e) {
       _logCmd('AUDITION FEHLER: $e');
     }

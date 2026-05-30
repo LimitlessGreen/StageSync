@@ -133,10 +133,12 @@ PlayheadState _buildPlayhead(ShowControlState state, CueList? cueList) {
     nextCueId = cueList.cueAfter(activeCueId)?.id;
   }
 
-  // Phase
+  // Phase — Priorität: idle > done > paused > running
   final CueListPhase phase;
   if (state.activeCue == null) {
     phase = CueListPhase.idle;
+  } else if (state.cueDoneServerMs != null && state.runningCueIds.isEmpty) {
+    phase = CueListPhase.done; // Cue natürlich beendet, Timer eingefroren
   } else if (state.isPaused) {
     phase = CueListPhase.paused;
   } else {
@@ -167,6 +169,7 @@ PlayheadState _buildPlayhead(ShowControlState state, CueList? cueList) {
     phase: phase,
     startedServerMs: state.activeCueStartedServerMs,
     pausedAtServerMs: state.pausedAtServerMs,
+    doneServerMs: state.cueDoneServerMs,
     perCue: perCue,
   );
 }

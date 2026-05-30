@@ -5,7 +5,6 @@ import 'dart:io';
 import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
 
-// ignore: unused_import
 import '../../session/clock_sync.dart';
 import 'abstract_audio_engine.dart';
 import 'audio_device.dart';
@@ -218,9 +217,15 @@ class MiniaudioEngine implements AbstractAudioEngine {
       await preload(cueId, filePath);
     }
 
-    // Server-timestamp: convert to absolute Unix ms if given as relative.
-    // If startUnixMillis == 0, we pass 0 to the C layer (= play immediately).
+    // Server-Zeitstempel auf lokale Uhr umrechnen (ClockSync-Offset).
+    // Das Native-Layer vergleicht gegen time.Now() auf dem lokalen Gerät —
+    // ohne Konvertierung würde eine Uhrabweichung zwischen Server und Node
+    // zu zu frühem/spätem Start führen.
+    // startUnixMillis == 0 bedeutet "sofort spielen" → keine Konvertierung.
     int scheduledMs = startUnixMillis;
+    if (scheduledMs > 0 && ClockSync.instance.isSynced) {
+      scheduledMs = ClockSync.instance.toLocalMillis(scheduledMs);
+    }
 
     final cuePtr = cueId.toNativeUtf8();
     try {

@@ -83,6 +83,15 @@ final class GroupParams extends CueParams {
     required this.childCueIds,
     this.sequential = true,
   });
+
+  GroupParams copyWith({
+    List<String>? childCueIds,
+    bool? sequential,
+  }) =>
+      GroupParams(
+        childCueIds: childCueIds ?? this.childCueIds,
+        sequential: sequential ?? this.sequential,
+      );
 }
 
 enum MaOscCommand { unspecified, go, off, pause, gotoP }
@@ -132,6 +141,15 @@ final class GotoParams extends CueParams {
     required this.targetCueId,
     this.targetNumber = '',
   });
+
+  GotoParams copyWith({
+    String? targetCueId,
+    String? targetNumber,
+  }) =>
+      GotoParams(
+        targetCueId: targetCueId ?? this.targetCueId,
+        targetNumber: targetNumber ?? this.targetNumber,
+      );
 }
 
 @immutable

@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/asset.dart';
-import '../media/server_media_client.dart';
+import '../media/media_grpc_client.dart';
+import '../media/server_media_client.dart' show MediaFile;
 import 'show_control_domain_provider.dart';
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -105,46 +107,64 @@ final enrichedAssetsProvider = Provider<List<Asset>>((ref) {
 class MediaNotifier extends StateNotifier<MediaState> {
   MediaNotifier(Ref ref) : super(const MediaState());
 
-  ServerMediaClient? get _client => ServerMediaClient.fromConnection();
+  final _grpc = MediaGrpcClient();
+  StreamSubscription<ManifestSnapshot>? _manifestSub;
 
-  /// Loads (or reloads) the asset list from the server.
-  Future<void> refresh() async {
-    final client = _client;
-    if (client == null) {
-      state = state.copyWith(
-        error: 'Nicht verbunden — kein Server-Host bekannt.',
-        clearUploadError: true,
-      );
-      return;
-    }
+  /// Startet den WatchManifest-Stream und hält die Asset-Liste aktuell.
+  /// Wird automatisch neu verbunden bei Verbindungsabbruch.
+  void startWatching() {
+    _manifestSub?.cancel();
+    _manifestSub = _grpc.watchManifest().listen(
+      _onManifestEvent,
+      onError: (e) {
+        state = state.copyWith(error: 'Verbindungsfehler: $e');
+        // Reconnect nach 5 s
+        Future.delayed(const Duration(seconds: 5), () {
+          if (mounted) startWatching();
+        });
+      },
+    );
+  }
 
-    state = state.copyWith(isLoading: true, clearError: true);
-    try {
-      final files = await client.list();
-      final assets = files.map(_toAsset).toList()
+  void _onManifestEvent(ManifestSnapshot event) {
+    if (event.type == ManifestEventType.snapshot) {
+      final assets = event.assets.map(_toAsset).toList()
         ..sort((a, b) => a.name.compareTo(b.name));
-      state = state.copyWith(assets: assets, isLoading: false);
-    } catch (e) {
+      state = state.copyWith(assets: assets, isLoading: false, clearError: true);
+    } else if (event.type == ManifestEventType.added ||
+               event.type == ManifestEventType.updated) {
+      for (final f in event.assets) {
+        final updated = _toAsset(f);
+        final existing = state.assets.indexWhere((a) => a.name == f.name);
+        final next = List<Asset>.from(state.assets);
+        if (existing >= 0) {
+          next[existing] = updated;
+        } else {
+          next.add(updated);
+          next.sort((a, b) => a.name.compareTo(b.name));
+        }
+        state = state.copyWith(assets: next);
+      }
+    } else if (event.type == ManifestEventType.removed) {
       state = state.copyWith(
-        isLoading: false,
-        error: 'Laden fehlgeschlagen: $e',
+        assets: state.assets.where((a) => a.name != event.removedName).toList(),
       );
     }
   }
 
-  /// Uploads [bytes] as [filename] to the server and refreshes the list.
-  Future<void> upload(String filename, List<int> bytes) async {
-    final client = _client;
-    if (client == null) {
-      state = state.copyWith(uploadError: 'Nicht verbunden.');
-      return;
-    }
+  /// Manueller Refresh: WatchManifest neu starten → frischen Snapshot holen.
+  Future<void> refresh() async {
+    state = state.copyWith(isLoading: true, clearError: true);
+    startWatching();
+  }
 
+  /// Lädt [bytes] als [filename] per gRPC-Streaming auf den Server.
+  Future<void> upload(String filename, List<int> bytes) async {
     state = state.copyWith(isUploading: true, clearUploadError: true);
     try {
-      await client.upload(filename, bytes);
+      await _grpc.uploadFile(filename, Uint8List.fromList(bytes));
       state = state.copyWith(isUploading: false);
-      await refresh();
+      // Kein manuelles refresh nötig — WatchManifest liefert ASSET_ADDED-Event
     } catch (e) {
       state = state.copyWith(
         isUploading: false,
@@ -155,19 +175,25 @@ class MediaNotifier extends StateNotifier<MediaState> {
 
   void clearError() => state = state.copyWith(clearError: true, clearUploadError: true);
 
-  /// Deletes the asset with [name] from the server and refreshes the list.
+  /// Löscht ein Asset per gRPC.
   Future<void> delete(String name) async {
-    final client = _client;
-    if (client == null) return;
     try {
-      await client.delete(name);
-      // Optimistic removal
+      // Optimistisch aus der Liste entfernen
       state = state.copyWith(
         assets: state.assets.where((a) => a.name != name).toList(),
       );
+      await _grpc.deleteFile(name);
+      // WatchManifest liefert ASSET_REMOVED-Event zur Bestätigung
     } catch (e) {
       state = state.copyWith(error: 'Löschen fehlgeschlagen: $e');
+      refresh(); // Zustand reparieren
     }
+  }
+
+  @override
+  void dispose() {
+    _manifestSub?.cancel();
+    super.dispose();
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────

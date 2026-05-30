@@ -193,6 +193,8 @@ class SessionNotifier extends StateNotifier<SessionState> {
         needsNodeStart: true,
         health: ConnectionHealth.connected,
       );
+      StageSyncClient.instance.sessionId = session.sessionId;
+      StageSyncClient.instance.token = activeToken;
 
       _startHeartbeat();
       await _watchEvents();
@@ -270,6 +272,8 @@ class SessionNotifier extends StateNotifier<SessionState> {
         isLoading: false,
         health: ConnectionHealth.connected,
       );
+      StageSyncClient.instance.sessionId = result.session.sessionId;
+      StageSyncClient.instance.token = result.token;
 
       await _saveCredentials(
         host: host,
@@ -329,6 +333,8 @@ class SessionNotifier extends StateNotifier<SessionState> {
         isLoading: false,
         health: ConnectionHealth.connected,
       );
+      StageSyncClient.instance.sessionId = result.session.sessionId;
+      StageSyncClient.instance.token = result.token;
 
       await _saveCredentials(
         host: host,

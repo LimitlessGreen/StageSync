@@ -1,6 +1,13 @@
 import 'package:meta/meta.dart';
 
-enum CueListPhase { idle, cueing, running, paused, panic }
+enum CueListPhase {
+  idle,    // kein aktiver Eintrag, Timer = 0:00
+  cueing,  // GO-Befehl gesendet, noch kein CUE_STARTED
+  running, // Cue läuft, Timer zählt hoch
+  paused,  // Cue pausiert, Timer eingefroren (gelb)
+  done,    // Cue natürlich beendet, Timer eingefroren bei Enddauer (gedimmt)
+  panic,
+}
 
 enum CueLifecycle { armed, loading, running, paused, done, error }
 
@@ -103,6 +110,10 @@ class PlayheadState {
   /// Server-authoritative pause time in Unix-ms (freezes elapsed display).
   final int? pausedAtServerMs;
 
+  /// Server-Zeit (Unix-ms) zu der die Cue natürlich endete (CUE_DONE).
+  /// Gesetzt → phase = done, Timer eingefroren bei (doneServerMs - startedServerMs).
+  final int? doneServerMs;
+
   /// Per-cue runtime state map. Key = cueId.
   final Map<String, CueRunState> perCue;
 
@@ -114,6 +125,7 @@ class PlayheadState {
     this.phase = CueListPhase.idle,
     this.startedServerMs,
     this.pausedAtServerMs,
+    this.doneServerMs,
     this.perCue = const {},
   });
 
@@ -121,7 +133,9 @@ class PlayheadState {
 
   bool get isRunning => phase == CueListPhase.running;
   bool get isPaused  => phase == CueListPhase.paused;
+  bool get isDone    => phase == CueListPhase.done;
   bool get isIdle    => phase == CueListPhase.idle;
+  bool get isActive  => isRunning || isPaused || isDone;
 
   CueRunState? runStateFor(String cueId) => perCue[cueId];
 
@@ -133,17 +147,18 @@ class PlayheadState {
     CueListPhase? phase,
     int? startedServerMs,
     int? pausedAtServerMs,
+    int? doneServerMs,
     Map<String, CueRunState>? perCue,
   }) =>
       PlayheadState(
         cueListId: cueListId ?? this.cueListId,
-        // Nullable fields: pass sentinel `Object()` trick avoided via named params
         activeCueId: activeCueId,
         runningCueIds: runningCueIds ?? this.runningCueIds,
         nextCueId: nextCueId,
         phase: phase ?? this.phase,
         startedServerMs: startedServerMs,
         pausedAtServerMs: pausedAtServerMs,
+        doneServerMs: doneServerMs,
         perCue: perCue ?? this.perCue,
       );
 }

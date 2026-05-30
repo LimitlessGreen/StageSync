@@ -3,6 +3,7 @@ import 'package:grpc/grpc.dart';
 import 'generated/stagesync/v1/session.pbgrpc.dart';
 import 'generated/stagesync/v1/showcontrol.pbgrpc.dart';
 import 'generated/stagesync/v1/node.pbgrpc.dart';
+import 'generated/stagesync/v1/media.pbgrpc.dart';
 
 /// Verbindungszustand des Clients.
 enum StageSyncConnectionState { disconnected, connecting, connected, error }
@@ -20,6 +21,11 @@ class StageSyncClient {
   late SessionServiceClient session;
   late ShowControlServiceClient showControl;
   late NodeServiceClient node;
+  late MediaServiceClient media;
+
+  // Session-Kontext für MediaService-Aufrufe (werden nach dem Join gesetzt).
+  String? sessionId;
+  String? token;
 
   StageSyncConnectionState _state = StageSyncConnectionState.disconnected;
   StageSyncConnectionState get state => _state;
@@ -58,6 +64,7 @@ class StageSyncClient {
     session = SessionServiceClient(_channel!);
     showControl = ShowControlServiceClient(_channel!);
     node = NodeServiceClient(_channel!);
+    media = MediaServiceClient(_channel!);
 
     _state = StageSyncConnectionState.connected;
   }

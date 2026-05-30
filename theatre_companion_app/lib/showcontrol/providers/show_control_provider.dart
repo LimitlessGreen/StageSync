@@ -37,6 +37,9 @@ class ShowControlState {
   /// Server-Zeit (Unix-Millis), zu der pausiert wurde.
   final int? pausedAtServerMs;
 
+  /// Server-Zeit (Unix-Millis), zu der die Cue natürlich endete (CUE_DONE).
+  final int? cueDoneServerMs;
+
   /// Alle aktuell ausführenden Cue-IDs (bei Group-Cues mehrere).
   final Set<String> runningCueIds;
 
@@ -55,6 +58,7 @@ class ShowControlState {
     this.error,
     this.activeCueStartedServerMs,
     this.pausedAtServerMs,
+    this.cueDoneServerMs,
     this.runningCueIds = const {},
     this.nodeStatuses = const [],
     this.patchConfig = PatchConfig.empty,
@@ -72,6 +76,7 @@ class ShowControlState {
     Object? nextCue = _unset,
     Object? activeCueStartedServerMs = _unset,
     Object? pausedAtServerMs = _unset,
+    Object? cueDoneServerMs = _unset,
   }) =>
       ShowControlState(
         cueList: cueList ?? this.cueList,
@@ -89,6 +94,9 @@ class ShowControlState {
         pausedAtServerMs: identical(pausedAtServerMs, _unset)
             ? this.pausedAtServerMs
             : pausedAtServerMs as int?,
+        cueDoneServerMs: identical(cueDoneServerMs, _unset)
+            ? this.cueDoneServerMs
+            : cueDoneServerMs as int?,
       );
 }
 
@@ -144,9 +152,8 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
       _subscribeToDefinition();
       _subscribeToExecution();
       _subscribeToNodeHealth();
-      _subscribeToMediaSync();
-      // Media-Manifest beim Start laden (Assets für Inspector-Readiness).
-      _ref.read(mediaProvider.notifier).refresh();
+      // WatchManifest-gRPC-Stream öffnen: liefert Snapshot + Live-Updates.
+      _ref.read(mediaProvider.notifier).startWatching();
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
     }
@@ -387,6 +394,7 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
           activeCue: event.hasAffectedCue() ? event.affectedCue : state.activeCue,
           activeCueStartedServerMs: startMs,
           pausedAtServerMs: null,
+          cueDoneServerMs: null, // neuer GO/Resume → done-Zustand löschen
           runningCueIds: event.runningCueIds.isNotEmpty
               ? event.runningCueIds.toSet()
               : (event.hasAffectedCue() ? {event.affectedCue.cueId} : state.runningCueIds),
@@ -406,14 +414,23 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
           isPaused: false,
           activeCueStartedServerMs: null,
           pausedAtServerMs: null,
+          cueDoneServerMs: null,
           runningCueIds: const {},
         );
       case ShowExecutionEvent_ExecutionEventType.CUE_DONE:
       case ShowExecutionEvent_ExecutionEventType.CUE_ERROR:
         final updatedRunning = event.runningCueIds.isNotEmpty
             ? event.runningCueIds.toSet()
-            : state.runningCueIds;
-        state = state.copyWith(runningCueIds: updatedRunning);
+            : const <String>{};
+        if (updatedRunning.isEmpty) {
+          // Keine Cues mehr aktiv → done-Zustand: Timer einfrieren, nicht weiter zählen
+          state = state.copyWith(
+            runningCueIds: const {},
+            cueDoneServerMs: _eventServerMs(event),
+          );
+        } else {
+          state = state.copyWith(runningCueIds: updatedRunning);
+        }
       default:
         break;
     }
@@ -493,19 +510,8 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
 
   // ── Stream 4: Media-Sync ────────────────────────────────────────────────────
 
-  void _subscribeToMediaSync() {
-    final req = WatchMediaSyncRequest()
-      ..sessionId = _sessionId
-      ..nodeId = _session.myNode!.nodeId
-      ..token = _token;
-
-    // Jeder MEDIA_SNAPSHOT triggert einen Media-Manifest-Refresh.
-    StageSyncClient.instance.showControl
-        .watchMediaSync(req)
-        .listen((_) => _ref.read(mediaProvider.notifier).refresh(),
-            onError: (_) => _scheduleReconnect(),
-            onDone: () => _scheduleReconnect());
-  }
+  // _subscribeToMediaSync entfernt: WatchManifest (MediaService) übernimmt
+  // Snapshot + inkrementelle Events direkt im MediaNotifier.
 
   int _eventServerMs(ShowExecutionEvent event) {
     if (event.hasOccurredAt()) {

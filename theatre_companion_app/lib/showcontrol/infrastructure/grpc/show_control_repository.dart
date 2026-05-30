@@ -201,14 +201,14 @@ class ShowControlRepository {
 
     if (domain.logicalOutputId != null) {
       proto.logicalOutputId = domain.logicalOutputId!;
-      proto.targetNodeId    = domain.logicalOutputId!; // backward compat
     }
 
     switch (domain.params) {
       case AudioParams ap:
+        proto.cueType = pb_common.CueType.CUE_TYPE_AUDIO;
         proto.audio = pb.AudioCueParams()
           ..assetId = ap.assetId
-          ..filePath = ap.assetId   // backward compat: server liest beide Felder
+          ..filePath = ''           // filePath nicht mit SHA-256 befüllen (würde Preload-Lookup brechen)
           ..volumeDb = ap.volumeDb
           ..fadeInMs = ap.fadeInMs
           ..fadeOutMs = ap.fadeOutMs
@@ -217,8 +217,10 @@ class ShowControlRepository {
           ..endTimeMs = ap.endTimeMs
           ..declaredDurationMs = ap.declaredDurationMs ?? 0;
       case WaitParams wp:
+        proto.cueType = pb_common.CueType.CUE_TYPE_WAIT;
         proto.wait = pb.WaitCueParams()..durationMs = wp.durationMs;
       case MaOscParams mp:
+        proto.cueType = pb_common.CueType.CUE_TYPE_MA_OSC;
         proto.maOsc = pb.MaOscCueParams()
           ..oscAddress = mp.oscAddress
           ..oscArgument = mp.oscArgument
@@ -226,6 +228,7 @@ class ShowControlRepository {
           ..executorNo = mp.executorNo
           ..gotoCue = mp.gotoCue.toInt();
       case GotoParams gp:
+        proto.cueType = pb_common.CueType.CUE_TYPE_GOTO;
         proto.gotoP = pb.GotoCueParams()
           ..targetCueId = gp.targetCueId
           ..targetNumber = gp.targetNumber;
