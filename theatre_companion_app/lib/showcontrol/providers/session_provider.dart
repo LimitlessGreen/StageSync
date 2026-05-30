@@ -9,6 +9,7 @@ import '../grpc/generated/stagesync/v1/session.pb.dart';
 import '../grpc/generated/stagesync/v1/common.pb.dart';
 import '../session/session_service.dart';
 import '../session/clock_sync.dart';
+import '../platform/foreground_service.dart';
 
 const _kCredKey = 'stagesync_session_creds';
 
@@ -195,6 +196,15 @@ class SessionNotifier extends StateNotifier<SessionState> {
 
       _startHeartbeat();
       await _watchEvents();
+
+      final taskLabels = myNode.tasks
+          .map((t) => _taskLabel(t))
+          .where((l) => l.isNotEmpty)
+          .join(', ');
+      ForegroundService.start(
+        sessionName: session.name,
+        role: taskLabels,
+      );
     } catch (_) {
       await _clearCredentials();
       state = const SessionState();
@@ -274,6 +284,15 @@ class SessionNotifier extends StateNotifier<SessionState> {
 
       _startHeartbeat();
       await _watchEvents();
+
+      final taskLabels = result.assignedNode.tasks
+          .map((t) => _taskLabel(t))
+          .where((l) => l.isNotEmpty)
+          .join(', ');
+      ForegroundService.start(
+        sessionName: result.session.name,
+        role: taskLabels,
+      );
     } on SessionException catch (e) {
       state = state.copyWith(isLoading: false, error: e.message);
     }
@@ -324,14 +343,35 @@ class SessionNotifier extends StateNotifier<SessionState> {
 
       _startHeartbeat();
       await _watchEvents();
+
+      // Foreground Service starten damit Android die App nicht killt
+      final taskLabels = result.assignedNode.tasks
+          .map((t) => _taskLabel(t))
+          .where((l) => l.isNotEmpty)
+          .join(', ');
+      ForegroundService.start(
+        sessionName: result.session.name,
+        role: taskLabels,
+      );
     } on SessionException catch (e) {
       state = state.copyWith(isLoading: false, error: e.message);
     }
   }
 
+  static String _taskLabel(NodeTask t) => switch (t) {
+    NodeTask.NODE_TASK_MASTER       => 'Master',
+    NodeTask.NODE_TASK_AUDIO_OUTPUT => 'Audio',
+    NodeTask.NODE_TASK_EDITOR       => 'Editor',
+    NodeTask.NODE_TASK_MA_OSC       => 'MA OSC',
+    NodeTask.NODE_TASK_VIEWER       => 'Viewer',
+    _                               => '',
+  };
+
   Future<void> leaveSession() async {
     final s = state;
     if (!s.isInSession) return;
+
+    ForegroundService.stop();
 
     state = const SessionState();
     _heartbeatTimer?.cancel();

@@ -103,6 +103,12 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Foreground Service: hält gRPC + Audio im Hintergrund aktiv -->
+        <service
+            android:name=".StageSyncForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback|dataSync|connectedDevice" />
+
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
