@@ -1476,7 +1476,10 @@ class NodeConfigCommand extends $pb.GeneratedMessage {
     ..aI(1, _omitFieldNames ? '' : 'audioDeviceIndex')
     ..aOS(2, _omitFieldNames ? '' : 'audioDeviceName')
     ..aOS(3, _omitFieldNames ? '' : 'networkInterfaceAddress')
-    ..pc<$2.NodeTask>(4, _omitFieldNames ? '' : 'tasks', $pb.PbFieldType.KE, valueOf: $2.NodeTask.valueOf, enumValues: $2.NodeTask.values, defaultEnumValue: $2.NodeTask.NODE_TASK_UNSPECIFIED)
+    ..pc<$2.NodeTask>(4, _omitFieldNames ? '' : 'tasks', $pb.PbFieldType.KE,
+        valueOf: $2.NodeTask.valueOf,
+        enumValues: $2.NodeTask.values,
+        defaultEnumValue: $2.NodeTask.NODE_TASK_UNSPECIFIED)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1529,8 +1532,10 @@ class NodeConfigCommand extends $pb.GeneratedMessage {
   void clearNetworkInterfaceAddress() => $_clearField(3);
 
   /// Tasks (Rollen) des Nodes neu setzen. Leer = keine Änderung.
+  /// Master sendet dies; Server aktualisiert NodeInfo in der Session-Registry
+  /// und broadcastet ein TYPE_CAPS_UPDATED NodeEvent.
   @$pb.TagNumber(4)
-  $core.List<$2.NodeTask> get tasks => $_getList(3);
+  $pb.PbList<$2.NodeTask> get tasks => $_getList(3);
 }
 
 /// SendNodeCommandRequest: Master/Client sendet Command an einen Node

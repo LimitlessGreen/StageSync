@@ -147,6 +147,13 @@ const AudioCueParams$json = {
     {'1': 'end_time_ms', '3': 7, '4': 1, '5': 1, '10': 'endTimeMs'},
     {'1': 'output_device', '3': 8, '4': 1, '5': 9, '10': 'outputDevice'},
     {'1': 'asset_id', '3': 9, '4': 1, '5': 9, '10': 'assetId'},
+    {
+      '1': 'declared_duration_ms',
+      '3': 10,
+      '4': 1,
+      '5': 1,
+      '10': 'declaredDurationMs'
+    },
   ],
 };
 
@@ -157,7 +164,8 @@ final $typed_data.Uint8List audioCueParamsDescriptor = $convert.base64Decode(
     'ZV9vdXRfbXMYBCABKAFSCWZhZGVPdXRNcxISCgRsb29wGAUgASgIUgRsb29wEiIKDXN0YXJ0X3'
     'RpbWVfbXMYBiABKAFSC3N0YXJ0VGltZU1zEh4KC2VuZF90aW1lX21zGAcgASgBUgllbmRUaW1l'
     'TXMSIwoNb3V0cHV0X2RldmljZRgIIAEoCVIMb3V0cHV0RGV2aWNlEhkKCGFzc2V0X2lkGAkgAS'
-    'gJUgdhc3NldElk');
+    'gJUgdhc3NldElkEjAKFGRlY2xhcmVkX2R1cmF0aW9uX21zGAogASgBUhJkZWNsYXJlZER1cmF0'
+    'aW9uTXM=');
 
 @$core.Deprecated('Use maOscCueParamsDescriptor instead')
 const MaOscCueParams$json = {

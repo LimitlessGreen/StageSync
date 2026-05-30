@@ -488,6 +488,14 @@ const NodeConfigCommand$json = {
       '5': 9,
       '10': 'networkInterfaceAddress'
     },
+    {
+      '1': 'tasks',
+      '3': 4,
+      '4': 3,
+      '5': 14,
+      '6': '.stagesync.v1.NodeTask',
+      '10': 'tasks'
+    },
   ],
 };
 
@@ -496,7 +504,7 @@ final $typed_data.Uint8List nodeConfigCommandDescriptor = $convert.base64Decode(
     'ChFOb2RlQ29uZmlnQ29tbWFuZBIsChJhdWRpb19kZXZpY2VfaW5kZXgYASABKAVSEGF1ZGlvRG'
     'V2aWNlSW5kZXgSKgoRYXVkaW9fZGV2aWNlX25hbWUYAiABKAlSD2F1ZGlvRGV2aWNlTmFtZRI6'
     'ChluZXR3b3JrX2ludGVyZmFjZV9hZGRyZXNzGAMgASgJUhduZXR3b3JrSW50ZXJmYWNlQWRkcm'
-    'Vzcw==');
+    'VzcxIsCgV0YXNrcxgEIAMoDjIWLnN0YWdlc3luYy52MS5Ob2RlVGFza1IFdGFza3M=');
 
 @$core.Deprecated('Use sendNodeCommandRequestDescriptor instead')
 const SendNodeCommandRequest$json = {

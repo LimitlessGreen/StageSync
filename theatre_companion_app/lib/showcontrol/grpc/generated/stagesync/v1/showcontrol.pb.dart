@@ -355,7 +355,8 @@ class AudioCueParams extends $pb.GeneratedMessage {
     if (endTimeMs != null) result.endTimeMs = endTimeMs;
     if (outputDevice != null) result.outputDevice = outputDevice;
     if (assetId != null) result.assetId = assetId;
-    if (declaredDurationMs != null) result.declaredDurationMs = declaredDurationMs;
+    if (declaredDurationMs != null)
+      result.declaredDurationMs = declaredDurationMs;
     return result;
   }
 
