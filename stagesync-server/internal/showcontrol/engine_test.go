@@ -196,3 +196,149 @@ func TestEngine_GroupSequential_SkipsUnknownChildren(t *testing.T) {
 		t.Errorf("unexpected error for unknown child: %v", err)
 	}
 }
+
+// ── lookAheadAssetIDs ─────────────────────────────────────────────────────────
+
+func audioCue(id, assetID string) *pb.Cue {
+	return &pb.Cue{
+		CueId:   id,
+		Number:  id,
+		Label:   id,
+		CueType: pb.CueType_CUE_TYPE_AUDIO,
+		Params:  &pb.Cue_Audio{Audio: &pb.AudioCueParams{AssetId: assetID}},
+	}
+}
+
+func TestEngine_LookAheadAssetIDs_Basic(t *testing.T) {
+	store := makeStore(
+		audioCue("c1", "sha1"),
+		audioCue("c2", "sha2"),
+		audioCue("c3", "sha3"),
+		audioCue("c4", "sha4"),
+	)
+	engine := NewEngine("sess", "main", store, nil)
+	list, _ := store.GetCueList("main")
+
+	ids := engine.lookAheadAssetIDs(list, "c1", 2)
+	if len(ids) != 2 {
+		t.Fatalf("expected 2 ids, got %d: %v", len(ids), ids)
+	}
+	if ids[0] != "sha2" || ids[1] != "sha3" {
+		t.Errorf("unexpected ids: %v", ids)
+	}
+}
+
+func TestEngine_LookAheadAssetIDs_SkipsNonAudio(t *testing.T) {
+	store := makeStore(
+		audioCue("c1", "sha1"),
+		waitCue("w1", "1.5", 100),
+		audioCue("c2", "sha2"),
+	)
+	engine := NewEngine("sess", "main", store, nil)
+	list, _ := store.GetCueList("main")
+
+	ids := engine.lookAheadAssetIDs(list, "c1", 5)
+	if len(ids) != 1 || ids[0] != "sha2" {
+		t.Errorf("expected [sha2], got %v", ids)
+	}
+}
+
+func TestEngine_LookAheadAssetIDs_NilList(t *testing.T) {
+	engine := NewEngine("sess", "main", NewStore(), nil)
+	ids := engine.lookAheadAssetIDs(nil, "", 5)
+	if len(ids) != 0 {
+		t.Errorf("expected empty slice for nil list, got %v", ids)
+	}
+}
+
+func TestEngine_LookAheadAssetIDs_GroupExpanded(t *testing.T) {
+	store := makeStore(
+		audioCue("c1", "sha1"),
+		groupCue("g1", false, "c2", "c3"),
+		audioCue("c2", "sha2"),
+		audioCue("c3", "sha3"),
+	)
+	engine := NewEngine("sess", "main", store, nil)
+	list, _ := store.GetCueList("main")
+
+	ids := engine.lookAheadAssetIDs(list, "c1", 5)
+	if len(ids) != 2 {
+		t.Fatalf("expected 2 ids from group, got %d: %v", len(ids), ids)
+	}
+	if ids[0] != "sha2" || ids[1] != "sha3" {
+		t.Errorf("unexpected ids: %v", ids)
+	}
+}
+
+func TestEngine_LookAheadAssetIDs_RespectsLimit(t *testing.T) {
+	store := makeStore(
+		audioCue("c1", "sha1"),
+		audioCue("c2", "sha2"),
+		audioCue("c3", "sha3"),
+		audioCue("c4", "sha4"),
+		audioCue("c5", "sha5"),
+		audioCue("c6", "sha6"),
+	)
+	engine := NewEngine("sess", "main", store, nil)
+	list, _ := store.GetCueList("main")
+
+	ids := engine.lookAheadAssetIDs(list, "c1", 3)
+	if len(ids) != 3 {
+		t.Fatalf("expected exactly 3 ids, got %d: %v", len(ids), ids)
+	}
+}
+
+// ── AssetWarmer Integration ───────────────────────────────────────────────────
+
+type recordingWarmer struct {
+	locked   bool
+	unlocked bool
+	warmed   []string
+}
+
+func (w *recordingWarmer) WarmAssets(_ context.Context, ids []string) { w.warmed = append(w.warmed, ids...) }
+func (w *recordingWarmer) LockForShow()                               { w.locked = true }
+func (w *recordingWarmer) UnlockShow()                                { w.unlocked = true }
+
+func TestEngine_Go_WarmerCalled(t *testing.T) {
+	store := makeStore(
+		audioCue("c1", "sha1"),
+		audioCue("c2", "sha2"),
+		audioCue("c3", "sha3"),
+	)
+	disp   := &recordingDispatcher{}
+	warmer := &recordingWarmer{}
+	engine := NewEngine("sess", "main", store, disp)
+	engine.SetWarmer(warmer)
+
+	ctx := context.Background()
+	_, _, err := engine.Go(ctx, "c1")
+	if err != nil {
+		t.Fatalf("Go: %v", err)
+	}
+	// Kurz warten, damit die WarmAssets-Goroutine starten kann.
+	time.Sleep(10 * time.Millisecond)
+
+	if !warmer.locked {
+		t.Error("LockForShow sollte beim ersten GO aufgerufen werden")
+	}
+	if len(warmer.warmed) == 0 {
+		t.Error("WarmAssets sollte mit mindestens einer asset_id aufgerufen werden")
+	}
+}
+
+func TestEngine_Stop_UnlocksCalled(t *testing.T) {
+	store := makeStore(audioCue("c1", "sha1"))
+	disp   := &recordingDispatcher{}
+	warmer := &recordingWarmer{}
+	engine := NewEngine("sess", "main", store, disp)
+	engine.SetWarmer(warmer)
+
+	ctx := context.Background()
+	_, _, _ = engine.Go(ctx, "c1")
+	_ = engine.Stop(ctx)
+
+	if !warmer.unlocked {
+		t.Error("UnlockShow sollte bei Stop aufgerufen werden")
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -15,7 +16,6 @@ import (
 	"google.golang.org/grpc/reflection"
 
 	pb "stagesync-server/gen/go/stagesync/v1"
-	"path/filepath"
 
 	"stagesync-server/internal/audionode"
 	"stagesync-server/internal/discovery"
@@ -28,10 +28,11 @@ import (
 
 var (
 	port            = flag.Int("port", 50051, "gRPC server port")
-	mediaPort       = flag.Int("media-port", 50053, "HTTP media server port")
 	serviceName     = flag.String("name", "StageSync", "mDNS service name")
 	enableAudioNode = flag.Bool("audio-node", false,
-		"Start an internal audio node (stub). Useful for single-machine setups and rehearsals.")
+		"Start an internal audio node (malgo/miniaudio).")
+	ramCacheMB = flag.Int64("ram-cache-mb", 2048,
+		"RAM-Budget für den Audio-Cache in MiB (0 = 2 GiB Default).")
 )
 
 func main() {
@@ -46,21 +47,21 @@ func main() {
 
 	sessionMgr := session.NewManager(dataDir)
 	dispatcher := node.NewDispatcher()
-
 	persistence := showcontrol.NewPersistence(dataDir)
 
-	// ── Autoritativer Medien-Speicher (HTTP) ─────────────────────────────────
+	// ── Media: Store + RAM-Cache + gRPC-Handler ───────────────────────────────
 	mediaStore, err := media.NewStore(filepath.Join(dataDir, "media"))
 	if err != nil {
 		log.Fatalf("media store: %v", err)
 	}
-	mediaSrv := media.NewServer(mediaStore, fmt.Sprintf(":%d", *mediaPort))
-	go func() {
-		log.Printf("Media-HTTP-Server auf :%d", *mediaPort)
-		if err := mediaSrv.Start(ctx); err != nil {
-			log.Printf("media server error: %v", err)
-		}
-	}()
+
+	cacheMaxBytes := *ramCacheMB * 1024 * 1024
+	mediaCache := media.NewCache(cacheMaxBytes)
+	mediaGRPC := media.NewGRPCHandler(mediaStore, mediaCache)
+	storeWarmer := media.NewStoreWarmer(mediaCache, mediaStore)
+
+	used, max, _ := mediaCache.Stats()
+	log.Printf("Audio-Cache: %d MiB Budget (aktuell %d MiB genutzt)", max>>20, used>>20)
 
 	// ── gRPC Server ──────────────────────────────────────────────────────────
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
@@ -71,31 +72,35 @@ func main() {
 	grpcServer := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(loggingInterceptor),
 		grpc.ChainStreamInterceptor(loggingStreamInterceptor),
+		// Größere Message-Limits für Audio-Uploads (default 4 MiB)
+		grpc.MaxRecvMsgSize(512*1024*1024), // 512 MiB
+		grpc.MaxSendMsgSize(512*1024*1024),
 	)
 
-	// Handler registrieren
 	pb.RegisterSessionServiceServer(grpcServer, grpchandlers.NewSessionHandler(sessionMgr))
 	pb.RegisterNodeServiceServer(grpcServer, grpchandlers.NewNodeHandler(sessionMgr, dispatcher))
-	pb.RegisterShowControlServiceServer(grpcServer, grpchandlers.NewShowControlHandler(sessionMgr, dispatcher, persistence, mediaStore))
+	showControlHandler := grpchandlers.NewShowControlHandler(sessionMgr, dispatcher, persistence, mediaStore)
+	showControlHandler.SetWarmer(storeWarmer)
+	pb.RegisterShowControlServiceServer(grpcServer, showControlHandler)
+	pb.RegisterMediaServiceServer(grpcServer, mediaGRPC)
 
-	// gRPC Reflection (für grpcurl / Debugging)
 	reflection.Register(grpcServer)
 
-	// ── Optional internal audio node ─────────────────────────────────────
+	// ── Optional internal audio node ─────────────────────────────────────────
 	if *enableAudioNode {
 		log.Println("--audio-node: starting internal audio node (malgo/miniaudio)")
 		an := audionode.New(sessionMgr, dispatcher, mediaStore)
 		an.Start(ctx)
 	}
 
-	// ── mDNS Announcement ───────────────────────────────────────────────────
-	txtRecords := []string{"version=1", fmt.Sprintf("port=%d", *port), fmt.Sprintf("mediaPort=%d", *mediaPort)}
+	// ── mDNS Announcement ────────────────────────────────────────────────────
+	txtRecords := []string{"version=1", fmt.Sprintf("port=%d", *port)}
 	if _, err := discovery.Announce(ctx, *serviceName, *port, txtRecords); err != nil {
 		log.Printf("mDNS announce failed (non-fatal): %v", err)
 	}
 
-	// ── Start ────────────────────────────────────────────────────────────────
-	log.Printf("StageSync Server listening on :%d", *port)
+	// ── Start ─────────────────────────────────────────────────────────────────
+	log.Printf("StageSync Server listening on :%d (gRPC + MediaService)", *port)
 
 	go func() {
 		if err := grpcServer.Serve(lis); err != nil {
@@ -106,8 +111,6 @@ func main() {
 	<-ctx.Done()
 	log.Println("Shutting down...")
 
-	// GracefulStop wartet auf alle laufenden RPCs. Langlebige Streams (Watch*)
-	// blockieren das sonst unbegrenzt — daher nach 5 s hart stoppen.
 	stopDone := make(chan struct{})
 	go func() {
 		grpcServer.GracefulStop()

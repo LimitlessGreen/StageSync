@@ -17,6 +17,7 @@ import (
 	"context"
 	"log"
 	"math"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -38,15 +39,31 @@ type InternalAudioNode struct {
 
 	nodeID    string
 	sessionID string
+
+	currentDeviceIdx  int32
+	currentDeviceName string
+
+	// preloadsMu schützt die Map laufender asynchroner Preloads.
+	// cueID → done-Channel: geschlossen wenn Preload abgeschlossen (ok oder fehler).
+	preloadsMu sync.Mutex
+	preloads   map[string]chan struct{}
+
+	// generation zählt wie oft STOP ALL aufgerufen wurde.
+	// Preload-Goroutinen prüfen beim Start ob ihre Generation noch aktuell ist —
+	// veraltete Goroutinen (vor einem STOP ALL gestartet) überspringen die Dekodierung.
+	genMu      sync.Mutex
+	generation uint64
 }
 
 // New creates an InternalAudioNode. Call Start to activate it.
 // mediaStore may be nil during testing; Preload will then fail gracefully.
 func New(mgr *session.Manager, disp *node.Dispatcher, ms *media.Store) *InternalAudioNode {
 	return &InternalAudioNode{
-		sessionMgr: mgr,
-		dispatcher: disp,
-		mediaStore: ms,
+		sessionMgr:       mgr,
+		dispatcher:       disp,
+		mediaStore:       ms,
+		currentDeviceIdx: -1,
+		preloads:         make(map[string]chan struct{}),
 	}
 }
 
@@ -60,12 +77,20 @@ func (n *InternalAudioNode) Start(ctx context.Context) {
 	}
 	n.engine = eng
 
+	// Audio-Gerät sofort initialisieren (nicht lazy beim ersten Preload) —
+	// verhindert WASAPI-Init-Latenz beim ersten GO-Befehl.
+	if err := eng.EnsureStarted(); err != nil {
+		log.Printf("[audionode] Warnung: Audio-Gerät konnte nicht vorab geöffnet werden: %v", err)
+	}
+
 	// Log available devices for operator reference.
 	if devs, err := eng.EnumerateDevices(); err == nil {
-		log.Printf("[audionode] available output devices (%d):", len(devs))
+		log.Printf("[audionode] verfügbare Ausgabegeräte (%d):", len(devs))
 		for _, d := range devs {
 			log.Printf("[audionode]   [%d] %s", d.Index, d.Name)
 		}
+	} else {
+		log.Printf("[audionode] Gerätliste nicht abrufbar: %v", err)
 	}
 
 	go n.run(ctx)
@@ -169,33 +194,96 @@ func (n *InternalAudioNode) handlePreload(cmd *pb.AudioPreloadCommand) {
 		log.Printf("[audionode] PRELOAD skipped: no media store")
 		return
 	}
-	assetID := cmd.GetAssetId()
-	if assetID == "" {
-		assetID = cmd.GetFilePath()
-	}
-	if assetID == "" {
+	if cmd.GetAssetId() == "" && cmd.GetFilePath() == "" {
 		log.Printf("[audionode] PRELOAD: missing assetId/filePath")
 		return
 	}
 
-	// Resolve file path: first try assetID as name, then as SHA-256 key.
-	path := n.mediaStore.FilePath(assetID)
-	_, statErr := n.mediaStore.Stat(assetID)
-	if statErr != nil {
-		log.Printf("[audionode] PRELOAD: asset %q not found in store: %v", assetID, statErr)
-		return
+	var path string
+	assetID := cmd.GetAssetId()
+	if assetID != "" {
+		if p, err := n.mediaStore.FilePathBySHA256(assetID); err == nil {
+			path = p
+		}
+	}
+	if path == "" {
+		name := cmd.GetFilePath()
+		if name == "" {
+			name = assetID
+		}
+		if _, statErr := n.mediaStore.Stat(name); statErr != nil {
+			log.Printf("[audionode] PRELOAD: asset %q nicht im Store gefunden: %v", assetID, statErr)
+			return
+		}
+		path = n.mediaStore.FilePath(name)
 	}
 
 	cueID := cmd.GetCueId()
-	log.Printf("[audionode] PRELOAD cueId=%s asset=%s", cueID, assetID)
+	shortAsset := assetID
+	if len(shortAsset) > 12 {
+		shortAsset = shortAsset[:12] + "..."
+	}
+	log.Printf("[audionode] PRELOAD cueId=%s asset=%s path=%s", cueID, shortAsset, path)
 
-	if err := n.engine.Preload(cueID, path); err != nil {
-		log.Printf("[audionode] PRELOAD error cueId=%s: %v", cueID, err)
+	// Aktuelle Generation: wenn STOP ALL feuert, steigt n.generation.
+	// Veraltete Goroutinen (vor dem Stop gestartet) überspringen Dekodierung.
+	n.genMu.Lock()
+	myGen := n.generation
+	n.genMu.Unlock()
+
+	// Dekodierung asynchron: blockiert den Command-Channel nicht.
+	// PLAY wartet via waitPreload() auf Fertigstellung.
+	done := make(chan struct{})
+	n.preloadsMu.Lock()
+	n.preloads[cueID] = done
+	n.preloadsMu.Unlock()
+
+	go func() {
+		defer func() {
+			close(done)
+			n.preloadsMu.Lock()
+			delete(n.preloads, cueID)
+			n.preloadsMu.Unlock()
+		}()
+		n.genMu.Lock()
+		stale := n.generation != myGen
+		n.genMu.Unlock()
+		if stale {
+			log.Printf("[audionode] PRELOAD veraltet (STOP ALL seit Dispatch): %s", cueID)
+			return
+		}
+		if err := n.engine.PreloadByAsset(cueID, assetID, path); err != nil {
+			log.Printf("[audionode] PRELOAD FEHLER cueId=%s: %v", cueID, err)
+		} else {
+			log.Printf("[audionode] PRELOAD OK cueId=%s", cueID)
+		}
+	}()
+}
+
+// waitPreload wartet bis das Preload für cueID abgeschlossen ist.
+// Gibt sofort zurück wenn kein laufendes Preload bekannt ist.
+// Timeout: 30 s (gibt bei Dekodierungshänger nach).
+func (n *InternalAudioNode) waitPreload(cueID string) {
+	n.preloadsMu.Lock()
+	done, loading := n.preloads[cueID]
+	n.preloadsMu.Unlock()
+	if !loading {
+		return
+	}
+	log.Printf("[audionode] PLAY wartet auf Preload-Abschluss: %s", cueID)
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		log.Printf("[audionode] PLAY Timeout beim Warten auf Preload: %s", cueID)
 	}
 }
 
 func (n *InternalAudioNode) handlePlay(cmd *pb.AudioPlayCommand) {
 	cueID := cmd.GetCueId()
+
+	// PLAY wartet auf sein PRELOAD — wenn kein Preload läuft, sofort weiter.
+	n.waitPreload(cueID)
+
 	log.Printf("[audionode] PLAY cueId=%s startMs=%d vol=%.1fdB loop=%v",
 		cueID, cmd.GetStartUnixMillis(), cmd.GetVolumeDb(), cmd.GetLoop())
 
@@ -207,15 +295,28 @@ func (n *InternalAudioNode) handlePlay(cmd *pb.AudioPlayCommand) {
 		cmd.GetFadeOutMs(),
 		cmd.GetLoop(),
 	); err != nil {
-		log.Printf("[audionode] PLAY error cueId=%s: %v", cueID, err)
+		log.Printf("[audionode] PLAY FEHLER cueId=%s: %v", cueID, err)
+	} else {
+		log.Printf("[audionode] PLAY OK cueId=%s", cueID)
 	}
 }
 
 func (n *InternalAudioNode) handleStop(cmd *pb.AudioStopCommand) {
 	cueID := cmd.GetCueId()
 	log.Printf("[audionode] STOP cueId=%s fadeOut=%.0fms", cueID, cmd.GetFadeOutMs())
+
+	if cueID == "" {
+		// Leere CueId = alle Cues stoppen (Notfall-Stop vom Server).
+		// Generation erhöhen → laufende und wartende Preload-Goroutinen werden verworfen.
+		n.genMu.Lock()
+		n.generation++
+		log.Printf("[audionode] STOP ALL (gen=%d)", n.generation)
+		n.genMu.Unlock()
+		n.engine.StopAll()
+		return
+	}
 	if err := n.engine.Stop(cueID, cmd.GetFadeOutMs()); err != nil {
-		log.Printf("[audionode] STOP error cueId=%s: %v", cueID, err)
+		log.Printf("[audionode] STOP FEHLER cueId=%s: %v", cueID, err)
 	}
 }
 
@@ -237,6 +338,7 @@ func (n *InternalAudioNode) handleResume(cmd *pb.AudioResumeCommand) {
 
 // reportCapabilities enumerates local audio devices and publishes them via
 // NodeCapabilities so the Flutter health stream delivers the device list to the UI.
+// It also reports the currently selected device so Flutter can pre-select it.
 func (n *InternalAudioNode) reportCapabilities(sessID, nodeID string, info *pb.NodeInfo) {
 	caps := &pb.NodeCapabilities{}
 	if devs, err := n.engine.EnumerateDevices(); err == nil {
@@ -247,8 +349,18 @@ func (n *InternalAudioNode) reportCapabilities(sessID, nodeID string, info *pb.N
 				Name:  d.Name,
 			}
 		}
-		caps.Audio = &pb.AudioCapabilities{AvailableDevices: devices}
+		// selectedIdx is 0 for the system default (-1) so Flutter always gets a
+		// valid index; the name distinguishes "default" from an explicit selection.
+		selectedIdx := n.currentDeviceIdx
+		if selectedIdx < 0 {
+			selectedIdx = 0
+		}
+		caps.Audio = &pb.AudioCapabilities{
+			AvailableDevices: devices,
+			SelectedDevice:   selectedIdx,
+		}
 	}
+	caps.AuditionDevice = n.currentDeviceName
 	sess, err := n.sessionMgr.GetSession(sessID)
 	if err != nil {
 		return
@@ -334,7 +446,25 @@ func (n *InternalAudioNode) handleNodeConfig(cmd *pb.NodeConfigCommand) {
 
 	if err := n.engine.SetDevice(idx); err != nil {
 		log.Printf("[audionode] SetDevice(%d) failed: %v", idx, err)
-	} else {
-		log.Printf("[audionode] audio device changed to index=%d", idx)
+		return
 	}
+	log.Printf("[audionode] audio device changed to index=%d", idx)
+
+	// Track the newly active device so reportCapabilities can advertise it.
+	n.currentDeviceIdx = int32(idx)
+	if cmd.GetAudioDeviceName() != "" {
+		n.currentDeviceName = cmd.GetAudioDeviceName()
+	} else {
+		n.currentDeviceName = ""
+	}
+
+	// Push updated capabilities immediately so Flutter clients learn about
+	// the new active device without waiting for the next WatchNodes event.
+	n.reportCapabilities(n.sessionID, n.nodeID, &pb.NodeInfo{
+		NodeId:   n.nodeID,
+		Name:     internalNodeName,
+		NodeType: pb.NodeType_NODE_TYPE_AUDIO,
+		Tasks:    []pb.NodeTask{pb.NodeTask_NODE_TASK_AUDIO_OUTPUT},
+		Online:   true,
+	})
 }

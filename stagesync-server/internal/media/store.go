@@ -261,6 +261,22 @@ func (s *Store) Save(name string, r io.Reader) (FileInfo, error) {
 	return s.Stat(safe)
 }
 
+// FilePathBySHA256 returns the absolute path of the file whose SHA-256 hash
+// matches the given hex string. Returns ErrNotFound if no match exists.
+// List() is used internally and handles caching.
+func (s *Store) FilePathBySHA256(sha256hex string) (string, error) {
+	files, err := s.List()
+	if err != nil {
+		return "", err
+	}
+	for _, f := range files {
+		if f.SHA256 == sha256hex {
+			return s.path(f.Name), nil
+		}
+	}
+	return "", ErrNotFound
+}
+
 // Open öffnet eine Datei zum Lesen.
 func (s *Store) Open(name string) (*os.File, error) {
 	f, err := os.Open(s.path(name))
@@ -288,6 +304,12 @@ func (s *Store) Delete(name string) error {
 	}
 	s.notifyChange()
 	return nil
+}
+
+// ReadAll liest den gesamten Inhalt einer Datei in den Speicher.
+// path muss ein absoluter Pfad sein (z.B. aus FilePath oder FilePathBySHA256).
+func (s *Store) ReadAll(path string) ([]byte, error) {
+	return os.ReadFile(path)
 }
 
 // touch (Test-Hilfe / Reserve): aktualisiert mtime.

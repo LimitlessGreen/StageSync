@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"log"
 	"sync"
 	"time"
 
@@ -64,7 +65,8 @@ type ShowControlHandler struct {
 	sessionMgr  *session.Manager
 	dispatcher  *node.Dispatcher
 	persistence *showcontrol.Persistence
-	mediaStore  *media.Store // für WatchMediaSync (nil = kein Media-Store)
+	mediaStore  *media.Store          // für WatchMediaSync (nil = kein Media-Store)
+	warmer      showcontrol.AssetWarmer // RAM-Cache-Preloader (nil = deaktiviert)
 	dedup       *commandDedup
 
 	mu      sync.RWMutex
@@ -84,6 +86,18 @@ func NewShowControlHandler(mgr *session.Manager, disp *node.Dispatcher, persist 
 	}
 }
 
+// SetWarmer setzt den Asset-Warmer für alle Engines dieser Handler-Instanz.
+// Muss vor der ersten Session aufgerufen werden; bestehende Engines werden
+// ebenfalls aktualisiert.
+func (h *ShowControlHandler) SetWarmer(w showcontrol.AssetWarmer) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.warmer = w
+	for _, e := range h.engines {
+		e.SetWarmer(w)
+	}
+}
+
 func (h *ShowControlHandler) getOrCreateStore(sessionID string) *showcontrol.Store {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -93,9 +107,40 @@ func (h *ShowControlHandler) getOrCreateStore(sessionID string) *showcontrol.Sto
 	store := showcontrol.NewStore()
 	h.stores[sessionID] = store
 	engine := showcontrol.NewEngine(sessionID, "main", store, h.dispatcher)
+	if h.warmer != nil {
+		engine.SetWarmer(h.warmer)
+	}
 	h.engines[sessionID] = engine
 	h.persistence.Load(sessionID, store)
+
+	// RAM-Cache für die ersten Audio-Cues der geladenen Show vorwärmen,
+	// damit der erste GO ohne Dekodierungslatenz sofort startet.
+	if h.warmer != nil {
+		go h.prewarmSession(sessionID, store, engine)
+	}
 	return store
+}
+
+// prewarmSession wärmt den Server-RAM-Cache für alle Audio-Assets vor
+// UND sendet PRELOAD-Commands an alle Audio-Nodes (PCM-Dekodierung vorab).
+func (h *ShowControlHandler) prewarmSession(sessionID string, store *showcontrol.Store, engine *showcontrol.Engine) {
+	list, ok := store.GetCueList("main")
+	if !ok || list == nil || len(list.Cues) == 0 {
+		return
+	}
+
+	// Server-RAM-Cache: alle Asset-IDs vorladen
+	if h.warmer != nil {
+		ids := engine.LookAheadFromStart(list, len(list.Cues))
+		if len(ids) > 0 {
+			log.Printf("[showcontrol] prewarm RAM-Cache session=%s: %d assets", sessionID, len(ids))
+			go h.warmer.WarmAssets(context.Background(), ids)
+		}
+	}
+
+	// PRELOAD an alle Audio-Nodes: PCM vorab dekodieren
+	log.Printf("[showcontrol] prewarm ArmAll session=%s", sessionID)
+	go engine.ArmAll(context.Background())
 }
 
 func (h *ShowControlHandler) getEngine(sessionID string) (*showcontrol.Engine, bool) {
@@ -165,6 +210,10 @@ func (h *ShowControlHandler) UpsertCue(ctx context.Context, req *pb.UpsertCueReq
 		return nil, status.Error(codes.NotFound, "cue list not found")
 	}
 	h.persistence.Save(req.SessionId, store)
+	// Neue/geänderte Audio-Cue sofort auf Nodes vorladen
+	if engine, ok := h.getEngine(req.SessionId); ok {
+		go engine.ArmCue(ctx, cue)
+	}
 	return &pb.CueResponse{Cue: cue}, nil
 }
 
@@ -195,13 +244,27 @@ func (h *ShowControlHandler) Go(ctx context.Context, req *pb.GoRequest) (*pb.GoR
 		return nil, status.Error(codes.Internal, "show engine not initialized")
 	}
 
+	cueDesc := req.CueId
+	if cueDesc == "" {
+		cueDesc = "(next)"
+	}
+	log.Printf("[showcontrol] GO session=%s cue=%s cmd=%s", req.SessionId, cueDesc, req.CommandId)
+
 	executing, next, err := engine.Go(ctx, req.CueId)
 	if err != nil {
 		if err == showcontrol.ErrNoCue {
+			log.Printf("[showcontrol] GO → keine Cue vorhanden (session=%s)", req.SessionId)
 			return nil, status.Error(codes.NotFound, "no cue to execute")
 		}
 		return nil, status.Errorf(codes.Internal, "%v", err)
 	}
+
+	nextDesc := "(Ende)"
+	if next != nil {
+		nextDesc = next.Number + " \"" + next.Label + "\""
+	}
+	log.Printf("[showcontrol] GO OK → exec=%s/%q next=%s",
+		executing.Number, executing.Label, nextDesc)
 	return &pb.GoResponse{ExecutingCue: executing, NextCue: next}, nil
 }
 
@@ -212,6 +275,7 @@ func (h *ShowControlHandler) Stop(ctx context.Context, req *pb.StopRequest) (*em
 	if h.dedup.checkAndMark(req.CommandId) {
 		return &emptypb.Empty{}, nil
 	}
+	log.Printf("[showcontrol] STOP session=%s", req.SessionId)
 	if engine, ok := h.getEngine(req.SessionId); ok {
 		_ = engine.Stop(ctx)
 	}
@@ -225,6 +289,7 @@ func (h *ShowControlHandler) Pause(ctx context.Context, req *pb.PauseRequest) (*
 	if h.dedup.checkAndMark(req.CommandId) {
 		return &emptypb.Empty{}, nil
 	}
+	log.Printf("[showcontrol] PAUSE session=%s", req.SessionId)
 	if engine, ok := h.getEngine(req.SessionId); ok {
 		_ = engine.Pause(ctx)
 	}
@@ -238,6 +303,7 @@ func (h *ShowControlHandler) Resume(ctx context.Context, req *pb.ResumeRequest) 
 	if h.dedup.checkAndMark(req.CommandId) {
 		return &emptypb.Empty{}, nil
 	}
+	log.Printf("[showcontrol] RESUME session=%s", req.SessionId)
 	if engine, ok := h.getEngine(req.SessionId); ok {
 		_ = engine.Resume(ctx)
 	}

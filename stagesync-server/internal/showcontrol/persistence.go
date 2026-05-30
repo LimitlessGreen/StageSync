@@ -24,22 +24,27 @@ type snapshotEntry struct {
 }
 
 type cueEntry struct {
-	CueID        string  `json:"cue_id"`
-	Number       string  `json:"number"`
-	Label        string  `json:"label"`
-	CueType      int32   `json:"cue_type"`
-	TargetNodeID string  `json:"target_node_id"`
-	AutoContinue bool    `json:"auto_continue"`
-	PreWaitMs    float64 `json:"pre_wait_ms"`
-	PostWaitMs   float64 `json:"post_wait_ms"`
-	Version      int64   `json:"version"`
+	CueID           string  `json:"cue_id"`
+	Number          string  `json:"number"`
+	Label           string  `json:"label"`
+	CueType         int32   `json:"cue_type"`
+	LogicalOutputID string  `json:"logical_output_id,omitempty"`
+	TargetNodeID    string  `json:"target_node_id,omitempty"`
+	AutoContinue    bool    `json:"auto_continue"`
+	PreWaitMs       float64 `json:"pre_wait_ms"`
+	PostWaitMs      float64 `json:"post_wait_ms"`
+	Version         int64   `json:"version"`
 
 	// Audio
-	FilePath    string  `json:"file_path,omitempty"`
-	VolumeDb    float64 `json:"volume_db,omitempty"`
-	FadeInMs    float64 `json:"fade_in_ms,omitempty"`
-	FadeOutMs   float64 `json:"fade_out_ms,omitempty"`
-	Loop        bool    `json:"loop,omitempty"`
+	AssetId            string  `json:"asset_id,omitempty"`
+	FilePath           string  `json:"file_path,omitempty"` // Legacy-Fallback
+	VolumeDb           float64 `json:"volume_db,omitempty"`
+	FadeInMs           float64 `json:"fade_in_ms,omitempty"`
+	FadeOutMs          float64 `json:"fade_out_ms,omitempty"`
+	Loop               bool    `json:"loop,omitempty"`
+	StartTimeMs        float64 `json:"start_time_ms,omitempty"`
+	EndTimeMs          float64 `json:"end_time_ms,omitempty"`
+	DeclaredDurationMs float64 `json:"declared_duration_ms,omitempty"`
 
 	// MA-OSC
 	OscAddress   string `json:"osc_address,omitempty"`
@@ -52,8 +57,12 @@ type cueEntry struct {
 	WaitDurationMs float64 `json:"wait_duration_ms,omitempty"`
 
 	// Goto
-	GotoCueID     string `json:"goto_cue_id,omitempty"`
-	GotoNumber    string `json:"goto_number,omitempty"`
+	GotoCueID  string `json:"goto_cue_id,omitempty"`
+	GotoNumber string `json:"goto_number,omitempty"`
+
+	// Group
+	ChildCueIds []string `json:"child_cue_ids,omitempty"`
+	Sequential  bool     `json:"sequential,omitempty"`
 }
 
 // Persistence speichert und lädt den kompletten Show-State als JSON.
@@ -140,24 +149,29 @@ func (p *Persistence) clToEntry(sessionID string, cl *CueList) *snapshotEntry {
 
 func (p *Persistence) cueToEntry(c *pb.Cue) *cueEntry {
 	e := &cueEntry{
-		CueID:        c.CueId,
-		Number:       c.Number,
-		Label:        c.Label,
-		CueType:      int32(c.CueType),
-		TargetNodeID: c.TargetNodeId,
-		AutoContinue: c.AutoContinue,
-		PreWaitMs:    c.PreWaitMs,
-		PostWaitMs:   c.PostWaitMs,
-		Version:      c.Version,
+		CueID:           c.CueId,
+		Number:          c.Number,
+		Label:           c.Label,
+		CueType:         int32(c.CueType),
+		LogicalOutputID: c.LogicalOutputId,
+		TargetNodeID:    c.TargetNodeId,
+		AutoContinue:    c.AutoContinue,
+		PreWaitMs:       c.PreWaitMs,
+		PostWaitMs:      c.PostWaitMs,
+		Version:         c.Version,
 	}
 	switch params := c.Params.(type) {
 	case *pb.Cue_Audio:
 		if params.Audio != nil {
-			e.FilePath  = params.Audio.FilePath
-			e.VolumeDb  = params.Audio.VolumeDb
-			e.FadeInMs  = params.Audio.FadeInMs
-			e.FadeOutMs = params.Audio.FadeOutMs
-			e.Loop      = params.Audio.Loop
+			e.AssetId            = params.Audio.AssetId
+			e.FilePath           = params.Audio.FilePath
+			e.VolumeDb           = params.Audio.VolumeDb
+			e.FadeInMs           = params.Audio.FadeInMs
+			e.FadeOutMs          = params.Audio.FadeOutMs
+			e.Loop               = params.Audio.Loop
+			e.StartTimeMs        = params.Audio.StartTimeMs
+			e.EndTimeMs          = params.Audio.EndTimeMs
+			e.DeclaredDurationMs = params.Audio.DeclaredDurationMs
 		}
 	case *pb.Cue_MaOsc:
 		if params.MaOsc != nil {
@@ -175,6 +189,11 @@ func (p *Persistence) cueToEntry(c *pb.Cue) *cueEntry {
 		if params.GotoP != nil {
 			e.GotoCueID  = params.GotoP.TargetCueId
 			e.GotoNumber = params.GotoP.TargetNumber
+		}
+	case *pb.Cue_Group:
+		if params.Group != nil {
+			e.ChildCueIds = params.Group.ChildCueIds
+			e.Sequential  = params.Group.Sequential
 		}
 	}
 	return e
@@ -195,24 +214,29 @@ func (p *Persistence) entryToCueList(entry *snapshotEntry) *pb.CueList {
 
 func (p *Persistence) entryToCue(e *cueEntry) *pb.Cue {
 	c := &pb.Cue{
-		CueId:        e.CueID,
-		Number:       e.Number,
-		Label:        e.Label,
-		CueType:      pb.CueType(e.CueType),
-		TargetNodeId: e.TargetNodeID,
-		AutoContinue: e.AutoContinue,
-		PreWaitMs:    e.PreWaitMs,
-		PostWaitMs:   e.PostWaitMs,
-		Version:      e.Version,
+		CueId:           e.CueID,
+		Number:          e.Number,
+		Label:           e.Label,
+		CueType:         pb.CueType(e.CueType),
+		LogicalOutputId: e.LogicalOutputID,
+		TargetNodeId:    e.TargetNodeID,
+		AutoContinue:    e.AutoContinue,
+		PreWaitMs:       e.PreWaitMs,
+		PostWaitMs:      e.PostWaitMs,
+		Version:         e.Version,
 	}
 	switch pb.CueType(e.CueType) {
 	case pb.CueType_CUE_TYPE_AUDIO:
 		c.Params = &pb.Cue_Audio{Audio: &pb.AudioCueParams{
-			FilePath:  e.FilePath,
-			VolumeDb:  e.VolumeDb,
-			FadeInMs:  e.FadeInMs,
-			FadeOutMs: e.FadeOutMs,
-			Loop:      e.Loop,
+			AssetId:            e.AssetId,
+			FilePath:           e.FilePath,
+			VolumeDb:           e.VolumeDb,
+			FadeInMs:           e.FadeInMs,
+			FadeOutMs:          e.FadeOutMs,
+			Loop:               e.Loop,
+			StartTimeMs:        e.StartTimeMs,
+			EndTimeMs:          e.EndTimeMs,
+			DeclaredDurationMs: e.DeclaredDurationMs,
 		}}
 	case pb.CueType_CUE_TYPE_MA_OSC:
 		c.Params = &pb.Cue_MaOsc{MaOsc: &pb.MaOscCueParams{
@@ -226,8 +250,13 @@ func (p *Persistence) entryToCue(e *cueEntry) *pb.Cue {
 		c.Params = &pb.Cue_Wait{Wait: &pb.WaitCueParams{DurationMs: e.WaitDurationMs}}
 	case pb.CueType_CUE_TYPE_GOTO:
 		c.Params = &pb.Cue_GotoP{GotoP: &pb.GotoCueParams{
-			TargetCueId: e.GotoCueID,
+			TargetCueId:  e.GotoCueID,
 			TargetNumber: e.GotoNumber,
+		}}
+	case pb.CueType_CUE_TYPE_GROUP:
+		c.Params = &pb.Cue_Group{Group: &pb.GroupCueParams{
+			ChildCueIds: e.ChildCueIds,
+			Sequential:  e.Sequential,
 		}}
 	}
 	return c

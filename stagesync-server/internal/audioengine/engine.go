@@ -35,6 +35,10 @@ type Engine struct {
 	device  *malgo.Device
 	handles map[string]*Handle // cueID → handle
 
+	// assetPCM: decodierter PCM-Buffer pro Asset-ID (SHA-256).
+	// Mehrere Cues mit demselben Asset teilen denselben Buffer — kein Doppel-Decode.
+	assetPCM map[string][]float32 // assetID → PCM
+
 	sampleRate uint32
 	channels   uint32
 	deviceIdx  int // -1 = system default
@@ -49,11 +53,12 @@ func New() (*Engine, error) {
 		return nil, fmt.Errorf("malgo context init: %w", err)
 	}
 	e := &Engine{
-		ctx:       ctx,
-		handles:   make(map[string]*Handle),
+		ctx:        ctx,
+		handles:    make(map[string]*Handle),
+		assetPCM:   make(map[string][]float32),
 		sampleRate: 48000,
 		channels:   2,
-		deviceIdx: -1,
+		deviceIdx:  -1,
 	}
 	return e, nil
 }
@@ -174,15 +179,47 @@ func (e *Engine) PreloadPCM(cueID string, pcm []float32, sampleRate, channels ui
 }
 
 // Preload decodes the audio file at path and stores it under cueID.
-// If a handle for cueID already exists it is replaced.
 func (e *Engine) Preload(cueID, path string) error {
+	return e.PreloadByAsset(cueID, "", path)
+}
+
+// PreloadByAsset decodes path and stores it under cueID.
+// Wenn assetID nicht leer ist und das Asset bereits dekodiert wurde, wird
+// der vorhandene PCM-Buffer wiederverwendet (kein Doppel-Decode).
+func (e *Engine) PreloadByAsset(cueID, assetID, path string) error {
 	if err := e.EnsureStarted(); err != nil {
 		return err
 	}
 
-	pcm, sr, ch, err := decodeFile(path, e.sampleRate, e.channels)
-	if err != nil {
-		return fmt.Errorf("decode %q: %w", path, err)
+	var pcm []float32
+	var sr, ch uint32
+
+	if assetID != "" {
+		e.mu.Lock()
+		cached, hit := e.assetPCM[assetID]
+		e.mu.Unlock()
+		if hit {
+			pcm = cached
+			sr = e.sampleRate
+			ch = e.channels
+			log.Printf("[audioengine] preload cueID=%s assetID=%s…: PCM aus Cache (%d frames)",
+				cueID, assetID[:8], len(pcm)/int(ch))
+		}
+	}
+
+	if pcm == nil {
+		var err error
+		pcm, sr, ch, err = decodeFile(path, e.sampleRate, e.channels)
+		if err != nil {
+			return fmt.Errorf("decode %q: %w", path, err)
+		}
+		log.Printf("[audioengine] preloaded cueID=%s (%d frames, sr=%d, ch=%d)",
+			cueID, len(pcm)/int(ch), sr, ch)
+		if assetID != "" {
+			e.mu.Lock()
+			e.assetPCM[assetID] = pcm // PCM für spätere Cues cachen
+			e.mu.Unlock()
+		}
 	}
 
 	h := &Handle{
@@ -193,13 +230,9 @@ func (e *Engine) Preload(cueID, path string) error {
 		state:      StatePreloaded,
 		volume:     1.0,
 	}
-
 	e.mu.Lock()
 	e.handles[cueID] = h
 	e.mu.Unlock()
-
-	log.Printf("[audioengine] preloaded cueID=%s (%d frames, sr=%d, ch=%d)",
-		cueID, len(pcm)/int(ch), sr, ch)
 	return nil
 }
 

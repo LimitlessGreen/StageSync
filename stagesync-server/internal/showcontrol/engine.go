@@ -3,6 +3,7 @@ package showcontrol
 import (
 	"context"
 	"errors"
+	"log"
 	"sync"
 	"time"
 
@@ -13,6 +14,20 @@ var (
 	ErrNoCue          = errors.New("no cue to execute")
 	ErrUnknownCueType = errors.New("unknown cue type")
 )
+
+// AssetWarmer wärmt den Server-RAM-Cache für bevorstehende Audio-Assets vor.
+// Implementiert von media.StoreWarmer; nil-sicher (Engine prüft vor Aufruf).
+type AssetWarmer interface {
+	WarmAssets(ctx context.Context, assetIDs []string)
+	LockForShow()
+	UnlockShow()
+}
+
+// lookAheadN: Anzahl Audio-Cues, die nach jedem GO vorausgeladen werden.
+const lookAheadN = 5
+
+// PrewarmN: Anzahl Audio-Cues die beim Session-Start vom Anfang vorgewärmt werden.
+const PrewarmN = 3
 
 // NodeDispatcher ist das Interface, über das die Engine Befehle an Nodes sendet.
 // Implementiert von node.Dispatcher.
@@ -27,6 +42,7 @@ type Engine struct {
 	mu         sync.Mutex
 	store      *Store
 	dispatcher NodeDispatcher
+	warmer     AssetWarmer // optional; nil = kein RAM-Cache-Preloading
 	sessionID  string
 	cueListID  string
 
@@ -69,11 +85,19 @@ func (e *Engine) runningCueIDsList() []string {
 
 func NewEngine(sessionID, cueListID string, store *Store, dispatcher NodeDispatcher) *Engine {
 	return &Engine{
-		store:     store,
+		store:      store,
 		dispatcher: dispatcher,
-		sessionID: sessionID,
-		cueListID: cueListID,
+		sessionID:  sessionID,
+		cueListID:  cueListID,
 	}
+}
+
+// SetWarmer setzt den Asset-Warmer (RAM-Cache-Preloader). Thread-safe.
+// Kann nach NewEngine gesetzt werden; nil deaktiviert das Preloading.
+func (e *Engine) SetWarmer(w AssetWarmer) {
+	e.mu.Lock()
+	e.warmer = w
+	e.mu.Unlock()
 }
 
 // TransportSnapshot beschreibt den aktuellen Transport-Zustand (für den
@@ -135,6 +159,8 @@ func (e *Engine) Go(ctx context.Context, cueID string) (*pb.Cue, *pb.Cue, error)
 
 	e.store.SetActiveCue(e.cueListID, cue.CueId)
 
+	wasRunning := e.running // vor State-Wechsel merken (für Show-Lock-Entscheidung)
+
 	execCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	if e.cancelFn != nil {
 		e.cancelFn()
@@ -157,10 +183,20 @@ func (e *Engine) Go(ctx context.Context, cueID string) (*pb.Cue, *pb.Cue, error)
 		}
 	}
 
-	// Nächste Cue vorab auf den Nodes laden, damit das folgende GO ohne
-	// Lade-Latenz sofort feuern kann.
+	// Node-seitiges Preload: nächste Cue direkt auf den Audio-Nodes vorladen.
 	if next != nil {
 		go e.armCue(context.Background(), next)
+	}
+
+	// Server-RAM-Cache: nächste N Audio-Cues vorladen damit StreamFile Cache-Hits liefert.
+	if w := e.warmer; w != nil {
+		if !wasRunning { // erste GO dieser Show: Show-Lock aktivieren
+			w.LockForShow()
+		}
+		assetIDs := e.lookAheadAssetIDs(list, cue.CueId, lookAheadN)
+		if len(assetIDs) > 0 {
+			go w.WarmAssets(context.Background(), assetIDs)
+		}
 	}
 
 	return cue, next, nil
@@ -181,9 +217,16 @@ func (e *Engine) Stop(ctx context.Context) error {
 	activeCue := e.store.GetActiveCue(e.cueListID)
 	// Aktive Cue in Store löschen, damit Reconnect-Snapshots korrekt sind.
 	e.store.SetActiveCue(e.cueListID, "")
+	warmer := e.warmer
 	e.mu.Unlock()
 
+	// Show beendet → RAM-Cache darf wieder normal evicten.
+	if warmer != nil {
+		warmer.UnlockShow()
+	}
+
 	// AudioStop an alle Audio-Nodes senden (leere CueId = alle stoppen).
+	// Background-Kontext: Stop darf nie verworfen werden.
 	if e.dispatcher != nil {
 		stopCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
@@ -304,6 +347,8 @@ func (e *Engine) Resume(ctx context.Context) error {
 
 // dispatchCue sendet die Cue-Ausführung an den zuständigen Node.
 func (e *Engine) dispatchCue(ctx context.Context, cue *pb.Cue) {
+	log.Printf("[engine] dispatchCue %s/%q type=%s target=%q",
+		cue.Number, cue.Label, cue.CueType, cue.LogicalOutputId)
 	var err error
 
 	// Pre-Wait
@@ -323,8 +368,7 @@ func (e *Engine) dispatchCue(ctx context.Context, cue *pb.Cue) {
 	e.cueStartedAt = startedAt
 	e.pausedElapsed = 0
 	e.pausedAt = time.Time{}
-	e.mu.Unlock()
-	e.mu.Lock()
+	e.addRunning(cue.CueId)
 	runningIDs := e.runningCueIDsList()
 	e.mu.Unlock()
 	e.store.BroadcastExec(&pb.ShowExecutionEvent{
@@ -335,11 +379,29 @@ func (e *Engine) dispatchCue(ctx context.Context, cue *pb.Cue) {
 		RunningCueIds:  runningIDs,
 	})
 
-	e.mu.Lock()
-	e.addRunning(cue.CueId)
-	e.mu.Unlock()
+	// Effektiven Typ ermitteln: explizit gesetzt oder aus dem oneof-Params inferieren
+	// (Abwärtskompatibilität mit Cues die vor dem cue_type-Fix gespeichert wurden).
+	effectiveType := cue.CueType
+	if effectiveType == pb.CueType_CUE_TYPE_UNSPECIFIED {
+		switch cue.Params.(type) {
+		case *pb.Cue_Audio:
+			effectiveType = pb.CueType_CUE_TYPE_AUDIO
+		case *pb.Cue_MaOsc:
+			effectiveType = pb.CueType_CUE_TYPE_MA_OSC
+		case *pb.Cue_Wait:
+			effectiveType = pb.CueType_CUE_TYPE_WAIT
+		case *pb.Cue_Group:
+			effectiveType = pb.CueType_CUE_TYPE_GROUP
+		case *pb.Cue_GotoP:
+			effectiveType = pb.CueType_CUE_TYPE_GOTO
+		}
+		if effectiveType != pb.CueType_CUE_TYPE_UNSPECIFIED {
+			log.Printf("[engine] Cue %s/%q: cue_type=UNSPECIFIED, aus params inferiert: %s",
+				cue.Number, cue.Label, effectiveType)
+		}
+	}
 
-	switch cue.CueType {
+	switch effectiveType {
 	case pb.CueType_CUE_TYPE_AUDIO:
 		err = e.dispatchAudio(ctx, cue)
 	case pb.CueType_CUE_TYPE_MA_OSC:
@@ -349,6 +411,8 @@ func (e *Engine) dispatchCue(ctx context.Context, cue *pb.Cue) {
 	case pb.CueType_CUE_TYPE_GROUP:
 		err = e.dispatchGroup(ctx, cue)
 	default:
+		log.Printf("[engine] Cue %s/%q: unbekannter Typ %s (params=%T) → übersprungen",
+			cue.Number, cue.Label, cue.CueType, cue.Params)
 		err = ErrUnknownCueType
 	}
 
@@ -418,12 +482,32 @@ func (e *Engine) dispatchAudio(ctx context.Context, cue *pb.Cue) error {
 		return errors.New("no dispatcher")
 	}
 
+	// Commands werden mit einem nicht-cancellierbaren Kontext gesendet.
+	// Der execCtx (ctx) kann durch ein neues GO gecancelt werden — das darf
+	// aber nicht dazu führen dass PRELOAD geht, PLAY aber verworfen wird.
+	// Nur Warte-Phasen (dispatchWait, Auto-Continue) reagieren auf ctx.
+	sendCtx := context.Background()
+
 	dispatch := func(cmd *pb.NodeCommandRequest) error {
 		if cue.TargetNodeId != "" {
-			return e.dispatcher.Dispatch(ctx, cue.TargetNodeId, cmd)
+			return e.dispatcher.Dispatch(sendCtx, cue.TargetNodeId, cmd)
 		}
-		return e.dispatcher.DispatchToTask(ctx, pb.NodeTask_NODE_TASK_AUDIO_OUTPUT, cmd)
+		return e.dispatcher.DispatchToTask(sendCtx, pb.NodeTask_NODE_TASK_AUDIO_OUTPUT, cmd)
 	}
+
+	assetDesc := params.Audio.AssetId
+	if len(assetDesc) > 8 {
+		assetDesc = assetDesc[:8] + "..."
+	}
+	if assetDesc == "" {
+		assetDesc = params.Audio.FilePath
+	}
+	routeDesc := "task:AUDIO_OUTPUT"
+	if cue.TargetNodeId != "" {
+		routeDesc = "node:" + cue.TargetNodeId
+	}
+	log.Printf("[engine] dispatchAudio cueId=%s asset=%s route=%s vol=%.1fdB loop=%v",
+		cue.CueId, assetDesc, routeDesc, params.Audio.VolumeDb, params.Audio.Loop)
 
 	// 1. Preload senden. asset_id (SHA-256) wird bevorzugt; file_path als Fallback.
 	if params.Audio.AssetId != "" || params.Audio.FilePath != "" {
@@ -465,16 +549,51 @@ func (e *Engine) dispatchAudio(ctx context.Context, cue *pb.Cue) error {
 	})
 }
 
-// armCue lädt eine Audio-Cue auf den zuständigen Nodes vor (Preload ohne Play),
-// damit ein späteres GO ohne Lade-Latenz sofort feuern kann (QLab "loaded").
-func (e *Engine) armCue(ctx context.Context, cue *pb.Cue) {
-	if cue == nil || cue.CueType != pb.CueType_CUE_TYPE_AUDIO || e.dispatcher == nil {
+// ArmAll sendet PRELOAD-Commands für alle Audio-Cues in der aktuellen CueList.
+// Soll beim Session-Start und nach Cue-Listen-Änderungen aufgerufen werden,
+// damit alle Assets vorab dekodiert sind und jeder GO sofort startet.
+func (e *Engine) ArmAll(ctx context.Context) {
+	list, found := e.store.GetCueList(e.cueListID)
+	if !found || list == nil {
+		return
+	}
+	count := 0
+	for _, cue := range list.Cues {
+		if cue.CueType != pb.CueType_CUE_TYPE_AUDIO {
+			// Typ aus params inferieren (Abwärtskompatibilität)
+			if _, ok := cue.Params.(*pb.Cue_Audio); !ok {
+				continue
+			}
+		}
+		e.armCue(ctx, cue)
+		count++
+	}
+	if count > 0 {
+		log.Printf("[engine] armAll: %d Audio-Cues an Nodes gesendet", count)
+	}
+}
+
+// ArmCue lädt eine Audio-Cue auf den zuständigen Nodes vor (Preload ohne Play).
+func (e *Engine) ArmCue(ctx context.Context, cue *pb.Cue) { e.armCue(ctx, cue) }
+
+// armCue — interne Implementierung.
+func (e *Engine) armCue(_ context.Context, cue *pb.Cue) {
+	if cue == nil || e.dispatcher == nil {
+		return
+	}
+	// Typ aus params inferieren (Abwärtskompatibilität)
+	isAudio := cue.CueType == pb.CueType_CUE_TYPE_AUDIO
+	if !isAudio {
+		_, isAudio = cue.Params.(*pb.Cue_Audio)
+	}
+	if !isAudio {
 		return
 	}
 	params, ok := cue.Params.(*pb.Cue_Audio)
 	if !ok || params == nil || (params.Audio.AssetId == "" && params.Audio.FilePath == "") {
 		return
 	}
+	log.Printf("[engine] armCue %s/%q", cue.Number, cue.Label)
 	cmd := &pb.NodeCommandRequest{
 		SessionId:    e.sessionID,
 		TargetNodeId: cue.TargetNodeId,
@@ -486,10 +605,12 @@ func (e *Engine) armCue(ctx context.Context, cue *pb.Cue) {
 			},
 		},
 	}
+	// Arm-Commands immer mit Background-Kontext — dürfen nie verworfen werden.
+	bgCtx := context.Background()
 	if cue.TargetNodeId != "" {
-		_ = e.dispatcher.Dispatch(ctx, cue.TargetNodeId, cmd)
+		_ = e.dispatcher.Dispatch(bgCtx, cue.TargetNodeId, cmd)
 	} else {
-		_ = e.dispatcher.DispatchToTask(ctx, pb.NodeTask_NODE_TASK_AUDIO_OUTPUT, cmd)
+		_ = e.dispatcher.DispatchToTask(bgCtx, pb.NodeTask_NODE_TASK_AUDIO_OUTPUT, cmd)
 	}
 }
 
@@ -621,6 +742,74 @@ func (e *Engine) dispatchGroupSequential(ctx context.Context, children []*pb.Cue
 		}
 	}
 	return nil
+}
+
+// LookAheadFromStart gibt die asset_ids der ersten n Audio-Cues vom Anfang der
+// CueList zurück (unabhängig von der aktiven Cue). Für Session-Start-Prewarm.
+func (e *Engine) LookAheadFromStart(list *pb.CueList, n int) []string {
+	return e.lookAheadAssetIDs(list, "", n) // activeCueID="" → startet von vorne
+}
+
+// lookAheadAssetIDs sammelt die asset_ids der nächsten n Audio-Cues nach
+// activeCueID in der übergebenen CueList. Gruppe-Cues werden flach expandiert.
+// Duplikate werden entfernt. list darf nil sein (gibt nil zurück).
+func (e *Engine) lookAheadAssetIDs(list *pb.CueList, activeCueID string, n int) []string {
+	if list == nil || n <= 0 {
+		return nil
+	}
+
+	cueByID := make(map[string]*pb.Cue, len(list.Cues))
+	for _, c := range list.Cues {
+		cueByID[c.CueId] = c
+	}
+
+	seen := make(map[string]struct{}, n)
+	ids := make([]string, 0, n)
+	past := activeCueID == ""
+
+	for _, c := range list.Cues {
+		if len(ids) >= n {
+			break
+		}
+		if c.CueId == activeCueID {
+			past = true
+			continue
+		}
+		if !past {
+			continue
+		}
+		ids = collectAssetIDs(c, cueByID, ids, seen, n)
+	}
+	return ids
+}
+
+// collectAssetIDs extrahiert asset_ids aus einer Cue (inkl. Group-Expansion).
+// seen verhindert Duplikate wenn Kinder-Cues auch als Top-Level-Einträge stehen.
+func collectAssetIDs(c *pb.Cue, byID map[string]*pb.Cue, out []string, seen map[string]struct{}, max int) []string {
+	switch c.CueType {
+	case pb.CueType_CUE_TYPE_AUDIO:
+		if ap, ok := c.Params.(*pb.Cue_Audio); ok && ap.Audio.AssetId != "" {
+			id := ap.Audio.AssetId
+			if _, dup := seen[id]; !dup {
+				seen[id] = struct{}{}
+				out = append(out, id)
+			}
+		}
+	case pb.CueType_CUE_TYPE_GROUP:
+		gp, ok := c.Params.(*pb.Cue_Group)
+		if !ok || gp == nil {
+			break
+		}
+		for _, childID := range gp.Group.ChildCueIds {
+			if len(out) >= max {
+				break
+			}
+			if child, ok := byID[childID]; ok {
+				out = collectAssetIDs(child, byID, out, seen, max)
+			}
+		}
+	}
+	return out
 }
 
 func (e *Engine) dispatchGroupParallel(ctx context.Context, children []*pb.Cue) error {

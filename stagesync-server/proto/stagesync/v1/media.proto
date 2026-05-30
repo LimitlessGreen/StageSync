@@ -1,0 +1,128 @@
+syntax = "proto3";
+
+package stagesync.v1;
+
+option go_package = "stagesync-server/gen/go/stagesync/v1;stagesyncv1";
+
+// ── Media Service ─────────────────────────────────────────────────────────────
+//
+// Ersetzte den HTTP-Medienserver vollständig:
+//   - StreamFile  : Node/Client lädt Datei via Server-Streaming (aus RAM-Cache)
+//   - UploadFile  : Client streamt Datei chunk-weise hoch
+//   - DeleteFile  : Datei löschen
+//   - WatchManifest: Ersetzt HTTP SSE + /media/manifest; liefert Snapshot beim
+//                    Verbinden, dann inkrementelle Events bei Änderungen
+//
+// Authentifizierung: session_id + token in den jeweiligen Requests.
+// Nodes ohne Session (interner AudioNode) können session_id leer lassen.
+
+service MediaService {
+  // Datei in 64-KB-Chunks streamen. Cache-Hit: aus RAM; Miss: von Disk + Cache füllen.
+  rpc StreamFile(StreamFileRequest) returns (stream FileChunk);
+
+  // Datei chunk-weise hochladen. Erstes Paket = UploadMeta, Rest = Daten.
+  rpc UploadFile(stream UploadChunk) returns (UploadResponse);
+
+  // Datei auf dem Server löschen.
+  rpc DeleteFile(DeleteFileRequest) returns (DeleteFileResponse);
+
+  // Manifest-Stream: Snapshot beim Verbinden, dann inkrementelle Events.
+  // Ersetzt HTTP GET /media/manifest + GET /media/events (SSE).
+  rpc WatchManifest(WatchManifestRequest) returns (stream ManifestEvent);
+}
+
+// ── StreamFile ────────────────────────────────────────────────────────────────
+
+message StreamFileRequest {
+  string session_id = 1;
+  string token      = 2;
+
+  // Asset-Identifikation: asset_id (SHA-256) bevorzugt; name als Fallback.
+  string asset_id = 3;
+  string name     = 4;
+
+  // Resumable: Byte-Offset vom dem gestreamt wird (0 = Anfang).
+  int64 offset = 5;
+}
+
+message FileChunk {
+  bytes data        = 1; // bis zu 65536 Bytes Nutzdaten
+  int64 offset      = 2; // Byte-Position in der Datei
+  int64 total_bytes = 3; // Gesamtgröße der Datei (unveränderlich über alle Chunks)
+}
+
+// ── UploadFile ────────────────────────────────────────────────────────────────
+
+message UploadChunk {
+  oneof payload {
+    UploadMeta meta = 1; // erstes Paket: Metadaten
+    bytes      data = 2; // folgende Pakete: Rohdaten (bis 65536 Bytes)
+  }
+}
+
+message UploadMeta {
+  string session_id  = 1;
+  string token       = 2;
+  string filename    = 3;
+  int64  total_bytes = 4; // optionale Gesamtgröße (0 = unbekannt)
+}
+
+message UploadResponse {
+  string    asset_id   = 1; // SHA-256 der hochgeladenen Datei
+  string    name       = 2; // kanonischer Dateiname
+  int64     size_bytes = 3;
+  AudioMeta audio      = 4; // nil wenn nicht WAV / Parse-Fehler
+}
+
+// ── DeleteFile ────────────────────────────────────────────────────────────────
+
+message DeleteFileRequest {
+  string session_id = 1;
+  string token      = 2;
+  string name       = 3; // Dateiname (kein Pfad)
+}
+
+message DeleteFileResponse {
+  bool success = 1;
+}
+
+// ── WatchManifest ─────────────────────────────────────────────────────────────
+
+message WatchManifestRequest {
+  string session_id = 1;
+  string token      = 2;
+}
+
+message ManifestEvent {
+  enum EventType {
+    MANIFEST_SNAPSHOT = 0; // vollständige Asset-Liste beim Stream-Start
+    ASSET_ADDED       = 1; // neues Asset (assets enthält ein Element)
+    ASSET_REMOVED     = 2; // Asset gelöscht (removed_name gesetzt, assets leer)
+    ASSET_UPDATED     = 3; // Asset ersetzt (assets enthält ein Element)
+  }
+
+  EventType          type         = 1;
+  int64              seq          = 2;
+  repeated AssetInfo assets       = 3; // für SNAPSHOT: alle; ADD/UPDATE: ein Eintrag
+  string             removed_name = 4; // nur für ASSET_REMOVED
+}
+
+// ── Shared Messages ───────────────────────────────────────────────────────────
+
+message AssetInfo {
+  string    asset_id    = 1; // SHA-256 (stabil bei gleichem Inhalt)
+  string    name        = 2; // Dateiname
+  int64     size_bytes  = 3;
+  string    mime_type   = 4;
+  int64     modified_ms = 5; // Unix-Timestamp in Millisekunden
+  AudioMeta audio       = 6; // nil wenn nicht WAV / Parse-Fehler
+}
+
+message AudioMeta {
+  int64  duration_ms   = 1;
+  int32  channels      = 2;
+  int32  sample_rate   = 3; // Hz
+  int32  bit_depth     = 4;
+  double loudness_lufs = 5; // EBU R128 integrierte Lautheit
+  bool   has_loudness  = 6; // true wenn loudness_lufs gültig (nil-Ersatz in proto3)
+}

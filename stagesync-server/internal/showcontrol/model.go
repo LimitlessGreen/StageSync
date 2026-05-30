@@ -112,15 +112,15 @@ func (s *Store) UpsertCue(cueListID string, cue *pb.Cue) (*pb.Cue, bool) {
 	defer cl.mu.Unlock()
 
 	cue.UpdatedAt = nowProto()
-	cue.Version++
 
 	if idx, exists := cl.cueIndex[cue.CueId]; exists {
-		existing := cl.proto.Cues[idx]
-		if cue.Version <= existing.Version {
-			return cloneCue(existing), true
-		}
+		// Version immer monoton von der gespeicherten Version erhöhen —
+		// unabhängig davon was der Client schickt. Verhindert dass der Client
+		// (der version=0 schickt) still verworfen wird.
+		cue.Version = cl.proto.Cues[idx].Version + 1
 		cl.proto.Cues[idx] = cue
 	} else {
+		cue.Version = 1
 		cl.cueIndex[cue.CueId] = len(cl.proto.Cues)
 		cl.proto.Cues = append(cl.proto.Cues, cue)
 	}
