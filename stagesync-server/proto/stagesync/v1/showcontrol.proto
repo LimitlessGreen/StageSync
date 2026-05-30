@@ -77,6 +77,8 @@ message Cue {
     WaitCueParams   wait   = 12;
     GotoCueParams   goto_p = 13;
     GroupCueParams  group  = 17;
+    NoteCueParams   note   = 19;
+    FadeCueParams   fade   = 20;
   }
 
   Timestamp created_at  = 14;
@@ -95,6 +97,22 @@ message AudioCueParams {
   string  output_device  = 8; // leer = System-Default
   string  asset_id       = 9; // SHA-256 des Assets (bevorzugt gegenüber file_path)
   double  declared_duration_ms = 10; // deklarierte Abspieldauer aus Asset-Metadaten; 0 = unbekannt
+
+  // ── Pause / Resume Verhalten ──────────────────────────────────────────────
+  enum PauseBehavior {
+    PAUSE_HARD     = 0; // sofort stoppen (default)
+    PAUSE_FADE_OUT = 1; // ausblenden, dann pausieren
+  }
+  PauseBehavior pause_behavior = 11;
+  double        pause_fade_ms  = 12; // Dauer des Ausblendens bei PAUSE_FADE_OUT
+
+  enum ResumeBehavior {
+    RESUME_CONTINUE  = 0; // nahtlos weitermachen (default)
+    RESUME_FADE_IN   = 1; // einblenden beim Weiterspielen
+    RESUME_FROM_START = 2; // von vorne beginnen
+  }
+  ResumeBehavior resume_behavior = 13;
+  double         resume_fade_ms  = 14; // Dauer des Einblendens bei RESUME_FADE_IN
 }
 
 message MaOscCueParams {
@@ -125,6 +143,32 @@ message GotoCueParams {
 message GroupCueParams {
   repeated string child_cue_ids = 1;
   bool sequential               = 2;
+}
+
+// ── Note Cue ─────────────────────────────────────────────────────────────────
+// Textmarker / Trennlinie — kein Execution. Nur für Übersicht in der CueList.
+message NoteCueParams {
+  string text      = 1; // Anzeigetext (kann leer sein)
+  string color_hex = 2; // Hex-Farbe z.B. "#FF8800" (leer = Standard-Grau)
+}
+
+// ── Fade Cue ─────────────────────────────────────────────────────────────────
+// Steuert eine andere laufende Cue: Lautstärke faden, stoppen, etc.
+// Entspricht dem QLab Fade-Cue.
+message FadeCueParams {
+  string target_cue_id    = 1; // Ziel-Cue (muss gerade laufen)
+  string target_cue_number = 2; // Anzeigenummer als Fallback-Referenz
+
+  enum FadeAction {
+    FADE_ACTION_VOLUME    = 0; // nur Lautstärke anpassen
+    FADE_ACTION_STOP      = 1; // mit Fade stoppen
+    FADE_ACTION_PAUSE     = 2; // mit Fade pausieren
+    FADE_ACTION_RESUME    = 3; // mit Fade-In fortsetzen
+  }
+  FadeAction action        = 3;
+  double     target_volume_db = 4; // Ziel-Lautstärke (bei VOLUME/STOP/PAUSE)
+  double     duration_ms      = 5; // Fade-Dauer
+  bool       stop_when_done   = 6; // Ziel-Cue nach Fade stoppen
 }
 
 // ── CueList ───────────────────────────────────────────────────────────────────

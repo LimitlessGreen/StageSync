@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart' show Color;
 import 'package:path/path.dart' as p;
 
 import '../../grpc/generated/stagesync/v1/showcontrol.pb.dart' as pb;
@@ -49,8 +50,6 @@ class ShowControlRepository {
   static CueParams _paramsFromProto(pb.Cue proto) {
     return switch (proto.whichParams()) {
       pb.Cue_Params.audio => AudioParams(
-          // asset_id (SHA-256) bevorzugt; fallback auf basename(file_path) für
-          // Cues die noch ohne asset_id gespeichert wurden.
           assetId: proto.audio.assetId.isNotEmpty
               ? proto.audio.assetId
               : p.basename(proto.audio.filePath),
@@ -63,6 +62,10 @@ class ShowControlRepository {
           declaredDurationMs: proto.audio.declaredDurationMs > 0
               ? proto.audio.declaredDurationMs
               : null,
+          pauseBehavior: _pauseBehavior(proto.audio.pauseBehavior),
+          pauseFadeMs: proto.audio.pauseFadeMs,
+          resumeBehavior: _resumeBehavior(proto.audio.resumeBehavior),
+          resumeFadeMs: proto.audio.resumeFadeMs,
         ),
       pb.Cue_Params.wait => WaitParams(
           durationMs: proto.wait.durationMs,
@@ -82,6 +85,22 @@ class ShowControlRepository {
       pb.Cue_Params.group => GroupParams(
           childCueIds: proto.group.childCueIds.toList(),
           sequential: proto.group.sequential,
+        ),
+      pb.Cue_Params.note => NoteParams(
+          text: proto.note.text,
+          color: proto.note.colorHex.isNotEmpty
+              ? Color(int.parse(
+                  'FF${proto.note.colorHex.replaceAll("#", "")}',
+                  radix: 16))
+              : null,
+        ),
+      pb.Cue_Params.fade => FadeParams(
+          targetCueId: proto.fade.targetCueId,
+          targetCueNumber: proto.fade.targetCueNumber,
+          action: _fadeAction(proto.fade.action),
+          targetVolumeDb: proto.fade.targetVolumeDb,
+          durationMs: proto.fade.durationMs,
+          stopWhenDone: proto.fade.stopWhenDone,
         ),
       pb.Cue_Params.notSet => const ScriptParams(script: ''),
     };
@@ -106,6 +125,48 @@ class ShowControlRepository {
         3 => MaOscCommand.pause,
         4 => MaOscCommand.gotoP,
         _ => MaOscCommand.unspecified,
+      };
+
+  static pb.AudioCueParams_PauseBehavior _pauseBehaviorToProto(PauseBehavior v) =>
+      switch (v) {
+        PauseBehavior.fadeOut => pb.AudioCueParams_PauseBehavior.PAUSE_FADE_OUT,
+        PauseBehavior.hard    => pb.AudioCueParams_PauseBehavior.PAUSE_HARD,
+      };
+
+  static pb.AudioCueParams_ResumeBehavior _resumeBehaviorToProto(ResumeBehavior v) =>
+      switch (v) {
+        ResumeBehavior.fadeIn          => pb.AudioCueParams_ResumeBehavior.RESUME_FADE_IN,
+        ResumeBehavior.fromStart       => pb.AudioCueParams_ResumeBehavior.RESUME_FROM_START,
+        ResumeBehavior.continuePlaying => pb.AudioCueParams_ResumeBehavior.RESUME_CONTINUE,
+      };
+
+  static pb.FadeCueParams_FadeAction _fadeActionToProto(FadeAction v) =>
+      switch (v) {
+        FadeAction.stop   => pb.FadeCueParams_FadeAction.FADE_ACTION_STOP,
+        FadeAction.pause  => pb.FadeCueParams_FadeAction.FADE_ACTION_PAUSE,
+        FadeAction.resume => pb.FadeCueParams_FadeAction.FADE_ACTION_RESUME,
+        FadeAction.volume => pb.FadeCueParams_FadeAction.FADE_ACTION_VOLUME,
+      };
+
+  static PauseBehavior _pauseBehavior(pb.AudioCueParams_PauseBehavior v) =>
+      switch (v.value) {
+        1 => PauseBehavior.fadeOut,
+        _ => PauseBehavior.hard,
+      };
+
+  static ResumeBehavior _resumeBehavior(pb.AudioCueParams_ResumeBehavior v) =>
+      switch (v.value) {
+        1 => ResumeBehavior.fadeIn,
+        2 => ResumeBehavior.fromStart,
+        _ => ResumeBehavior.continuePlaying,
+      };
+
+  static FadeAction _fadeAction(pb.FadeCueParams_FadeAction v) =>
+      switch (v.value) {
+        1 => FadeAction.stop,
+        2 => FadeAction.pause,
+        3 => FadeAction.resume,
+        _ => FadeAction.volume,
       };
 
   // ── NodeStatus ────────────────────────────────────────────────────────────
@@ -208,14 +269,18 @@ class ShowControlRepository {
         proto.cueType = pb_common.CueType.CUE_TYPE_AUDIO;
         proto.audio = pb.AudioCueParams()
           ..assetId = ap.assetId
-          ..filePath = ''           // filePath nicht mit SHA-256 befüllen (würde Preload-Lookup brechen)
+          ..filePath = ''
           ..volumeDb = ap.volumeDb
           ..fadeInMs = ap.fadeInMs
           ..fadeOutMs = ap.fadeOutMs
           ..loop = ap.loop
           ..startTimeMs = ap.startTimeMs
           ..endTimeMs = ap.endTimeMs
-          ..declaredDurationMs = ap.declaredDurationMs ?? 0;
+          ..declaredDurationMs = ap.declaredDurationMs ?? 0
+          ..pauseBehavior = _pauseBehaviorToProto(ap.pauseBehavior)
+          ..pauseFadeMs = ap.pauseFadeMs
+          ..resumeBehavior = _resumeBehaviorToProto(ap.resumeBehavior)
+          ..resumeFadeMs = ap.resumeFadeMs;
       case WaitParams wp:
         proto.cueType = pb_common.CueType.CUE_TYPE_WAIT;
         proto.wait = pb.WaitCueParams()..durationMs = wp.durationMs;
@@ -232,6 +297,27 @@ class ShowControlRepository {
         proto.gotoP = pb.GotoCueParams()
           ..targetCueId = gp.targetCueId
           ..targetNumber = gp.targetNumber;
+      case GroupParams gp:
+        proto.cueType = pb_common.CueType.CUE_TYPE_GROUP;
+        proto.group = pb.GroupCueParams()
+          ..childCueIds.addAll(gp.childCueIds)
+          ..sequential = gp.sequential;
+      case NoteParams np:
+        proto.cueType = pb_common.CueType.CUE_TYPE_NOTE;
+        proto.note = pb.NoteCueParams()
+          ..text = np.text
+          ..colorHex = np.color != null
+              ? '#${np.color!.toARGB32().toRadixString(16).substring(2).toUpperCase()}'
+              : '';
+      case FadeParams fp:
+        proto.cueType = pb_common.CueType.CUE_TYPE_FADE;
+        proto.fade = pb.FadeCueParams()
+          ..targetCueId = fp.targetCueId
+          ..targetCueNumber = fp.targetCueNumber
+          ..action = _fadeActionToProto(fp.action)
+          ..targetVolumeDb = fp.targetVolumeDb
+          ..durationMs = fp.durationMs
+          ..stopWhenDone = fp.stopWhenDone;
       default:
         break;
     }

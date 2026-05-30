@@ -95,6 +95,24 @@ const Cue$json = {
       '10': 'group'
     },
     {
+      '1': 'note',
+      '3': 19,
+      '4': 1,
+      '5': 11,
+      '6': '.stagesync.v1.NoteCueParams',
+      '9': 0,
+      '10': 'note'
+    },
+    {
+      '1': 'fade',
+      '3': 20,
+      '4': 1,
+      '5': 11,
+      '6': '.stagesync.v1.FadeCueParams',
+      '9': 0,
+      '10': 'fade'
+    },
+    {
       '1': 'created_at',
       '3': 14,
       '4': 1,
@@ -130,9 +148,11 @@ final $typed_data.Uint8List cueDescriptor = $convert.base64Decode(
     'c2NDdWVQYXJhbXNIAFIFbWFPc2MSMQoEd2FpdBgMIAEoCzIbLnN0YWdlc3luYy52MS5XYWl0Q3'
     'VlUGFyYW1zSABSBHdhaXQSNAoGZ290b19wGA0gASgLMhsuc3RhZ2VzeW5jLnYxLkdvdG9DdWVQ'
     'YXJhbXNIAFIFZ290b1ASNAoFZ3JvdXAYESABKAsyHC5zdGFnZXN5bmMudjEuR3JvdXBDdWVQYX'
-    'JhbXNIAFIFZ3JvdXASNgoKY3JlYXRlZF9hdBgOIAEoCzIXLnN0YWdlc3luYy52MS5UaW1lc3Rh'
-    'bXBSCWNyZWF0ZWRBdBI2Cgp1cGRhdGVkX2F0GA8gASgLMhcuc3RhZ2VzeW5jLnYxLlRpbWVzdG'
-    'FtcFIJdXBkYXRlZEF0EhgKB3ZlcnNpb24YECABKANSB3ZlcnNpb25CCAoGcGFyYW1z');
+    'JhbXNIAFIFZ3JvdXASMQoEbm90ZRgTIAEoCzIbLnN0YWdlc3luYy52MS5Ob3RlQ3VlUGFyYW1z'
+    'SABSBG5vdGUSMQoEZmFkZRgUIAEoCzIbLnN0YWdlc3luYy52MS5GYWRlQ3VlUGFyYW1zSABSBG'
+    'ZhZGUSNgoKY3JlYXRlZF9hdBgOIAEoCzIXLnN0YWdlc3luYy52MS5UaW1lc3RhbXBSCWNyZWF0'
+    'ZWRBdBI2Cgp1cGRhdGVkX2F0GA8gASgLMhcuc3RhZ2VzeW5jLnYxLlRpbWVzdGFtcFIJdXBkYX'
+    'RlZEF0EhgKB3ZlcnNpb24YECABKANSB3ZlcnNpb25CCAoGcGFyYW1z');
 
 @$core.Deprecated('Use audioCueParamsDescriptor instead')
 const AudioCueParams$json = {
@@ -154,6 +174,44 @@ const AudioCueParams$json = {
       '5': 1,
       '10': 'declaredDurationMs'
     },
+    {
+      '1': 'pause_behavior',
+      '3': 11,
+      '4': 1,
+      '5': 14,
+      '6': '.stagesync.v1.AudioCueParams.PauseBehavior',
+      '10': 'pauseBehavior'
+    },
+    {'1': 'pause_fade_ms', '3': 12, '4': 1, '5': 1, '10': 'pauseFadeMs'},
+    {
+      '1': 'resume_behavior',
+      '3': 13,
+      '4': 1,
+      '5': 14,
+      '6': '.stagesync.v1.AudioCueParams.ResumeBehavior',
+      '10': 'resumeBehavior'
+    },
+    {'1': 'resume_fade_ms', '3': 14, '4': 1, '5': 1, '10': 'resumeFadeMs'},
+  ],
+  '4': [AudioCueParams_PauseBehavior$json, AudioCueParams_ResumeBehavior$json],
+};
+
+@$core.Deprecated('Use audioCueParamsDescriptor instead')
+const AudioCueParams_PauseBehavior$json = {
+  '1': 'PauseBehavior',
+  '2': [
+    {'1': 'PAUSE_HARD', '2': 0},
+    {'1': 'PAUSE_FADE_OUT', '2': 1},
+  ],
+};
+
+@$core.Deprecated('Use audioCueParamsDescriptor instead')
+const AudioCueParams_ResumeBehavior$json = {
+  '1': 'ResumeBehavior',
+  '2': [
+    {'1': 'RESUME_CONTINUE', '2': 0},
+    {'1': 'RESUME_FADE_IN', '2': 1},
+    {'1': 'RESUME_FROM_START', '2': 2},
   ],
 };
 
@@ -165,7 +223,13 @@ final $typed_data.Uint8List audioCueParamsDescriptor = $convert.base64Decode(
     'RpbWVfbXMYBiABKAFSC3N0YXJ0VGltZU1zEh4KC2VuZF90aW1lX21zGAcgASgBUgllbmRUaW1l'
     'TXMSIwoNb3V0cHV0X2RldmljZRgIIAEoCVIMb3V0cHV0RGV2aWNlEhkKCGFzc2V0X2lkGAkgAS'
     'gJUgdhc3NldElkEjAKFGRlY2xhcmVkX2R1cmF0aW9uX21zGAogASgBUhJkZWNsYXJlZER1cmF0'
-    'aW9uTXM=');
+    'aW9uTXMSUQoOcGF1c2VfYmVoYXZpb3IYCyABKA4yKi5zdGFnZXN5bmMudjEuQXVkaW9DdWVQYX'
+    'JhbXMuUGF1c2VCZWhhdmlvclINcGF1c2VCZWhhdmlvchIiCg1wYXVzZV9mYWRlX21zGAwgASgB'
+    'UgtwYXVzZUZhZGVNcxJUCg9yZXN1bWVfYmVoYXZpb3IYDSABKA4yKy5zdGFnZXN5bmMudjEuQX'
+    'VkaW9DdWVQYXJhbXMuUmVzdW1lQmVoYXZpb3JSDnJlc3VtZUJlaGF2aW9yEiQKDnJlc3VtZV9m'
+    'YWRlX21zGA4gASgBUgxyZXN1bWVGYWRlTXMiMwoNUGF1c2VCZWhhdmlvchIOCgpQQVVTRV9IQV'
+    'JEEAASEgoOUEFVU0VfRkFERV9PVVQQASJQCg5SZXN1bWVCZWhhdmlvchITCg9SRVNVTUVfQ09O'
+    'VElOVUUQABISCg5SRVNVTUVfRkFERV9JThABEhUKEVJFU1VNRV9GUk9NX1NUQVJUEAI=');
 
 @$core.Deprecated('Use maOscCueParamsDescriptor instead')
 const MaOscCueParams$json = {
@@ -249,6 +313,62 @@ const GroupCueParams$json = {
 final $typed_data.Uint8List groupCueParamsDescriptor = $convert.base64Decode(
     'Cg5Hcm91cEN1ZVBhcmFtcxIiCg1jaGlsZF9jdWVfaWRzGAEgAygJUgtjaGlsZEN1ZUlkcxIeCg'
     'pzZXF1ZW50aWFsGAIgASgIUgpzZXF1ZW50aWFs');
+
+@$core.Deprecated('Use noteCueParamsDescriptor instead')
+const NoteCueParams$json = {
+  '1': 'NoteCueParams',
+  '2': [
+    {'1': 'text', '3': 1, '4': 1, '5': 9, '10': 'text'},
+    {'1': 'color_hex', '3': 2, '4': 1, '5': 9, '10': 'colorHex'},
+  ],
+};
+
+/// Descriptor for `NoteCueParams`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List noteCueParamsDescriptor = $convert.base64Decode(
+    'Cg1Ob3RlQ3VlUGFyYW1zEhIKBHRleHQYASABKAlSBHRleHQSGwoJY29sb3JfaGV4GAIgASgJUg'
+    'hjb2xvckhleA==');
+
+@$core.Deprecated('Use fadeCueParamsDescriptor instead')
+const FadeCueParams$json = {
+  '1': 'FadeCueParams',
+  '2': [
+    {'1': 'target_cue_id', '3': 1, '4': 1, '5': 9, '10': 'targetCueId'},
+    {'1': 'target_cue_number', '3': 2, '4': 1, '5': 9, '10': 'targetCueNumber'},
+    {
+      '1': 'action',
+      '3': 3,
+      '4': 1,
+      '5': 14,
+      '6': '.stagesync.v1.FadeCueParams.FadeAction',
+      '10': 'action'
+    },
+    {'1': 'target_volume_db', '3': 4, '4': 1, '5': 1, '10': 'targetVolumeDb'},
+    {'1': 'duration_ms', '3': 5, '4': 1, '5': 1, '10': 'durationMs'},
+    {'1': 'stop_when_done', '3': 6, '4': 1, '5': 8, '10': 'stopWhenDone'},
+  ],
+  '4': [FadeCueParams_FadeAction$json],
+};
+
+@$core.Deprecated('Use fadeCueParamsDescriptor instead')
+const FadeCueParams_FadeAction$json = {
+  '1': 'FadeAction',
+  '2': [
+    {'1': 'FADE_ACTION_VOLUME', '2': 0},
+    {'1': 'FADE_ACTION_STOP', '2': 1},
+    {'1': 'FADE_ACTION_PAUSE', '2': 2},
+    {'1': 'FADE_ACTION_RESUME', '2': 3},
+  ],
+};
+
+/// Descriptor for `FadeCueParams`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List fadeCueParamsDescriptor = $convert.base64Decode(
+    'Cg1GYWRlQ3VlUGFyYW1zEiIKDXRhcmdldF9jdWVfaWQYASABKAlSC3RhcmdldEN1ZUlkEioKEX'
+    'RhcmdldF9jdWVfbnVtYmVyGAIgASgJUg90YXJnZXRDdWVOdW1iZXISPgoGYWN0aW9uGAMgASgO'
+    'MiYuc3RhZ2VzeW5jLnYxLkZhZGVDdWVQYXJhbXMuRmFkZUFjdGlvblIGYWN0aW9uEigKEHRhcm'
+    'dldF92b2x1bWVfZGIYBCABKAFSDnRhcmdldFZvbHVtZURiEh8KC2R1cmF0aW9uX21zGAUgASgB'
+    'UgpkdXJhdGlvbk1zEiQKDnN0b3Bfd2hlbl9kb25lGAYgASgIUgxzdG9wV2hlbkRvbmUiaQoKRm'
+    'FkZUFjdGlvbhIWChJGQURFX0FDVElPTl9WT0xVTUUQABIUChBGQURFX0FDVElPTl9TVE9QEAES'
+    'FQoRRkFERV9BQ1RJT05fUEFVU0UQAhIWChJGQURFX0FDVElPTl9SRVNVTUUQAw==');
 
 @$core.Deprecated('Use cueListDescriptor instead')
 const CueList$json = {

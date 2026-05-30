@@ -354,6 +354,37 @@ func (e *Engine) Resume(cueID string, fadeInMs float64) error {
 }
 
 // StopAll immediately silences everything (PANIC).
+// FadeVolume gradually changes the volume of a playing cue to targetVolumeDb
+// over durationMs. Optionally stops or pauses the cue when the fade finishes.
+func (e *Engine) FadeVolume(cueID string, targetVolumeDb, durationMs float64, stopWhenDone, pauseWhenDone bool) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	h, ok := e.handles[cueID]
+	if !ok {
+		return fmt.Errorf("handle not found: %q", cueID)
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.state != StatePlaying && h.state != StatePaused {
+		return fmt.Errorf("cue %q not playing", cueID)
+	}
+	targetLinear := float32(dbToLinear(targetVolumeDb))
+	totalSamples := msToSamples(durationMs, h.sampleRate)
+	if totalSamples <= 0 {
+		// Immediate volume change
+		h.volume = targetLinear
+		return nil
+	}
+	h.volumeFadeStart   = h.volume
+	h.volumeFadeTarget  = targetLinear
+	h.volumeFadeSamples = totalSamples
+	h.volumeFadePos     = 0
+	h.volumeFadeStop    = stopWhenDone
+	h.volumeFadePause   = pauseWhenDone
+	log.Printf("[audioengine] fadeVolume cueID=%s → %.1fdB over %.0fms", cueID, targetVolumeDb, durationMs)
+	return nil
+}
+
 func (e *Engine) StopAll() {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -415,9 +446,32 @@ func (e *Engine) mix(outputSamples []byte, frameCount uint32) {
 				}
 			}
 
-			// Per-sample gain with fade in/out and stop/pause fade.
+			// Per-sample gain with fade in/out, stop/pause fade and continuous volume fade.
 			gain := h.volume
 			framePos := h.pos
+
+			// Continuous volume fade (Fade-Cue)
+			if h.volumeFadeSamples > 0 {
+				t := float32(h.volumeFadePos) / float32(h.volumeFadeSamples)
+				if t >= 1.0 {
+					// Fade done
+					h.volume = h.volumeFadeTarget
+					h.volumeFadeSamples = 0
+					if h.volumeFadeStop {
+						h.state = StateDone
+						break
+					}
+					if h.volumeFadePause {
+						h.pausedAt = h.pos
+						h.state = StatePaused
+						break
+					}
+				} else {
+					h.volume = h.volumeFadeStart + (h.volumeFadeTarget-h.volumeFadeStart)*t
+					h.volumeFadePos++
+				}
+				gain = h.volume
+			}
 
 			// Fade in
 			if h.fadeInSamples > 0 && framePos < h.fadeInSamples {

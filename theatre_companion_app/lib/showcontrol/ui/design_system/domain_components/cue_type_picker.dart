@@ -22,9 +22,11 @@ Future<CueParams?> showCueTypePicker(BuildContext context) async {
     items: [
       cueTypeMenuItem('audio', Icons.volume_up,            'Audio', 'Audiodatei abspielen'),
       cueTypeMenuItem('wait',  Icons.timer_outlined,        'Wait',  'Pause / Timer'),
+      cueTypeMenuItem('fade',  Icons.tune,                  'Fade',  'Lautstärke einer laufenden Cue faden'),
       cueTypeMenuItem('maOsc', Icons.settings_remote,       'MA OSC','GrandMA über OSC'),
       cueTypeMenuItem('goto',  Icons.redo,                  'GOTO',  'Zu einer anderen Cue springen'),
       cueTypeMenuItem('group', Icons.account_tree_outlined, 'Group', 'Cues parallel/sequentiell'),
+      cueTypeMenuItem('note',  Icons.text_fields,           'Note',  'Textmarker / Trennlinie'),
     ],
   );
 
@@ -34,6 +36,8 @@ Future<CueParams?> showCueTypePicker(BuildContext context) async {
     'maOsc' => const MaOscParams(oscAddress: '/gma2/cmd'),
     'goto'  => const GotoParams(targetCueId: ''),
     'group' => const GroupParams(childCueIds: [], sequential: false),
+    'note'  => const NoteParams(text: ''),
+    'fade'  => const FadeParams(),
     _       => null,
   };
 }

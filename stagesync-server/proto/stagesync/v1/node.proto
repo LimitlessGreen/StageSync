@@ -151,6 +151,7 @@ message NodeCommandRequest {
     AudioResumeCommand     audio_resume   = 10;
     AudioTestSignalCommand audio_test     = 11;
     NodeConfigCommand      node_config    = 12; // Master → Node: Konfiguration ändern
+    AudioFadeCommand       audio_fade     = 13; // Lautstärke einer laufenden Cue faden
   }
 }
 
@@ -215,6 +216,16 @@ message AudioResumeCommand {
 
 // Anweisung an den Node, ein Testsignal SELBST zu generieren und abzuspielen
 // (es wird kein Audio über das Netz übertragen).
+// Blendet eine laufende Cue auf eine Ziel-Lautstärke um.
+// Kann optional die Cue danach stoppen oder pausieren.
+message AudioFadeCommand {
+  string cue_id           = 1; // Ziel-Cue-ID
+  double target_volume_db = 2; // Ziel-Lautstärke in dB
+  double duration_ms      = 3; // Fade-Dauer in ms
+  bool   stop_when_done   = 4; // Cue nach Fade stoppen
+  bool   pause_when_done  = 5; // Cue nach Fade pausieren
+}
+
 message AudioTestSignalCommand {
   enum Kind {
     KIND_TONE  = 0; // Sinuston (frequency_hz)

@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart' show Color;
 import 'package:meta/meta.dart';
 
 /// Sealed hierarchy of cue-type-specific parameters.
@@ -7,11 +8,22 @@ sealed class CueParams {
   const CueParams();
 }
 
+// ── Audio Pause / Resume behavior enums ──────────────────────────────────────
+
+enum PauseBehavior {
+  hard,     // sofort stoppen (default)
+  fadeOut,  // ausblenden, dann pausieren
+}
+
+enum ResumeBehavior {
+  continuePlaying, // nahtlos weitermachen (default)
+  fadeIn,          // einblenden beim Weiterspielen
+  fromStart,       // von vorne beginnen
+}
+
 @immutable
 final class AudioParams extends CueParams {
   /// Content-addressable asset ID (SHA-256 of the audio file).
-  /// Maps to proto field AudioCueParams.asset_id; server stores and returns
-  /// the full SHA-256 hex string. Empty = asset not yet assigned.
   final String assetId;
   final double volumeDb;
   final double fadeInMs;
@@ -21,8 +33,13 @@ final class AudioParams extends CueParams {
   final double endTimeMs;
 
   /// Total playback duration from asset file header metadata (ms).
-  /// null = not known (old cue or asset not yet resolved).
   final double? declaredDurationMs;
+
+  // ── Pause / Resume ──────────────────────────────────────────────────────
+  final PauseBehavior pauseBehavior;
+  final double pauseFadeMs;     // Fade-Dauer bei pauseBehavior.fadeOut
+  final ResumeBehavior resumeBehavior;
+  final double resumeFadeMs;    // Fade-Dauer bei resumeBehavior.fadeIn
 
   const AudioParams({
     required this.assetId,
@@ -33,6 +50,10 @@ final class AudioParams extends CueParams {
     this.startTimeMs = 0.0,
     this.endTimeMs = 0.0,
     this.declaredDurationMs,
+    this.pauseBehavior = PauseBehavior.hard,
+    this.pauseFadeMs = 1000.0,
+    this.resumeBehavior = ResumeBehavior.continuePlaying,
+    this.resumeFadeMs = 500.0,
   });
 
   AudioParams copyWith({
@@ -44,6 +65,10 @@ final class AudioParams extends CueParams {
     double? startTimeMs,
     double? endTimeMs,
     double? declaredDurationMs,
+    PauseBehavior? pauseBehavior,
+    double? pauseFadeMs,
+    ResumeBehavior? resumeBehavior,
+    double? resumeFadeMs,
   }) =>
       AudioParams(
         assetId: assetId ?? this.assetId,
@@ -54,13 +79,14 @@ final class AudioParams extends CueParams {
         startTimeMs: startTimeMs ?? this.startTimeMs,
         endTimeMs: endTimeMs ?? this.endTimeMs,
         declaredDurationMs: declaredDurationMs ?? this.declaredDurationMs,
+        pauseBehavior: pauseBehavior ?? this.pauseBehavior,
+        pauseFadeMs: pauseFadeMs ?? this.pauseFadeMs,
+        resumeBehavior: resumeBehavior ?? this.resumeBehavior,
+        resumeFadeMs: resumeFadeMs ?? this.resumeFadeMs,
       );
 
-  /// Duration in ms derived from startTimeMs/endTimeMs.
   double? get effectiveDurationMs {
-    if (endTimeMs > startTimeMs && endTimeMs > 0) {
-      return endTimeMs - startTimeMs;
-    }
+    if (endTimeMs > startTimeMs && endTimeMs > 0) return endTimeMs - startTimeMs;
     return null;
   }
 }
@@ -179,5 +205,66 @@ final class MidiParams extends CueParams {
 final class ScriptParams extends CueParams {
   final String script;
   const ScriptParams({required this.script});
+}
+
+// ── Note / Placeholder cue ────────────────────────────────────────────────────
+
+/// Textmarker oder Trennlinie in der CueList — kein Execution.
+/// Hilft bei der Übersicht, besonders auf mobilen Geräten.
+@immutable
+final class NoteParams extends CueParams {
+  final String text;
+  final Color? color; // null = Standard-Grau
+
+  const NoteParams({this.text = '', this.color});
+
+  NoteParams copyWith({String? text, Color? color}) =>
+      NoteParams(text: text ?? this.text, color: color ?? this.color);
+}
+
+// ── Fade / Control cue ────────────────────────────────────────────────────────
+
+enum FadeAction {
+  volume,  // nur Lautstärke anpassen
+  stop,    // mit Fade stoppen
+  pause,   // mit Fade pausieren
+  resume,  // mit Fade-In fortsetzen
+}
+
+/// Steuert eine andere laufende Cue (entspricht QLab Fade-Cue).
+@immutable
+final class FadeParams extends CueParams {
+  final String targetCueId;
+  final String targetCueNumber; // Anzeigenummer als Referenz
+  final FadeAction action;
+  final double targetVolumeDb;
+  final double durationMs;
+  final bool stopWhenDone;
+
+  const FadeParams({
+    this.targetCueId = '',
+    this.targetCueNumber = '',
+    this.action = FadeAction.volume,
+    this.targetVolumeDb = 0.0,
+    this.durationMs = 2000.0,
+    this.stopWhenDone = false,
+  });
+
+  FadeParams copyWith({
+    String? targetCueId,
+    String? targetCueNumber,
+    FadeAction? action,
+    double? targetVolumeDb,
+    double? durationMs,
+    bool? stopWhenDone,
+  }) =>
+      FadeParams(
+        targetCueId: targetCueId ?? this.targetCueId,
+        targetCueNumber: targetCueNumber ?? this.targetCueNumber,
+        action: action ?? this.action,
+        targetVolumeDb: targetVolumeDb ?? this.targetVolumeDb,
+        durationMs: durationMs ?? this.durationMs,
+        stopWhenDone: stopWhenDone ?? this.stopWhenDone,
+      );
 }
 

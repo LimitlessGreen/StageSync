@@ -14,6 +14,53 @@ import 'dart:core' as $core;
 
 import 'package:protobuf/protobuf.dart' as $pb;
 
+/// ── Pause / Resume Verhalten ──────────────────────────────────────────────
+class AudioCueParams_PauseBehavior extends $pb.ProtobufEnum {
+  static const AudioCueParams_PauseBehavior PAUSE_HARD =
+      AudioCueParams_PauseBehavior._(0, _omitEnumNames ? '' : 'PAUSE_HARD');
+  static const AudioCueParams_PauseBehavior PAUSE_FADE_OUT =
+      AudioCueParams_PauseBehavior._(1, _omitEnumNames ? '' : 'PAUSE_FADE_OUT');
+
+  static const $core.List<AudioCueParams_PauseBehavior> values =
+      <AudioCueParams_PauseBehavior>[
+    PAUSE_HARD,
+    PAUSE_FADE_OUT,
+  ];
+
+  static final $core.List<AudioCueParams_PauseBehavior?> _byValue =
+      $pb.ProtobufEnum.$_initByValueList(values, 1);
+  static AudioCueParams_PauseBehavior? valueOf($core.int value) =>
+      value < 0 || value >= _byValue.length ? null : _byValue[value];
+
+  const AudioCueParams_PauseBehavior._(super.value, super.name);
+}
+
+class AudioCueParams_ResumeBehavior extends $pb.ProtobufEnum {
+  static const AudioCueParams_ResumeBehavior RESUME_CONTINUE =
+      AudioCueParams_ResumeBehavior._(
+          0, _omitEnumNames ? '' : 'RESUME_CONTINUE');
+  static const AudioCueParams_ResumeBehavior RESUME_FADE_IN =
+      AudioCueParams_ResumeBehavior._(
+          1, _omitEnumNames ? '' : 'RESUME_FADE_IN');
+  static const AudioCueParams_ResumeBehavior RESUME_FROM_START =
+      AudioCueParams_ResumeBehavior._(
+          2, _omitEnumNames ? '' : 'RESUME_FROM_START');
+
+  static const $core.List<AudioCueParams_ResumeBehavior> values =
+      <AudioCueParams_ResumeBehavior>[
+    RESUME_CONTINUE,
+    RESUME_FADE_IN,
+    RESUME_FROM_START,
+  ];
+
+  static final $core.List<AudioCueParams_ResumeBehavior?> _byValue =
+      $pb.ProtobufEnum.$_initByValueList(values, 2);
+  static AudioCueParams_ResumeBehavior? valueOf($core.int value) =>
+      value < 0 || value >= _byValue.length ? null : _byValue[value];
+
+  const AudioCueParams_ResumeBehavior._(super.value, super.name);
+}
+
 class MaOscCueParams_MaCommand extends $pb.ProtobufEnum {
   static const MaOscCueParams_MaCommand MA_CMD_UNSPECIFIED =
       MaOscCueParams_MaCommand._(0, _omitEnumNames ? '' : 'MA_CMD_UNSPECIFIED');
@@ -41,6 +88,32 @@ class MaOscCueParams_MaCommand extends $pb.ProtobufEnum {
       value < 0 || value >= _byValue.length ? null : _byValue[value];
 
   const MaOscCueParams_MaCommand._(super.value, super.name);
+}
+
+class FadeCueParams_FadeAction extends $pb.ProtobufEnum {
+  static const FadeCueParams_FadeAction FADE_ACTION_VOLUME =
+      FadeCueParams_FadeAction._(0, _omitEnumNames ? '' : 'FADE_ACTION_VOLUME');
+  static const FadeCueParams_FadeAction FADE_ACTION_STOP =
+      FadeCueParams_FadeAction._(1, _omitEnumNames ? '' : 'FADE_ACTION_STOP');
+  static const FadeCueParams_FadeAction FADE_ACTION_PAUSE =
+      FadeCueParams_FadeAction._(2, _omitEnumNames ? '' : 'FADE_ACTION_PAUSE');
+  static const FadeCueParams_FadeAction FADE_ACTION_RESUME =
+      FadeCueParams_FadeAction._(3, _omitEnumNames ? '' : 'FADE_ACTION_RESUME');
+
+  static const $core.List<FadeCueParams_FadeAction> values =
+      <FadeCueParams_FadeAction>[
+    FADE_ACTION_VOLUME,
+    FADE_ACTION_STOP,
+    FADE_ACTION_PAUSE,
+    FADE_ACTION_RESUME,
+  ];
+
+  static final $core.List<FadeCueParams_FadeAction?> _byValue =
+      $pb.ProtobufEnum.$_initByValueList(values, 3);
+  static FadeCueParams_FadeAction? valueOf($core.int value) =>
+      value < 0 || value >= _byValue.length ? null : _byValue[value];
+
+  const FadeCueParams_FadeAction._(super.value, super.name);
 }
 
 class ShowDefinitionEvent_DefinitionEventType extends $pb.ProtobufEnum {

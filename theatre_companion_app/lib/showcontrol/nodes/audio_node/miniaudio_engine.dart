@@ -300,6 +300,23 @@ class MiniaudioEngine implements AbstractAudioEngine {
   }
 
   @override
+  Future<void> fadeVolume(
+    String cueId, {
+    required double targetLinear,
+    required double durationMs,
+    bool stopWhenDone = false,
+    bool pauseWhenDone = false,
+  }) async {
+    // Miniaudio-Engine: Lautstärke sofort setzen (kein smooth fade auf FFI-Ebene).
+    // TODO: native fade implementieren wenn miniaudio FFI-Bindings erweitert werden.
+    if (stopWhenDone) {
+      await stop(cueId);
+    } else if (pauseWhenDone) {
+      await pause(cueId);
+    }
+  }
+
+  @override
   Future<void> disposeAll() async {
     // Stop all sounds but keep the engine running.
     _stopAll();

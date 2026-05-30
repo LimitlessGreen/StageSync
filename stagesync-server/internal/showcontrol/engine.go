@@ -277,16 +277,26 @@ func (e *Engine) Pause(ctx context.Context) error {
 	pausedAt := e.pausedAt
 	e.mu.Unlock()
 
-	// Audio auf allen Nodes anhalten (nicht stoppen) — mit kurzem Fade.
+	// Fade-Dauer aus den Cue-Parametern lesen (falls Audio-Cue mit PauseBehavior gesetzt).
+	fadeOut := float64(pauseFadeMs)
+	if activeCue != nil {
+		if ap, ok := activeCue.Params.(*pb.Cue_Audio); ok && ap != nil {
+			if ap.Audio.PauseBehavior == pb.AudioCueParams_PAUSE_FADE_OUT && ap.Audio.PauseFadeMs > 0 {
+				fadeOut = ap.Audio.PauseFadeMs
+			}
+		}
+	}
+
+	// Audio auf allen Nodes anhalten (nicht stoppen) — mit Fade.
 	if activeCue != nil && e.dispatcher != nil {
-		opCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		opCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = e.dispatcher.DispatchToTask(opCtx, pb.NodeTask_NODE_TASK_AUDIO_OUTPUT, &pb.NodeCommandRequest{
 			SessionId: e.sessionID,
 			Command: &pb.NodeCommandRequest_AudioPause{
 				AudioPause: &pb.AudioPauseCommand{
 					CueId:     activeCue.CueId,
-					FadeOutMs: pauseFadeMs,
+					FadeOutMs: fadeOut,
 				},
 			},
 		})
@@ -318,15 +328,36 @@ func (e *Engine) Resume(ctx context.Context) error {
 	e.mu.Unlock()
 
 	activeCue := e.store.GetActiveCue(e.cueListID)
+
+	// Fade-In-Dauer aus den Cue-Parametern lesen.
+	fadeIn := float64(resumeFadeMs)
+	if activeCue != nil {
+		if ap, ok := activeCue.Params.(*pb.Cue_Audio); ok && ap != nil {
+			if ap.Audio.ResumeBehavior == pb.AudioCueParams_RESUME_FADE_IN && ap.Audio.ResumeFadeMs > 0 {
+				fadeIn = ap.Audio.ResumeFadeMs
+			} else if ap.Audio.ResumeBehavior == pb.AudioCueParams_RESUME_FROM_START {
+				// Von vorne: erst stoppen, dann neu starten
+				_ = e.dispatcher.DispatchToTask(context.Background(), pb.NodeTask_NODE_TASK_AUDIO_OUTPUT, &pb.NodeCommandRequest{
+					SessionId: e.sessionID,
+					Command: &pb.NodeCommandRequest_AudioStop{
+						AudioStop: &pb.AudioStopCommand{CueId: activeCue.CueId},
+					},
+				})
+				_ = e.dispatchAudio(context.Background(), activeCue)
+				return nil
+			}
+		}
+	}
+
 	if activeCue != nil && e.dispatcher != nil {
-		opCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		opCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		_ = e.dispatcher.DispatchToTask(opCtx, pb.NodeTask_NODE_TASK_AUDIO_OUTPUT, &pb.NodeCommandRequest{
 			SessionId: e.sessionID,
 			Command: &pb.NodeCommandRequest_AudioResume{
 				AudioResume: &pb.AudioResumeCommand{
 					CueId:    activeCue.CueId,
-					FadeInMs: resumeFadeMs,
+					FadeInMs: fadeIn,
 				},
 			},
 		})
@@ -410,6 +441,12 @@ func (e *Engine) dispatchCue(ctx context.Context, cue *pb.Cue) {
 		err = e.dispatchWait(ctx, cue)
 	case pb.CueType_CUE_TYPE_GROUP:
 		err = e.dispatchGroup(ctx, cue)
+	case pb.CueType_CUE_TYPE_NOTE:
+		// Note/Placeholder: kein Execution — sofort fertig.
+		log.Printf("[engine] Cue %s/%q: Note → übersprungen", cue.Number, cue.Label)
+		err = nil
+	case pb.CueType_CUE_TYPE_FADE:
+		err = e.dispatchFade(ctx, cue)
 	default:
 		log.Printf("[engine] Cue %s/%q: unbekannter Typ %s (params=%T) → übersprungen",
 			cue.Number, cue.Label, cue.CueType, cue.Params)
@@ -647,6 +684,65 @@ func (e *Engine) dispatchWait(ctx context.Context, cue *pb.Cue) error {
 	}
 	select {
 	case <-time.After(time.Duration(params.Wait.DurationMs) * time.Millisecond):
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// dispatchFade sendet einen Lautstärke-Fade an eine laufende Audio-Cue.
+// Nach Ablauf der Fade-Dauer kann die Ziel-Cue gestoppt oder pausiert werden.
+func (e *Engine) dispatchFade(ctx context.Context, cue *pb.Cue) error {
+	params, ok := cue.Params.(*pb.Cue_Fade)
+	if !ok || params == nil {
+		return errors.New("invalid fade cue params")
+	}
+	if e.dispatcher == nil {
+		return errors.New("no dispatcher")
+	}
+
+	fp := params.Fade
+	log.Printf("[engine] dispatchFade cueId=%s → target=%s action=%s vol=%.1fdB dur=%.0fms",
+		cue.CueId, fp.TargetCueId, fp.Action, fp.TargetVolumeDb, fp.DurationMs)
+
+	sendCtx := context.Background()
+
+	// Fade-Command an alle Audio-Nodes senden.
+	_ = e.dispatcher.DispatchToTask(sendCtx, pb.NodeTask_NODE_TASK_AUDIO_OUTPUT,
+		&pb.NodeCommandRequest{
+			SessionId: e.sessionID,
+			Command: &pb.NodeCommandRequest_AudioFade{
+				AudioFade: &pb.AudioFadeCommand{
+					CueId:          fp.TargetCueId,
+					TargetVolumeDb: fp.TargetVolumeDb,
+					DurationMs:     fp.DurationMs,
+					StopWhenDone:   fp.StopWhenDone || fp.Action == pb.FadeCueParams_FADE_ACTION_STOP,
+					PauseWhenDone:  fp.Action == pb.FadeCueParams_FADE_ACTION_PAUSE,
+				},
+			},
+		})
+
+	// Bei RESUME: Resume-Command mit Fade-In statt Fade-Out senden.
+	if fp.Action == pb.FadeCueParams_FADE_ACTION_RESUME {
+		_ = e.dispatcher.DispatchToTask(sendCtx, pb.NodeTask_NODE_TASK_AUDIO_OUTPUT,
+			&pb.NodeCommandRequest{
+				SessionId: e.sessionID,
+				Command: &pb.NodeCommandRequest_AudioResume{
+					AudioResume: &pb.AudioResumeCommand{
+						CueId:    fp.TargetCueId,
+						FadeInMs: fp.DurationMs,
+					},
+				},
+			})
+	}
+
+	// Warte die Fade-Dauer ab (damit GO-Screen Fortschritt sieht).
+	fadeDur := time.Duration(fp.DurationMs) * time.Millisecond
+	if fadeDur <= 0 {
+		return nil
+	}
+	select {
+	case <-time.After(fadeDur):
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()

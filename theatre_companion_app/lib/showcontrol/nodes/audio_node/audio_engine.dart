@@ -438,6 +438,31 @@ class AudioEngine implements AbstractAudioEngine {
     }
   }
 
+  @override
+  Future<void> fadeVolume(
+    String cueId, {
+    required double targetLinear,
+    required double durationMs,
+    bool stopWhenDone = false,
+    bool pauseWhenDone = false,
+  }) async {
+    final handle = _handles[cueId];
+    if (handle == null || !_soloud.getIsValidVoiceHandle(handle)) return;
+    final gen = (_fadeGen[cueId] ?? 0) + 1;
+    _fadeGen[cueId] = gen;
+    _soloud.fadeVolume(handle, targetLinear, Duration(milliseconds: durationMs.round()));
+    if (stopWhenDone || pauseWhenDone) {
+      Future.delayed(Duration(milliseconds: durationMs.round()), () {
+        if (_fadeGen[cueId] != gen) return; // superseded
+        if (stopWhenDone) {
+          stop(cueId);
+        } else if (pauseWhenDone) {
+          pause(cueId);
+        }
+      });
+    }
+  }
+
   Future<void> _disposeSource(String cueId) async {
     _loadedPaths.remove(cueId);
     final existing = _sources.remove(cueId);

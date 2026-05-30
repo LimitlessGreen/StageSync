@@ -446,6 +446,15 @@ const NodeCommandRequest$json = {
       '9': 0,
       '10': 'nodeConfig'
     },
+    {
+      '1': 'audio_fade',
+      '3': 13,
+      '4': 1,
+      '5': 11,
+      '6': '.stagesync.v1.AudioFadeCommand',
+      '9': 0,
+      '10': 'audioFade'
+    },
   ],
   '8': [
     {'1': 'command'},
@@ -466,8 +475,9 @@ final $typed_data.Uint8List nodeCommandRequestDescriptor = $convert.base64Decode
     'VzZRJFCgxhdWRpb19yZXN1bWUYCiABKAsyIC5zdGFnZXN5bmMudjEuQXVkaW9SZXN1bWVDb21t'
     'YW5kSABSC2F1ZGlvUmVzdW1lEkUKCmF1ZGlvX3Rlc3QYCyABKAsyJC5zdGFnZXN5bmMudjEuQX'
     'VkaW9UZXN0U2lnbmFsQ29tbWFuZEgAUglhdWRpb1Rlc3QSQgoLbm9kZV9jb25maWcYDCABKAsy'
-    'Hy5zdGFnZXN5bmMudjEuTm9kZUNvbmZpZ0NvbW1hbmRIAFIKbm9kZUNvbmZpZ0IJCgdjb21tYW'
-    '5k');
+    'Hy5zdGFnZXN5bmMudjEuTm9kZUNvbmZpZ0NvbW1hbmRIAFIKbm9kZUNvbmZpZxI/CgphdWRpb1'
+    '9mYWRlGA0gASgLMh4uc3RhZ2VzeW5jLnYxLkF1ZGlvRmFkZUNvbW1hbmRIAFIJYXVkaW9GYWRl'
+    'QgkKB2NvbW1hbmQ=');
 
 @$core.Deprecated('Use nodeConfigCommandDescriptor instead')
 const NodeConfigCommand$json = {
@@ -610,6 +620,25 @@ const AudioResumeCommand$json = {
 final $typed_data.Uint8List audioResumeCommandDescriptor = $convert.base64Decode(
     'ChJBdWRpb1Jlc3VtZUNvbW1hbmQSFQoGY3VlX2lkGAEgASgJUgVjdWVJZBIcCgpmYWRlX2luX2'
     '1zGAIgASgBUghmYWRlSW5Ncw==');
+
+@$core.Deprecated('Use audioFadeCommandDescriptor instead')
+const AudioFadeCommand$json = {
+  '1': 'AudioFadeCommand',
+  '2': [
+    {'1': 'cue_id', '3': 1, '4': 1, '5': 9, '10': 'cueId'},
+    {'1': 'target_volume_db', '3': 2, '4': 1, '5': 1, '10': 'targetVolumeDb'},
+    {'1': 'duration_ms', '3': 3, '4': 1, '5': 1, '10': 'durationMs'},
+    {'1': 'stop_when_done', '3': 4, '4': 1, '5': 8, '10': 'stopWhenDone'},
+    {'1': 'pause_when_done', '3': 5, '4': 1, '5': 8, '10': 'pauseWhenDone'},
+  ],
+};
+
+/// Descriptor for `AudioFadeCommand`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List audioFadeCommandDescriptor = $convert.base64Decode(
+    'ChBBdWRpb0ZhZGVDb21tYW5kEhUKBmN1ZV9pZBgBIAEoCVIFY3VlSWQSKAoQdGFyZ2V0X3ZvbH'
+    'VtZV9kYhgCIAEoAVIOdGFyZ2V0Vm9sdW1lRGISHwoLZHVyYXRpb25fbXMYAyABKAFSCmR1cmF0'
+    'aW9uTXMSJAoOc3RvcF93aGVuX2RvbmUYBCABKAhSDHN0b3BXaGVuRG9uZRImCg9wYXVzZV93aG'
+    'VuX2RvbmUYBSABKAhSDXBhdXNlV2hlbkRvbmU=');
 
 @$core.Deprecated('Use audioTestSignalCommandDescriptor instead')
 const AudioTestSignalCommand$json = {

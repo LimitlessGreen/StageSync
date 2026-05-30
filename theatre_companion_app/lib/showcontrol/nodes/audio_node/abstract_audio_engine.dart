@@ -77,6 +77,16 @@ abstract class AbstractAudioEngine {
   /// Resumes a paused cue.
   Future<void> resume(String cueId, {double fadeInMs = 0.0});
 
+  /// Fades the volume of [cueId] to [targetLinear] over [durationMs].
+  /// Optionally stops or pauses when the fade finishes.
+  Future<void> fadeVolume(
+    String cueId, {
+    required double targetLinear,
+    required double durationMs,
+    bool stopWhenDone = false,
+    bool pauseWhenDone = false,
+  });
+
   /// Releases all preloaded handles without deinitialising the engine.
   Future<void> disposeAll();
 }

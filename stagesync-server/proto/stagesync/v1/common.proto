@@ -43,8 +43,10 @@ enum CueType {
   CUE_TYPE_AUDIO       = 1;
   CUE_TYPE_MA_OSC      = 2; // GrandMA via OSC
   CUE_TYPE_WAIT        = 3; // Zeitverzögerung
-  CUE_TYPE_GROUP       = 4; // Parallele Ausführung
+  CUE_TYPE_GROUP       = 4; // Parallele/sequentielle Ausführung
   CUE_TYPE_GOTO        = 5; // Sprung zu Cue-Nummer
+  CUE_TYPE_NOTE        = 6; // Textmarker / Trennlinie (kein Execution)
+  CUE_TYPE_FADE        = 7; // Lautstärke/Fade einer laufenden Cue steuern
 }
 
 enum CueState {

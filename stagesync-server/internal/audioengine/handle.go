@@ -39,6 +39,14 @@ type Handle struct {
 	stopFadeOutSamples int64
 	stopFadePos        int64
 
+	// Continuous volume fade (Fade-Cue): interpolates volume → volumeFadeTarget.
+	volumeFadeSamples  int64   // total samples for fade (0 = no fade active)
+	volumeFadePos      int64   // samples elapsed since fade started
+	volumeFadeStart    float32 // linear gain at fade start
+	volumeFadeTarget   float32 // linear gain target
+	volumeFadeStop     bool    // stop when fade finishes
+	volumeFadePause    bool    // pause when fade finishes
+
 	// Scheduled start: play at this server Unix ms.
 	scheduleAt int64
 }

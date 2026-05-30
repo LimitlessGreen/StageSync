@@ -121,6 +121,10 @@ class CueType extends $pb.ProtobufEnum {
       CueType._(4, _omitEnumNames ? '' : 'CUE_TYPE_GROUP');
   static const CueType CUE_TYPE_GOTO =
       CueType._(5, _omitEnumNames ? '' : 'CUE_TYPE_GOTO');
+  static const CueType CUE_TYPE_NOTE =
+      CueType._(6, _omitEnumNames ? '' : 'CUE_TYPE_NOTE');
+  static const CueType CUE_TYPE_FADE =
+      CueType._(7, _omitEnumNames ? '' : 'CUE_TYPE_FADE');
 
   static const $core.List<CueType> values = <CueType>[
     CUE_TYPE_UNSPECIFIED,
@@ -129,10 +133,12 @@ class CueType extends $pb.ProtobufEnum {
     CUE_TYPE_WAIT,
     CUE_TYPE_GROUP,
     CUE_TYPE_GOTO,
+    CUE_TYPE_NOTE,
+    CUE_TYPE_FADE,
   ];
 
   static final $core.List<CueType?> _byValue =
-      $pb.ProtobufEnum.$_initByValueList(values, 5);
+      $pb.ProtobufEnum.$_initByValueList(values, 7);
   static CueType? valueOf($core.int value) =>
       value < 0 || value >= _byValue.length ? null : _byValue[value];
 

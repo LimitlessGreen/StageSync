@@ -180,6 +180,8 @@ func (n *InternalAudioNode) handleCommand(cmd *pb.NodeCommandRequest) {
 		n.handlePause(c.AudioPause)
 	case *pb.NodeCommandRequest_AudioResume:
 		n.handleResume(c.AudioResume)
+	case *pb.NodeCommandRequest_AudioFade:
+		n.handleFade(c.AudioFade)
 	case *pb.NodeCommandRequest_NodeConfig:
 		n.handleNodeConfig(c.NodeConfig)
 	case *pb.NodeCommandRequest_AudioTest:
@@ -333,6 +335,22 @@ func (n *InternalAudioNode) handleResume(cmd *pb.AudioResumeCommand) {
 	log.Printf("[audionode] RESUME cueId=%s fadeIn=%.0fms", cueID, cmd.GetFadeInMs())
 	if err := n.engine.Resume(cueID, cmd.GetFadeInMs()); err != nil {
 		log.Printf("[audionode] RESUME error cueId=%s: %v", cueID, err)
+	}
+}
+
+func (n *InternalAudioNode) handleFade(cmd *pb.AudioFadeCommand) {
+	cueID := cmd.GetCueId()
+	log.Printf("[audionode] FADE cueId=%s → %.1fdB over %.0fms stop=%v pause=%v",
+		cueID, cmd.GetTargetVolumeDb(), cmd.GetDurationMs(),
+		cmd.GetStopWhenDone(), cmd.GetPauseWhenDone())
+	if err := n.engine.FadeVolume(
+		cueID,
+		cmd.GetTargetVolumeDb(),
+		cmd.GetDurationMs(),
+		cmd.GetStopWhenDone(),
+		cmd.GetPauseWhenDone(),
+	); err != nil {
+		log.Printf("[audionode] FADE error cueId=%s: %v", cueID, err)
 	}
 }
 

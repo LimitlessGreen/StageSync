@@ -139,6 +139,20 @@ class ShowDao extends DatabaseAccessor<AppDatabase> with _$ShowDaoMixin {
           'childCueIds': cue.group.childCueIds.toList(),
           'sequential': cue.group.sequential,
         },
+      pb.Cue_Params.note => {
+          'type': 'note',
+          'text': cue.note.text,
+          'colorHex': cue.note.colorHex,
+        },
+      pb.Cue_Params.fade => {
+          'type': 'fade',
+          'targetCueId': cue.fade.targetCueId,
+          'targetCueNumber': cue.fade.targetCueNumber,
+          'action': cue.fade.action.value,
+          'targetVolumeDb': cue.fade.targetVolumeDb,
+          'durationMs': cue.fade.durationMs,
+          'stopWhenDone': cue.fade.stopWhenDone,
+        },
       pb.Cue_Params.notSet => {'type': 'none'},
     };
     return jsonEncode(params);
@@ -172,6 +186,19 @@ class ShowDao extends DatabaseAccessor<AppDatabase> with _$ShowDaoMixin {
         cue.gotoP = pb.GotoCueParams()
           ..targetCueId = map['targetCueId'] ?? ''
           ..targetNumber = map['targetNumber'] ?? '';
+      case 'note':
+        cue.note = pb.NoteCueParams()
+          ..text = map['text'] ?? ''
+          ..colorHex = map['colorHex'] ?? '';
+      case 'fade':
+        cue.fade = pb.FadeCueParams()
+          ..targetCueId = map['targetCueId'] ?? ''
+          ..targetCueNumber = map['targetCueNumber'] ?? ''
+          ..action = pb.FadeCueParams_FadeAction.valueOf(map['action'] ?? 0) ??
+              pb.FadeCueParams_FadeAction.FADE_ACTION_VOLUME
+          ..targetVolumeDb = (map['targetVolumeDb'] ?? 0.0).toDouble()
+          ..durationMs = (map['durationMs'] ?? 2000.0).toDouble()
+          ..stopWhenDone = map['stopWhenDone'] ?? false;
     }
   }
 }

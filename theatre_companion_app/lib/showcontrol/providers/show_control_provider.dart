@@ -263,6 +263,98 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
     return '${cues.length + 1}';
   }
 
+  /// Insert a new cue directly after [afterId] (or at end if null).
+  Future<void> insertDomainCue(
+    domain_params.CueParams params, {
+    String? afterId,
+  }) async {
+    if (!_session.isInSession) return;
+    final list = state.cueList;
+    if (list == null) return;
+
+    final cues = list.cues.toList();
+    final insertIdx = afterId != null
+        ? (cues.indexWhere((c) => c.cueId == afterId) + 1).clamp(0, cues.length)
+        : cues.length;
+
+    final prevNum = insertIdx > 0 ? double.tryParse(cues[insertIdx - 1].number) : null;
+    final nextNum = insertIdx < cues.length ? double.tryParse(cues[insertIdx].number) : null;
+    final newNum = _midNumber(prevNum, nextNum, insertIdx);
+
+    final newCue = domain.Cue(
+      id: _uuid.v4(),
+      number: newNum,
+      label: 'Neue Cue',
+      params: params,
+    );
+    await upsertDomainCue(newCue);
+
+    // Reorder to place it at the right position
+    final proto = state.cueList?.cues.firstWhere(
+      (c) => c.cueId == newCue.id,
+      orElse: () => throw StateError('inserted cue not found'),
+    );
+    if (proto == null) return;
+    final newIds = List<String>.from(
+      state.cueList!.cues.map((c) => c.cueId),
+    );
+    newIds.remove(newCue.id);
+    newIds.insert(insertIdx, newCue.id);
+    await reorderCue(orderedIds: newIds);
+  }
+
+  /// Duplicate [cueId] and insert the copy directly after it.
+  Future<void> duplicateDomainCue(String cueId) async {
+    if (!_session.isInSession) return;
+    final list = state.cueList;
+    if (list == null) return;
+    final src = list.cues.firstWhere(
+      (c) => c.cueId == cueId,
+      orElse: () => Cue(),
+    );
+    if (src.cueId.isEmpty) return;
+    final srcDomain = repo.ShowControlRepository.cueFromProto(src);
+    await insertDomainCue(srcDomain.params, afterId: cueId);
+  }
+
+  /// Wrap [cueId] in a new sequential group cue inserted before it.
+  Future<void> wrapInGroup(String cueId) async {
+    if (!_session.isInSession) return;
+    final list = state.cueList;
+    if (list == null) return;
+
+    final idx = list.cues.indexWhere((c) => c.cueId == cueId);
+    if (idx < 0) return;
+
+    final prevNum = idx > 0 ? double.tryParse(list.cues[idx - 1].number) : null;
+    final thisNum = double.tryParse(list.cues[idx].number);
+    final groupNum = _midNumber(prevNum, thisNum, idx);
+
+    final group = domain.Cue(
+      id: _uuid.v4(),
+      number: groupNum,
+      label: 'Gruppe',
+      params: domain_params.GroupParams(childCueIds: [cueId], sequential: true),
+    );
+    await upsertDomainCue(group);
+
+    // Place group before the wrapped cue
+    final newIds = List<String>.from(state.cueList!.cues.map((c) => c.cueId));
+    newIds.remove(group.id);
+    newIds.insert(idx, group.id);
+    await reorderCue(orderedIds: newIds);
+  }
+
+  String _midNumber(double? prev, double? next, int idx) {
+    if (prev != null && next != null) {
+      final mid = (prev + next) / 2;
+      return mid == mid.truncateToDouble() ? mid.toInt().toString() : mid.toStringAsFixed(1);
+    }
+    if (prev != null) return (prev + 1).toInt().toString();
+    if (next != null && next > 1) return (next - 1).toInt().toString();
+    return (idx + 1).toString();
+  }
+
   Future<void> upsertCue(Cue cue) async {
     if (!_session.isInSession) return;
     final currentListId = state.cueList?.cueListId ?? 'main';

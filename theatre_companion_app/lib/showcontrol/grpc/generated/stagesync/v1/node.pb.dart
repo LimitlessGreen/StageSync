@@ -1194,6 +1194,7 @@ enum NodeCommandRequest_Command {
   audioResume,
   audioTest,
   nodeConfig,
+  audioFade,
   notSet
 }
 
@@ -1212,6 +1213,7 @@ class NodeCommandRequest extends $pb.GeneratedMessage {
     AudioResumeCommand? audioResume,
     AudioTestSignalCommand? audioTest,
     NodeConfigCommand? nodeConfig,
+    AudioFadeCommand? audioFade,
   }) {
     final result = create();
     if (sessionId != null) result.sessionId = sessionId;
@@ -1226,6 +1228,7 @@ class NodeCommandRequest extends $pb.GeneratedMessage {
     if (audioResume != null) result.audioResume = audioResume;
     if (audioTest != null) result.audioTest = audioTest;
     if (nodeConfig != null) result.nodeConfig = nodeConfig;
+    if (audioFade != null) result.audioFade = audioFade;
     return result;
   }
 
@@ -1248,13 +1251,14 @@ class NodeCommandRequest extends $pb.GeneratedMessage {
     10: NodeCommandRequest_Command.audioResume,
     11: NodeCommandRequest_Command.audioTest,
     12: NodeCommandRequest_Command.nodeConfig,
+    13: NodeCommandRequest_Command.audioFade,
     0: NodeCommandRequest_Command.notSet
   };
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(
       _omitMessageNames ? '' : 'NodeCommandRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
       createEmptyInstance: create)
-    ..oo(0, [4, 5, 6, 7, 9, 10, 11, 12])
+    ..oo(0, [4, 5, 6, 7, 9, 10, 11, 12, 13])
     ..aOS(1, _omitFieldNames ? '' : 'sessionId')
     ..aOS(2, _omitFieldNames ? '' : 'commandId')
     ..aOS(3, _omitFieldNames ? '' : 'targetNodeId')
@@ -1276,6 +1280,8 @@ class NodeCommandRequest extends $pb.GeneratedMessage {
         subBuilder: AudioTestSignalCommand.create)
     ..aOM<NodeConfigCommand>(12, _omitFieldNames ? '' : 'nodeConfig',
         subBuilder: NodeConfigCommand.create)
+    ..aOM<AudioFadeCommand>(13, _omitFieldNames ? '' : 'audioFade',
+        subBuilder: AudioFadeCommand.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1305,6 +1311,7 @@ class NodeCommandRequest extends $pb.GeneratedMessage {
   @$pb.TagNumber(10)
   @$pb.TagNumber(11)
   @$pb.TagNumber(12)
+  @$pb.TagNumber(13)
   NodeCommandRequest_Command whichCommand() =>
       _NodeCommandRequest_CommandByTag[$_whichOneof(0)]!;
   @$pb.TagNumber(4)
@@ -1315,6 +1322,7 @@ class NodeCommandRequest extends $pb.GeneratedMessage {
   @$pb.TagNumber(10)
   @$pb.TagNumber(11)
   @$pb.TagNumber(12)
+  @$pb.TagNumber(13)
   void clearCommand() => $_clearField($_whichOneof(0));
 
   @$pb.TagNumber(1)
@@ -1440,6 +1448,17 @@ class NodeCommandRequest extends $pb.GeneratedMessage {
   void clearNodeConfig() => $_clearField(12);
   @$pb.TagNumber(12)
   NodeConfigCommand ensureNodeConfig() => $_ensure(11);
+
+  @$pb.TagNumber(13)
+  AudioFadeCommand get audioFade => $_getN(12);
+  @$pb.TagNumber(13)
+  set audioFade(AudioFadeCommand value) => $_setField(13, value);
+  @$pb.TagNumber(13)
+  $core.bool hasAudioFade() => $_has(12);
+  @$pb.TagNumber(13)
+  void clearAudioFade() => $_clearField(13);
+  @$pb.TagNumber(13)
+  AudioFadeCommand ensureAudioFade() => $_ensure(12);
 }
 
 /// Konfigurationsbefehl vom Master an einen Node.
@@ -2051,6 +2070,110 @@ class AudioResumeCommand extends $pb.GeneratedMessage {
 
 /// Anweisung an den Node, ein Testsignal SELBST zu generieren und abzuspielen
 /// (es wird kein Audio über das Netz übertragen).
+/// Blendet eine laufende Cue auf eine Ziel-Lautstärke um.
+/// Kann optional die Cue danach stoppen oder pausieren.
+class AudioFadeCommand extends $pb.GeneratedMessage {
+  factory AudioFadeCommand({
+    $core.String? cueId,
+    $core.double? targetVolumeDb,
+    $core.double? durationMs,
+    $core.bool? stopWhenDone,
+    $core.bool? pauseWhenDone,
+  }) {
+    final result = create();
+    if (cueId != null) result.cueId = cueId;
+    if (targetVolumeDb != null) result.targetVolumeDb = targetVolumeDb;
+    if (durationMs != null) result.durationMs = durationMs;
+    if (stopWhenDone != null) result.stopWhenDone = stopWhenDone;
+    if (pauseWhenDone != null) result.pauseWhenDone = pauseWhenDone;
+    return result;
+  }
+
+  AudioFadeCommand._();
+
+  factory AudioFadeCommand.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory AudioFadeCommand.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'AudioFadeCommand',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'cueId')
+    ..aD(2, _omitFieldNames ? '' : 'targetVolumeDb')
+    ..aD(3, _omitFieldNames ? '' : 'durationMs')
+    ..aOB(4, _omitFieldNames ? '' : 'stopWhenDone')
+    ..aOB(5, _omitFieldNames ? '' : 'pauseWhenDone')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  AudioFadeCommand clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  AudioFadeCommand copyWith(void Function(AudioFadeCommand) updates) =>
+      super.copyWith((message) => updates(message as AudioFadeCommand))
+          as AudioFadeCommand;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static AudioFadeCommand create() => AudioFadeCommand._();
+  @$core.override
+  AudioFadeCommand createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static AudioFadeCommand getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<AudioFadeCommand>(create);
+  static AudioFadeCommand? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get cueId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set cueId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasCueId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearCueId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.double get targetVolumeDb => $_getN(1);
+  @$pb.TagNumber(2)
+  set targetVolumeDb($core.double value) => $_setDouble(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasTargetVolumeDb() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearTargetVolumeDb() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.double get durationMs => $_getN(2);
+  @$pb.TagNumber(3)
+  set durationMs($core.double value) => $_setDouble(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasDurationMs() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearDurationMs() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.bool get stopWhenDone => $_getBF(3);
+  @$pb.TagNumber(4)
+  set stopWhenDone($core.bool value) => $_setBool(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasStopWhenDone() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearStopWhenDone() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.bool get pauseWhenDone => $_getBF(4);
+  @$pb.TagNumber(5)
+  set pauseWhenDone($core.bool value) => $_setBool(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasPauseWhenDone() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearPauseWhenDone() => $_clearField(5);
+}
+
 class AudioTestSignalCommand extends $pb.GeneratedMessage {
   factory AudioTestSignalCommand({
     $core.String? cueId,

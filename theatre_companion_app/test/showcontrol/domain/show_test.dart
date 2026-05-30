@@ -62,6 +62,8 @@ void main() {
         OscParams(address: '/foo'),
         MidiParams(channel: 1, command: 0x90),
         ScriptParams(script: 'print()'),
+        NoteParams(text: 'test'),
+        FadeParams(targetCueId: 'x'),
       ];
       for (final p in params) {
         final label = switch (p) {
@@ -73,6 +75,8 @@ void main() {
           OscParams()    => 'osc',
           MidiParams()   => 'midi',
           ScriptParams() => 'script',
+          NoteParams()   => 'note',
+          FadeParams()   => 'fade',
         };
         expect(label, isNotEmpty);
       }

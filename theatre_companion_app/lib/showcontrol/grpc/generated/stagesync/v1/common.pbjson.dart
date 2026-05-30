@@ -81,6 +81,8 @@ const CueType$json = {
     {'1': 'CUE_TYPE_WAIT', '2': 3},
     {'1': 'CUE_TYPE_GROUP', '2': 4},
     {'1': 'CUE_TYPE_GOTO', '2': 5},
+    {'1': 'CUE_TYPE_NOTE', '2': 6},
+    {'1': 'CUE_TYPE_FADE', '2': 7},
   ],
 };
 
@@ -88,7 +90,8 @@ const CueType$json = {
 final $typed_data.Uint8List cueTypeDescriptor = $convert.base64Decode(
     'CgdDdWVUeXBlEhgKFENVRV9UWVBFX1VOU1BFQ0lGSUVEEAASEgoOQ1VFX1RZUEVfQVVESU8QAR'
     'ITCg9DVUVfVFlQRV9NQV9PU0MQAhIRCg1DVUVfVFlQRV9XQUlUEAMSEgoOQ1VFX1RZUEVfR1JP'
-    'VVAQBBIRCg1DVUVfVFlQRV9HT1RPEAU=');
+    'VVAQBBIRCg1DVUVfVFlQRV9HT1RPEAUSEQoNQ1VFX1RZUEVfTk9URRAGEhEKDUNVRV9UWVBFX0'
+    'ZBREUQBw==');
 
 @$core.Deprecated('Use cueStateDescriptor instead')
 const CueState$json = {

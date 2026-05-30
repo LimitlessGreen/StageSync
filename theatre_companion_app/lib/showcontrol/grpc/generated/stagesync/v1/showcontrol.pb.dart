@@ -23,7 +23,7 @@ export 'package:protobuf/protobuf.dart' show GeneratedMessageGenericExtensions;
 
 export 'showcontrol.pbenum.dart';
 
-enum Cue_Params { audio, maOsc, wait, gotoP, group, notSet }
+enum Cue_Params { audio, maOsc, wait, gotoP, group, note, fade, notSet }
 
 class Cue extends $pb.GeneratedMessage {
   factory Cue({
@@ -45,6 +45,8 @@ class Cue extends $pb.GeneratedMessage {
     $fixnum.Int64? version,
     GroupCueParams? group,
     $core.String? logicalOutputId,
+    NoteCueParams? note,
+    FadeCueParams? fade,
   }) {
     final result = create();
     if (cueId != null) result.cueId = cueId;
@@ -65,6 +67,8 @@ class Cue extends $pb.GeneratedMessage {
     if (version != null) result.version = version;
     if (group != null) result.group = group;
     if (logicalOutputId != null) result.logicalOutputId = logicalOutputId;
+    if (note != null) result.note = note;
+    if (fade != null) result.fade = fade;
     return result;
   }
 
@@ -83,13 +87,15 @@ class Cue extends $pb.GeneratedMessage {
     12: Cue_Params.wait,
     13: Cue_Params.gotoP,
     17: Cue_Params.group,
+    19: Cue_Params.note,
+    20: Cue_Params.fade,
     0: Cue_Params.notSet
   };
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(
       _omitMessageNames ? '' : 'Cue',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
       createEmptyInstance: create)
-    ..oo(0, [10, 11, 12, 13, 17])
+    ..oo(0, [10, 11, 12, 13, 17, 19, 20])
     ..aOS(1, _omitFieldNames ? '' : 'cueId')
     ..aOS(2, _omitFieldNames ? '' : 'number')
     ..aOS(3, _omitFieldNames ? '' : 'label')
@@ -117,6 +123,10 @@ class Cue extends $pb.GeneratedMessage {
     ..aOM<GroupCueParams>(17, _omitFieldNames ? '' : 'group',
         subBuilder: GroupCueParams.create)
     ..aOS(18, _omitFieldNames ? '' : 'logicalOutputId')
+    ..aOM<NoteCueParams>(19, _omitFieldNames ? '' : 'note',
+        subBuilder: NoteCueParams.create)
+    ..aOM<FadeCueParams>(20, _omitFieldNames ? '' : 'fade',
+        subBuilder: FadeCueParams.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -142,12 +152,16 @@ class Cue extends $pb.GeneratedMessage {
   @$pb.TagNumber(12)
   @$pb.TagNumber(13)
   @$pb.TagNumber(17)
+  @$pb.TagNumber(19)
+  @$pb.TagNumber(20)
   Cue_Params whichParams() => _Cue_ParamsByTag[$_whichOneof(0)]!;
   @$pb.TagNumber(10)
   @$pb.TagNumber(11)
   @$pb.TagNumber(12)
   @$pb.TagNumber(13)
   @$pb.TagNumber(17)
+  @$pb.TagNumber(19)
+  @$pb.TagNumber(20)
   void clearParams() => $_clearField($_whichOneof(0));
 
   @$pb.TagNumber(1)
@@ -330,6 +344,28 @@ class Cue extends $pb.GeneratedMessage {
   $core.bool hasLogicalOutputId() => $_has(17);
   @$pb.TagNumber(18)
   void clearLogicalOutputId() => $_clearField(18);
+
+  @$pb.TagNumber(19)
+  NoteCueParams get note => $_getN(18);
+  @$pb.TagNumber(19)
+  set note(NoteCueParams value) => $_setField(19, value);
+  @$pb.TagNumber(19)
+  $core.bool hasNote() => $_has(18);
+  @$pb.TagNumber(19)
+  void clearNote() => $_clearField(19);
+  @$pb.TagNumber(19)
+  NoteCueParams ensureNote() => $_ensure(18);
+
+  @$pb.TagNumber(20)
+  FadeCueParams get fade => $_getN(19);
+  @$pb.TagNumber(20)
+  set fade(FadeCueParams value) => $_setField(20, value);
+  @$pb.TagNumber(20)
+  $core.bool hasFade() => $_has(19);
+  @$pb.TagNumber(20)
+  void clearFade() => $_clearField(20);
+  @$pb.TagNumber(20)
+  FadeCueParams ensureFade() => $_ensure(19);
 }
 
 class AudioCueParams extends $pb.GeneratedMessage {
@@ -344,6 +380,10 @@ class AudioCueParams extends $pb.GeneratedMessage {
     $core.String? outputDevice,
     $core.String? assetId,
     $core.double? declaredDurationMs,
+    AudioCueParams_PauseBehavior? pauseBehavior,
+    $core.double? pauseFadeMs,
+    AudioCueParams_ResumeBehavior? resumeBehavior,
+    $core.double? resumeFadeMs,
   }) {
     final result = create();
     if (filePath != null) result.filePath = filePath;
@@ -357,6 +397,10 @@ class AudioCueParams extends $pb.GeneratedMessage {
     if (assetId != null) result.assetId = assetId;
     if (declaredDurationMs != null)
       result.declaredDurationMs = declaredDurationMs;
+    if (pauseBehavior != null) result.pauseBehavior = pauseBehavior;
+    if (pauseFadeMs != null) result.pauseFadeMs = pauseFadeMs;
+    if (resumeBehavior != null) result.resumeBehavior = resumeBehavior;
+    if (resumeFadeMs != null) result.resumeFadeMs = resumeFadeMs;
     return result;
   }
 
@@ -383,6 +427,14 @@ class AudioCueParams extends $pb.GeneratedMessage {
     ..aOS(8, _omitFieldNames ? '' : 'outputDevice')
     ..aOS(9, _omitFieldNames ? '' : 'assetId')
     ..aD(10, _omitFieldNames ? '' : 'declaredDurationMs')
+    ..aE<AudioCueParams_PauseBehavior>(
+        11, _omitFieldNames ? '' : 'pauseBehavior',
+        enumValues: AudioCueParams_PauseBehavior.values)
+    ..aD(12, _omitFieldNames ? '' : 'pauseFadeMs')
+    ..aE<AudioCueParams_ResumeBehavior>(
+        13, _omitFieldNames ? '' : 'resumeBehavior',
+        enumValues: AudioCueParams_ResumeBehavior.values)
+    ..aD(14, _omitFieldNames ? '' : 'resumeFadeMs')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -493,6 +545,44 @@ class AudioCueParams extends $pb.GeneratedMessage {
   $core.bool hasDeclaredDurationMs() => $_has(9);
   @$pb.TagNumber(10)
   void clearDeclaredDurationMs() => $_clearField(10);
+
+  @$pb.TagNumber(11)
+  AudioCueParams_PauseBehavior get pauseBehavior => $_getN(10);
+  @$pb.TagNumber(11)
+  set pauseBehavior(AudioCueParams_PauseBehavior value) =>
+      $_setField(11, value);
+  @$pb.TagNumber(11)
+  $core.bool hasPauseBehavior() => $_has(10);
+  @$pb.TagNumber(11)
+  void clearPauseBehavior() => $_clearField(11);
+
+  @$pb.TagNumber(12)
+  $core.double get pauseFadeMs => $_getN(11);
+  @$pb.TagNumber(12)
+  set pauseFadeMs($core.double value) => $_setDouble(11, value);
+  @$pb.TagNumber(12)
+  $core.bool hasPauseFadeMs() => $_has(11);
+  @$pb.TagNumber(12)
+  void clearPauseFadeMs() => $_clearField(12);
+
+  @$pb.TagNumber(13)
+  AudioCueParams_ResumeBehavior get resumeBehavior => $_getN(12);
+  @$pb.TagNumber(13)
+  set resumeBehavior(AudioCueParams_ResumeBehavior value) =>
+      $_setField(13, value);
+  @$pb.TagNumber(13)
+  $core.bool hasResumeBehavior() => $_has(12);
+  @$pb.TagNumber(13)
+  void clearResumeBehavior() => $_clearField(13);
+
+  @$pb.TagNumber(14)
+  $core.double get resumeFadeMs => $_getN(13);
+  @$pb.TagNumber(14)
+  set resumeFadeMs($core.double value) => $_setDouble(13, value);
+  @$pb.TagNumber(14)
+  $core.bool hasResumeFadeMs() => $_has(13);
+  @$pb.TagNumber(14)
+  void clearResumeFadeMs() => $_clearField(14);
 }
 
 class MaOscCueParams extends $pb.GeneratedMessage {
@@ -788,6 +878,192 @@ class GroupCueParams extends $pb.GeneratedMessage {
   $core.bool hasSequential() => $_has(1);
   @$pb.TagNumber(2)
   void clearSequential() => $_clearField(2);
+}
+
+/// ── Note Cue ─────────────────────────────────────────────────────────────────
+/// Textmarker / Trennlinie — kein Execution. Nur für Übersicht in der CueList.
+class NoteCueParams extends $pb.GeneratedMessage {
+  factory NoteCueParams({
+    $core.String? text,
+    $core.String? colorHex,
+  }) {
+    final result = create();
+    if (text != null) result.text = text;
+    if (colorHex != null) result.colorHex = colorHex;
+    return result;
+  }
+
+  NoteCueParams._();
+
+  factory NoteCueParams.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory NoteCueParams.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'NoteCueParams',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'text')
+    ..aOS(2, _omitFieldNames ? '' : 'colorHex')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  NoteCueParams clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  NoteCueParams copyWith(void Function(NoteCueParams) updates) =>
+      super.copyWith((message) => updates(message as NoteCueParams))
+          as NoteCueParams;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static NoteCueParams create() => NoteCueParams._();
+  @$core.override
+  NoteCueParams createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static NoteCueParams getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<NoteCueParams>(create);
+  static NoteCueParams? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get text => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set text($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasText() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearText() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get colorHex => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set colorHex($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasColorHex() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearColorHex() => $_clearField(2);
+}
+
+/// ── Fade Cue ─────────────────────────────────────────────────────────────────
+/// Steuert eine andere laufende Cue: Lautstärke faden, stoppen, etc.
+/// Entspricht dem QLab Fade-Cue.
+class FadeCueParams extends $pb.GeneratedMessage {
+  factory FadeCueParams({
+    $core.String? targetCueId,
+    $core.String? targetCueNumber,
+    FadeCueParams_FadeAction? action,
+    $core.double? targetVolumeDb,
+    $core.double? durationMs,
+    $core.bool? stopWhenDone,
+  }) {
+    final result = create();
+    if (targetCueId != null) result.targetCueId = targetCueId;
+    if (targetCueNumber != null) result.targetCueNumber = targetCueNumber;
+    if (action != null) result.action = action;
+    if (targetVolumeDb != null) result.targetVolumeDb = targetVolumeDb;
+    if (durationMs != null) result.durationMs = durationMs;
+    if (stopWhenDone != null) result.stopWhenDone = stopWhenDone;
+    return result;
+  }
+
+  FadeCueParams._();
+
+  factory FadeCueParams.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory FadeCueParams.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'FadeCueParams',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'targetCueId')
+    ..aOS(2, _omitFieldNames ? '' : 'targetCueNumber')
+    ..aE<FadeCueParams_FadeAction>(3, _omitFieldNames ? '' : 'action',
+        enumValues: FadeCueParams_FadeAction.values)
+    ..aD(4, _omitFieldNames ? '' : 'targetVolumeDb')
+    ..aD(5, _omitFieldNames ? '' : 'durationMs')
+    ..aOB(6, _omitFieldNames ? '' : 'stopWhenDone')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  FadeCueParams clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  FadeCueParams copyWith(void Function(FadeCueParams) updates) =>
+      super.copyWith((message) => updates(message as FadeCueParams))
+          as FadeCueParams;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static FadeCueParams create() => FadeCueParams._();
+  @$core.override
+  FadeCueParams createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static FadeCueParams getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<FadeCueParams>(create);
+  static FadeCueParams? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get targetCueId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set targetCueId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasTargetCueId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearTargetCueId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get targetCueNumber => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set targetCueNumber($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasTargetCueNumber() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearTargetCueNumber() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  FadeCueParams_FadeAction get action => $_getN(2);
+  @$pb.TagNumber(3)
+  set action(FadeCueParams_FadeAction value) => $_setField(3, value);
+  @$pb.TagNumber(3)
+  $core.bool hasAction() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearAction() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.double get targetVolumeDb => $_getN(3);
+  @$pb.TagNumber(4)
+  set targetVolumeDb($core.double value) => $_setDouble(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasTargetVolumeDb() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearTargetVolumeDb() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.double get durationMs => $_getN(4);
+  @$pb.TagNumber(5)
+  set durationMs($core.double value) => $_setDouble(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasDurationMs() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearDurationMs() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $core.bool get stopWhenDone => $_getBF(5);
+  @$pb.TagNumber(6)
+  set stopWhenDone($core.bool value) => $_setBool(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasStopWhenDone() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearStopWhenDone() => $_clearField(6);
 }
 
 class CueList extends $pb.GeneratedMessage {

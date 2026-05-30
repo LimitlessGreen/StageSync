@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' show pow;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
@@ -356,6 +357,8 @@ class AudioNodeService {
         await _handleTestSignal(cmd.audioTest);
       case NodeCommandRequest_Command.nodeConfig:
         await _handleNodeConfig(cmd.nodeConfig);
+      case NodeCommandRequest_Command.audioFade:
+        await _handleFade(cmd.audioFade);
       case NodeCommandRequest_Command.maOsc:
         break;
       case NodeCommandRequest_Command.notSet:
@@ -587,6 +590,25 @@ class AudioNodeService {
       }
     }
   }
+
+  Future<void> _handleFade(AudioFadeCommand cmd) async {
+    _logCmd('FADE: ${cmd.cueId} → ${cmd.targetVolumeDb.toStringAsFixed(1)}dB '
+        'over ${cmd.durationMs.toStringAsFixed(0)}ms');
+    try {
+      await _engine.fadeVolume(
+        cmd.cueId,
+        targetLinear: _dbToLinear(cmd.targetVolumeDb),
+        durationMs: cmd.durationMs,
+        stopWhenDone: cmd.stopWhenDone,
+        pauseWhenDone: cmd.pauseWhenDone,
+      );
+    } catch (e) {
+      _logCmd('FADE FEHLER (${cmd.cueId}): $e');
+    }
+  }
+
+  static double _dbToLinear(double db) =>
+      db <= -60 ? 0.0 : pow(10.0, db / 20.0).toDouble();
 
   /// Leere cueId → alle aktiven Cues, sonst die eine.
   List<String> _resolveCueTargets(String cueId) =>
