@@ -21,9 +21,13 @@ Companion-App/
 │   └── proto/stagesync/v1/    # Protobuf definitions (source of truth)
 └── theatre_companion_app/     # Flutter multi-platform client
     ├── lib/showcontrol/
+    │   ├── db/                # Drift DAOs for local show cache
+    │   ├── discovery/         # mDNS discovery (_stagesync._tcp)
     │   ├── domain/            # Immutable Dart domain models (no proto types)
     │   ├── infrastructure/    # gRPC repos, MediaSync, DB DAOs
-    │   ├── nodes/             # AudioNodeService (SoLoud), MaNodeService (OSC)
+    │   ├── media/             # Server media HTTP client + local mirror sync
+    │   ├── nodes/             # AudioNodeService (Miniaudio), MaNodeService (OSC)
+    │   ├── platform/          # Android foreground-service bridge
     │   ├── providers/         # Riverpod notifiers/providers
     │   ├── session/           # ClockSync, SessionService
     │   └── ui/                # Design system + screens + shell
@@ -39,16 +43,18 @@ Flutter UI (main isolate)
   └─ Riverpod Providers
        ├─ ShowControlProvider  ──► ShowControlNotifier (domain state)
        ├─ SessionProvider      ──► SessionService (clock-sync, heartbeat)
-       ├─ AudioNodeProvider    ──► AudioNodeService (SoLoud, MediaSync)
+       ├─ AudioNodeProvider    ──► AudioNodeService (Miniaudio, MediaSync)
        └─ NodeManagementProvider
 
 ShowControlNotifier
-  └─ ShowControlRepository (infrastructure/grpc/)
-       ├─ StageSyncClient      ──► gRPC Channel + Stubs (long-lived, one per session)
-       ├─ DefinitionStream     ──► ShowDefinitionEvent (cues, patch, assets)
-       ├─ ExecutionStream      ──► ShowExecutionEvent (playhead, cue run states)
-       ├─ HealthStream         ──► NodeHealthEvent
-       └─ MediaSyncStream      ──► MediaSyncEvent
+  ├─ StageSyncClient           ──► gRPC Channel + Stubs (long-lived, one per session)
+  ├─ DefinitionStream          ──► ShowDefinitionEvent (cues, patch)
+  ├─ ExecutionStream           ──► ShowExecutionEvent (playhead, cue run states)
+  ├─ HealthStream              ──► NodeHealthEvent
+  └─ MediaSyncStream           ──► MediaSyncEvent (triggers MediaProvider refresh)
+
+ShowControlRepository (infrastructure/grpc/)
+  └─ Proto ↔ Domain mapper only (no transport ownership)
 
 Go Server (stagesync-server)
   └─ gRPC Services
@@ -83,9 +89,9 @@ Proto types are the transport format only. Flutter uses its own **immutable Dart
 ## gRPC Channel Strategy
 
 - One `ClientChannel` per session, reused for all stubs.
-- **4 long-lived server streams**: Definition, Execution, Health, MediaSync.
-- On stream error: **only that stream** is cancelled and rebuilt — the channel stays up.
-- On full disconnect (3 heartbeat failures): exponential backoff 1 s → 30 s, then all 4 streams rebuild from snapshot.
+- **4 long-lived server streams** in `ShowControlNotifier`: Definition, Execution, Health, MediaSync.
+- On stream error/done: notifier schedules `initialize()` after 3 s; streams are rebuilt from fresh snapshot requests.
+- Session health is heartbeat-based in `SessionNotifier` (`session_provider.dart`): every 5 s, mark `reconnecting` after first failure, `disconnected` after 3 consecutive failures.
 
 ---
 
@@ -102,12 +108,13 @@ Role enforcement is **always on the server**. Flutter only shows/hides buttons a
 
 ## Audio Node
 
-`AudioNodeService` (`nodes/audio_node/`) runs SoLoud and handles:
+`AudioNodeService` (`nodes/audio_node/`) uses `MiniaudioEngine` (FFI, `native/miniaudio_wrapper`) by default and handles:
 - `AudioPlayCommand` from server (server-synced timestamp)
 - `MediaSync` — lazy pull of assets by SHA-256 from server HTTP API
+- local `MediaServer` startup + publishing `mediaServerUrl` in node capabilities
 - `auditionPlay()` — local preview, isolated handle, no server roundtrip, no show-state impact
 
-`AbstractAudioEngine` is the testable interface; `SoLoudAudioEngine` is the real implementation.
+`AbstractAudioEngine` is the testable interface; `MiniaudioEngine` is the active implementation (`AudioEngine`/SoLoud remains in-tree as alternative).
 
 ---
 
@@ -115,15 +122,15 @@ Role enforcement is **always on the server**. Flutter only shows/hides buttons a
 
 ### GO command
 1. `TransportBar` → `ref.read(showControlProvider.notifier).go()`
-2. `ShowControlNotifier` calls `ShowControlRepository.sendGo(commandId, cueId)`
-3. Repository sends gRPC `GoRequest` (with UUID `commandId` for server-side deduplication)
-4. Server executes, sends `ShowExecutionEvent` on Execution stream
+2. `ShowControlNotifier` sends gRPC `GoRequest` (with UUID `commandId` for server-side deduplication)
+3. Server executes command in authoritative show engine
+4. Server sends `ShowExecutionEvent` on Execution stream
 5. `ShowControlNotifier` updates `PlayheadState` → UI rebuilds
 
 ### Audio playback
 1. Server sends `AudioPlayCommand` on Node-Command stream to AudioNode
 2. `AudioNodeService` ensures file is local (lazy fetch via `MediaSync`)
-3. SoLoud plays at server-anchored timestamp
+3. `MiniaudioEngine` plays at server-anchored timestamp
 
 ---
 
@@ -164,7 +171,7 @@ cd ../stagesync-server && make gen
 ## Testing Conventions
 
 ### Flutter
-- Mirror `lib/showcontrol/` structure under `test/showcontrol/`.
+- Mirror `lib/showcontrol/` structure under `test/showcontrol/` where practical (e.g. `domain/`, `ui/`, `providers/`, plus `audio_node/` and `infrastructure/` test groups).
 - Every new feature or significant refactor ships with tests.
 - Use **mocktail** for service dependencies.
 - `AbstractAudioEngine` / other abstract interfaces allow engine-free unit tests.
@@ -204,10 +211,14 @@ Widgets never contain gRPC or proto imports. Business logic lives in notifiers/r
 | `stagesync-server/internal/showcontrol/engine.go` | Authoritative show-state machine |
 | `stagesync-server/internal/grpc/showcontrol_handler.go` | GO/STOP/PAUSE gRPC handlers |
 | `lib/showcontrol/grpc/stage_sync_client.dart` | Long-lived gRPC channel + stubs |
-| `lib/showcontrol/infrastructure/grpc/show_control_repository.dart` | Proto ↔ domain mapper |
-| `lib/showcontrol/providers/show_control_provider.dart` | Main Riverpod notifier |
+| `lib/showcontrol/infrastructure/grpc/show_control_repository.dart` | Proto ↔ domain mapping + patch/cue conversion helpers |
+| `lib/showcontrol/providers/show_control_provider.dart` | Main Riverpod notifier (owns 4 watch streams + transport commands) |
 | `lib/showcontrol/providers/show_control_domain_provider.dart` | Domain state providers |
-| `lib/showcontrol/nodes/audio_node/audio_node_service.dart` | SoLoud + MediaSync integration |
+| `lib/showcontrol/providers/session_provider.dart` | Session lifecycle, credentials persistence, heartbeat/health states |
+| `lib/showcontrol/media/server_media_client.dart` | HTTP media manifest/upload/download client (`:50053`) |
+| `lib/showcontrol/media/media_sync.dart` | Full mirror + lazy-fetch sync for audio-node media cache |
+| `lib/showcontrol/nodes/audio_node/audio_node_service.dart` | Miniaudio + MediaSync + node command handling |
+| `lib/showcontrol/discovery/mdns_discovery.dart` | LAN server discovery via `_stagesync._tcp.local` |
 | `lib/showcontrol/ui/shell/sc_adaptive_shell.dart` | Keyboard-first adaptive shell |
 
 ---
