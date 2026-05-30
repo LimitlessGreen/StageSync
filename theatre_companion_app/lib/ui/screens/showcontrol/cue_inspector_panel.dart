@@ -8,7 +8,8 @@ import 'package:path/path.dart' as p;
 
 import '../../../showcontrol/grpc/generated/stagesync/v1/showcontrol.pb.dart';
 import '../../../showcontrol/grpc/generated/stagesync/v1/common.pb.dart';
-import '../../../showcontrol/media/server_media_client.dart';
+import '../../../showcontrol/media/media_grpc_client.dart';
+import '../../../showcontrol/media/server_media_client.dart' show MediaFile;
 
 /// Inspector-Panel für eine Cue — zeigt typspezifische Parameter.
 /// Änderungen werden erst auf "Speichern" via [onSave] gemeldet.
@@ -318,13 +319,8 @@ class _AudioParamsState extends State<_AudioParams> {
 
     // Medien liegen IMMER auf dem Sync-Server. Ein einziger Upload genügt;
     // die Audio-Nodes spiegeln die Datei selbstständig.
-    final client = ServerMediaClient.fromConnection();
-    if (client == null) {
-      setState(() { _uploading = false; _uploadStatus = '✗ Keine Server-Verbindung'; });
-      return;
-    }
     try {
-      await client.upload(filename, bytes);
+      await MediaGrpcClient().uploadFile(filename, Uint8List.fromList(bytes));
       setState(() {
         _uploading = false;
         _uploadStatus = '✓ "$filename" auf Server hochgeladen';
@@ -608,7 +604,7 @@ class _MediaBrowserDialog extends StatefulWidget {
 }
 
 class _MediaBrowserDialogState extends State<_MediaBrowserDialog> {
-  final ServerMediaClient? _client = ServerMediaClient.fromConnection();
+  final _grpc = MediaGrpcClient();
   List<MediaFile> _files = [];
   bool _loading = true;
   bool _uploading = false;
@@ -622,23 +618,17 @@ class _MediaBrowserDialogState extends State<_MediaBrowserDialog> {
   }
 
   Future<void> _loadFiles() async {
-    final client = _client;
-    if (client == null) {
-      setState(() { _loading = false; _error = 'Keine Server-Verbindung'; });
-      return;
-    }
     setState(() { _loading = true; _error = null; });
     try {
-      final files = await client.list();
-      setState(() { _files = files; _loading = false; });
+      // Einmaligen Snapshot via WatchManifest holen (erstes Event = Snapshot)
+      final snapshot = await _grpc.watchManifest().first;
+      setState(() { _files = snapshot.assets; _loading = false; });
     } catch (e) {
       setState(() { _error = e.toString(); _loading = false; });
     }
   }
 
   Future<void> _uploadFile() async {
-    final client = _client;
-    if (client == null) return;
     final result = await FilePicker.pickFiles(type: FileType.audio);
     if (result == null || result.files.single.path == null) return;
 
@@ -647,7 +637,7 @@ class _MediaBrowserDialogState extends State<_MediaBrowserDialog> {
       final file = File(result.files.single.path!);
       final filename = result.files.single.name;
       final bytes = await file.readAsBytes();
-      await client.upload(filename, bytes);
+      await _grpc.uploadFile(filename, bytes);
       await _loadFiles();
     } catch (e) {
       setState(() => _error = 'Upload-Fehler: $e');
@@ -657,10 +647,8 @@ class _MediaBrowserDialogState extends State<_MediaBrowserDialog> {
   }
 
   Future<void> _deleteFile(String filename) async {
-    final client = _client;
-    if (client == null) return;
     try {
-      await client.delete(filename);
+      await _grpc.deleteFile(filename);
     } catch (e) {
       setState(() => _error = 'Löschen fehlgeschlagen: $e');
     }

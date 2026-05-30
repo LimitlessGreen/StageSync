@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../domain/playhead.dart';
 import '../../../domain/show.dart';
+import '../../../session/clock_sync.dart';
 import '../sc_colors.dart';
 import '../sc_typography.dart';
 
@@ -109,6 +110,7 @@ class _ActiveCueHeader extends StatelessWidget {
   Color get _stateColor {
     if (runState?.lifecycle == CueLifecycle.error) return ScColors.error;
     if (playhead.isPaused) return ScColors.warn;
+    if (playhead.isDone) return ScColors.textDim;
     return ScColors.active;
   }
 
@@ -173,9 +175,14 @@ class _ElapsedTimerState extends State<_ElapsedTimer> {
     final pause = widget.playhead.pausedAtServerMs;
     String elapsed = '0:00';
     if (start != null) {
-      final now = widget.playhead.isPaused
-          ? (pause ?? DateTime.now().millisecondsSinceEpoch)
-          : DateTime.now().millisecondsSinceEpoch;
+      final int now;
+      if (widget.playhead.isPaused) {
+        now = pause ?? ClockSync.instance.serverNow();
+      } else if (widget.playhead.isDone) {
+        now = widget.playhead.doneServerMs ?? ClockSync.instance.serverNow();
+      } else {
+        now = ClockSync.instance.serverNow();
+      }
       final ms = (now - start).clamp(0, 99 * 60 * 1000);
       final s = ms ~/ 1000;
       final m = s ~/ 60;
@@ -186,7 +193,7 @@ class _ElapsedTimerState extends State<_ElapsedTimer> {
     return Text(
       elapsed,
       style: ScText.timer.copyWith(
-        color: widget.playhead.isPaused ? ScColors.warn : ScColors.active,
+        color: widget.playhead.isPaused ? ScColors.warn : widget.playhead.isDone ? ScColors.textDim : ScColors.active,
       ),
     );
   }
@@ -203,8 +210,10 @@ class _ProgressBar extends StatelessWidget {
     final duration = cue.displayDurationMs;
     if (start == null || duration == null || duration == 0) return 0;
     final now = playhead.isPaused
-        ? (playhead.pausedAtServerMs ?? DateTime.now().millisecondsSinceEpoch)
-        : DateTime.now().millisecondsSinceEpoch;
+        ? (playhead.pausedAtServerMs ?? ClockSync.instance.serverNow())
+        : playhead.isDone
+            ? (playhead.doneServerMs ?? ClockSync.instance.serverNow())
+            : ClockSync.instance.serverNow();
     return ((now - start) / duration).clamp(0.0, 1.0);
   }
 
@@ -216,7 +225,7 @@ class _ProgressBar extends StatelessWidget {
         value: _fraction,
         backgroundColor: ScColors.divider,
         valueColor: AlwaysStoppedAnimation(
-          playhead.isPaused ? ScColors.warn : ScColors.active,
+          playhead.isPaused ? ScColors.warn : playhead.isDone ? ScColors.textDim : ScColors.active,
         ),
         minHeight: 6,
       ),

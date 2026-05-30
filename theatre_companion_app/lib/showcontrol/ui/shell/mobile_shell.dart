@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/show_control_provider.dart';
 import '../../providers/show_control_domain_provider.dart';
 import '../../providers/session_provider.dart';
+import '../../session/clock_sync.dart';
 import '../../providers/audio_node_provider.dart';
 import '../../providers/ma_node_provider.dart';
 import '../../grpc/generated/stagesync/v1/common.pb.dart' show NodeTask;
@@ -160,7 +162,7 @@ class _StatusStrip extends StatelessWidget {
 
 // ── Cue List ───────────────────────────────────────────────────────────────────
 
-class _MobileCueList extends StatelessWidget {
+class _MobileCueList extends StatefulWidget {
   final CueList? cueList;
   final PlayheadState playhead;
   final ShowControlNotifier notifier;
@@ -168,35 +170,82 @@ class _MobileCueList extends StatelessWidget {
   const _MobileCueList({required this.cueList, required this.playhead, required this.notifier});
 
   @override
+  State<_MobileCueList> createState() => _MobileCueListState();
+}
+
+class _MobileCueListState extends State<_MobileCueList> {
+  final ScrollController _scrollController = ScrollController();
+  String? _lastActiveCueId;
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(_MobileCueList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final newActiveId = widget.playhead.activeCueId;
+    if (newActiveId != null && newActiveId != _lastActiveCueId) {
+      _lastActiveCueId = newActiveId;
+      _scrollToActive(newActiveId);
+    }
+  }
+
+  void _scrollToActive(String activeId) {
+    final cues = widget.cueList?.cues;
+    if (cues == null) return;
+    final activeIdx = cues.indexWhere((c) => c.id == activeId);
+    if (activeIdx < 0) return;
+
+    // Calculate offset: rows before active use rowHeight, active row uses rowHeightActive.
+    double offset = activeIdx * ScSpacing.rowHeight;
+    // Subtract half the viewport height to center the active row.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      final viewportHeight = _scrollController.position.viewportDimension;
+      final target = (offset - viewportHeight / 2 + ScSpacing.rowHeightActive / 2)
+          .clamp(0.0, _scrollController.position.maxScrollExtent);
+      _scrollController.animateTo(
+        target,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
-    if (cueList == null) {
+    if (widget.cueList == null) {
       return Center(
         child: Text('Keine CueList', style: TextStyle(color: ScColors.textDim)),
       );
     }
 
-    final cues = cueList!.cues;
-    final activeIdx = playhead.activeCueId != null
-        ? cues.indexWhere((c) => c.id == playhead.activeCueId)
+    final cues = widget.cueList!.cues;
+    final activeIdx = widget.playhead.activeCueId != null
+        ? cues.indexWhere((c) => c.id == widget.playhead.activeCueId)
         : -1;
 
     return ListView.builder(
+      controller: _scrollController,
       itemCount: cues.length,
       itemBuilder: (context, i) {
         final cue = cues[i];
-        final isActive = playhead.activeCueId == cue.id;
+        final isActive = widget.playhead.activeCueId == cue.id;
         final isPast = activeIdx >= 0 && i < activeIdx;
 
         return CueListRow(
           key: ValueKey(cue.id),
           cue: cue,
-          runState: playhead.runStateFor(cue.id),
+          runState: widget.playhead.runStateFor(cue.id),
           isActive: isActive,
           isPast: isPast,
           expanded: isActive,
           // Mobile: tap to jump to cue; no drag/delete/context actions
           showDragHandle: false,
-          onTap: () => notifier.goToCue(cue.id),
+          onTap: () => widget.notifier.goToCue(cue.id),
         );
       },
     );
@@ -205,7 +254,7 @@ class _MobileCueList extends StatelessWidget {
 
 // ── Transport Controls ─────────────────────────────────────────────────────────
 
-class _TransportControls extends StatelessWidget {
+class _TransportControls extends StatefulWidget {
   final PlayheadState playhead;
   final VoidCallback onGo;
   final VoidCallback onStop;
@@ -223,13 +272,78 @@ class _TransportControls extends StatelessWidget {
   });
 
   @override
+  State<_TransportControls> createState() => _TransportControlsState();
+}
+
+class _TransportControlsState extends State<_TransportControls> {
+  Timer? _ticker;
+
+  @override
+  void initState() {
+    super.initState();
+    _updateTimer();
+  }
+
+  @override
+  void didUpdateWidget(_TransportControls oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.playhead.isRunning != widget.playhead.isRunning) {
+      _updateTimer();
+    }
+  }
+
+  void _updateTimer() {
+    if (widget.playhead.isRunning) {
+      _ticker ??= Timer.periodic(const Duration(seconds: 1), (_) {
+        if (mounted) setState(() {});
+      });
+    } else {
+      _ticker?.cancel();
+      _ticker = null;
+    }
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  String _formatElapsed() {
+    final started = widget.playhead.startedServerMs;
+    if (started == null) return '0:00';
+    final int elapsedMs;
+    if (widget.playhead.isPaused) {
+      final paused = widget.playhead.pausedAtServerMs;
+      elapsedMs = paused != null ? paused - started : 0;
+    } else {
+      elapsedMs = ClockSync.instance.serverNow() - started;
+    }
+    final totalSeconds = (elapsedMs / 1000).floor().clamp(0, double.maxFinite.toInt());
+    final m = totalSeconds ~/ 60;
+    final s = (totalSeconds % 60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final showTimer = widget.playhead.startedServerMs != null &&
+        (widget.playhead.isRunning || widget.playhead.isPaused);
+
     return Container(
       color: ScColors.surface,
       padding: const EdgeInsets.all(ScSpacing.panelPadLarge),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          // Elapsed timer
+          if (showTimer) ...[
+            Text(
+              _formatElapsed(),
+              style: ScText.timer,
+            ),
+            const SizedBox(height: 8),
+          ],
           // Large GO button
           SizedBox(
             width: double.infinity,
@@ -238,7 +352,7 @@ class _TransportControls extends StatelessWidget {
               label: 'GO',
               variant: ScButtonVariant.primary,
               size: ScButtonSize.large,
-              onPressed: onGo,
+              onPressed: widget.onGo,
             ),
           ),
           const SizedBox(height: 12),
@@ -248,20 +362,20 @@ class _TransportControls extends StatelessWidget {
               Expanded(
                 child: SizedBox(
                   height: ScSpacing.buttonHeightDefault,
-                  child: playhead.isPaused
+                  child: widget.playhead.isPaused
                       ? ScButton(
                           label: 'RESUME',
                           icon: Icons.play_arrow,
                           variant: ScButtonVariant.secondary,
                           size: ScButtonSize.normal,
-                          onPressed: onResume,
+                          onPressed: widget.onResume,
                         )
                       : ScButton(
                           label: 'PAUSE',
                           icon: Icons.pause,
                           variant: ScButtonVariant.secondary,
                           size: ScButtonSize.normal,
-                          onPressed: onPause,
+                          onPressed: widget.onPause,
                         ),
                 ),
               ),
@@ -274,7 +388,7 @@ class _TransportControls extends StatelessWidget {
                     icon: Icons.stop,
                     variant: ScButtonVariant.danger,
                     size: ScButtonSize.normal,
-                    onPressed: onStop,
+                    onPressed: widget.onStop,
                   ),
                 ),
               ),
@@ -289,7 +403,7 @@ class _TransportControls extends StatelessWidget {
               icon: Icons.logout,
               variant: ScButtonVariant.danger,
               size: ScButtonSize.compact,
-              onPressed: onLeave,
+              onPressed: widget.onLeave,
             ),
           ),
         ],

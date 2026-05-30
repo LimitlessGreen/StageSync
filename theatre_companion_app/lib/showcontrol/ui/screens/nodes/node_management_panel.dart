@@ -314,8 +314,15 @@ class _NodeDetailColumnState extends ConsumerState<_NodeDetailColumn> {
   // Returns the effective selection: user-picked index OR the currently active device.
   int? _effectiveIdx(List<AudioDevice> devices, AudioDevice? activeDevice, bool isLocal) {
     if (_selectedDeviceIdx != null) return _selectedDeviceIdx;
-    if (!isLocal || activeDevice == null) return null;
-    final i = devices.indexWhere((d) => d.name == activeDevice.name);
+    if (isLocal) {
+      if (activeDevice == null) return null;
+      final i = devices.indexWhere((d) => d.name == activeDevice.name);
+      return i >= 0 ? i : null;
+    }
+    // Remote node: pre-select via audition device name reported in capabilities.
+    final remoteName = widget.node.audition.deviceName;
+    if (remoteName == null || remoteName.isEmpty) return null;
+    final i = devices.indexWhere((d) => d.name == remoteName);
     return i >= 0 ? i : null;
   }
 

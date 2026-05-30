@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../providers/media_provider.dart';
 import '../../../providers/audio_node_provider.dart';
+import '../../../providers/show_control_domain_provider.dart';
 import '../../../nodes/audio_node/audio_node_service.dart';
 import '../../design_system/sc_colors.dart';
 import '../../design_system/sc_spacing.dart';
@@ -24,6 +25,8 @@ class MediaManagerScreen extends ConsumerStatefulWidget {
 }
 
 class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
+  String? _auditingAssetId;
+
   @override
   void initState() {
     super.initState();
@@ -31,6 +34,11 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (ref.read(mediaProvider).assets.isEmpty) {
         ref.read(mediaProvider.notifier).refresh();
+      }
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(audioNodeProvider.notifier).ensureEngineInitialized();
       }
     });
   }
@@ -87,8 +95,16 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
                   : _AssetTable(
                       assets: assets,
                       isUploading: state.isUploading,
-                      isAudioConnected: ref.watch(audioNodeProvider).state ==
-                          AudioNodeState.connected,
+                      isAudioConnected: () {
+                        final isLocalAudioConnected =
+                            ref.watch(audioNodeProvider).state ==
+                                AudioNodeState.connected;
+                        final hasOnlineAudioNode = ref
+                            .watch(nodeStatusListProvider)
+                            .any((n) => n.isAudio && n.isOnline);
+                        return isLocalAudioConnected || hasOnlineAudioNode;
+                      }(),
+                      auditingAssetId: _auditingAssetId,
                       onDelete: (name) =>
                           ref.read(mediaProvider.notifier).delete(name),
                       onAudition: (asset) {
@@ -96,13 +112,16 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
                         final volumeDb = lufs != null
                             ? (-23.0 - lufs).clamp(-40.0, 20.0)
                             : 0.0;
+                        setState(() => _auditingAssetId = asset.id);
                         ref.read(audioNodeProvider.notifier).auditionPlay(
-                          assetId: asset.name,  // Dateiname, nicht SHA-256
+                          assetId: asset.id, // SHA-256, nicht Dateiname
                           volumeDb: volumeDb,
                         );
                       },
-                      onAuditionStop: () =>
-                          ref.read(audioNodeProvider.notifier).auditionStop(),
+                      onAuditionStop: () {
+                        setState(() => _auditingAssetId = null);
+                        ref.read(audioNodeProvider.notifier).auditionStop();
+                      },
                     ),
         ),
       ],
@@ -173,6 +192,7 @@ class _AssetTable extends StatelessWidget {
   final List<Asset> assets;
   final bool isUploading;
   final bool isAudioConnected;
+  final String? auditingAssetId;
   final ValueChanged<String> onDelete;
   final ValueChanged<Asset> onAudition;
   final VoidCallback onAuditionStop;
@@ -181,6 +201,7 @@ class _AssetTable extends StatelessWidget {
     required this.assets,
     required this.isUploading,
     required this.isAudioConnected,
+    required this.auditingAssetId,
     required this.onDelete,
     required this.onAudition,
     required this.onAuditionStop,
@@ -217,6 +238,7 @@ class _AssetTable extends StatelessWidget {
             itemBuilder: (context, i) => _AssetRow(
               asset: assets[i],
               isAudioConnected: isAudioConnected,
+              auditingAssetId: auditingAssetId,
               onDelete: () => onDelete(assets[i].name),
               onAudition: () => onAudition(assets[i]),
               onAuditionStop: onAuditionStop,
@@ -279,6 +301,7 @@ class _HeaderCell extends StatelessWidget {
 class _AssetRow extends StatefulWidget {
   final Asset asset;
   final bool isAudioConnected;
+  final String? auditingAssetId;
   final VoidCallback onDelete;
   final VoidCallback onAudition;
   final VoidCallback onAuditionStop;
@@ -286,6 +309,7 @@ class _AssetRow extends StatefulWidget {
   const _AssetRow({
     required this.asset,
     required this.isAudioConnected,
+    required this.auditingAssetId,
     required this.onDelete,
     required this.onAudition,
     required this.onAuditionStop,
@@ -386,27 +410,41 @@ class _AssetRowState extends State<_AssetRow> {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   if (isAudio) ...[
-                    Tooltip(
-                      message: widget.isAudioConnected
-                          ? 'Vorhören'
-                          : 'Audio-Node nicht verbunden',
-                      child: InkWell(
-                        onTap: widget.isAudioConnected
-                            ? widget.onAudition
-                            : null,
-                        borderRadius: BorderRadius.circular(4),
-                        child: Padding(
-                          padding: const EdgeInsets.all(4),
-                          child: Icon(
-                            Icons.headphones,
-                            size: 15,
-                            color: widget.isAudioConnected
-                                ? ScColors.textSecondary
-                                : ScColors.textDim,
+                    () {
+                      final isPlaying =
+                          widget.auditingAssetId == widget.asset.id;
+                      return Tooltip(
+                        message: !widget.isAudioConnected
+                            ? 'Audio-Node nicht verbunden'
+                            : isPlaying
+                                ? 'Vorhören stoppen'
+                                : 'Vorhören',
+                        child: InkWell(
+                          onTap: widget.isAudioConnected
+                              ? (isPlaying
+                                  ? widget.onAuditionStop
+                                  : widget.onAudition)
+                              : null,
+                          borderRadius: BorderRadius.circular(4),
+                          child: Padding(
+                            padding: const EdgeInsets.all(4),
+                            child: isPlaying
+                                ? const Icon(
+                                    Icons.graphic_eq,
+                                    size: 15,
+                                    color: ScColors.active,
+                                  )
+                                : Icon(
+                                    Icons.headphones,
+                                    size: 15,
+                                    color: widget.isAudioConnected
+                                        ? ScColors.textSecondary
+                                        : ScColors.textDim,
+                                  ),
                           ),
                         ),
-                      ),
-                    ),
+                      );
+                    }(),
                     const SizedBox(width: 2),
                   ],
                   if (_hovered)

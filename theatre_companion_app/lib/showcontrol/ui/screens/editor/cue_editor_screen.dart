@@ -192,8 +192,12 @@ class _InspectorContent extends StatelessWidget {
             value: cue.label,
             onChanged: (v) => notifier.upsertDomainCue(cue.copyWith(label: v)),
           ),
-          if (cue.logicalOutputId != null)
-            ScInlineField(label: 'Bus', value: cue.logicalOutputId!),
+          ScInlineField(
+            label: 'Bus',
+            value: cue.logicalOutputId ?? '',
+            onChanged: (v) => notifier.upsertDomainCue(
+                cue.copyWith(logicalOutputId: v.isEmpty ? null : v)),
+          ),
           const SizedBox(height: 12),
           Text('TIMING', style: ScText.sectionTitle),
           const SizedBox(height: 4),
@@ -223,6 +227,7 @@ class _InspectorContent extends StatelessWidget {
               }
             },
           ),
+          _AutoContinueRow(cue: cue, notifier: notifier),
           const SizedBox(height: 12),
           Text('PARAMETER', style: ScText.sectionTitle),
           const SizedBox(height: 4),
@@ -265,13 +270,115 @@ class _ParamsContent extends ConsumerWidget {
             ScInlineField(label: 'Exec', value: '${mp.executorNo}'),
           ],
         ),
-      GotoParams gp => ScInlineField(label: 'Ziel', value: gp.targetNumber),
-      GroupParams gp => Text(
-          '${gp.childCueIds.length} Cues (${gp.sequential ? 'sequentiell' : 'parallel'})',
-          style: ScText.label,
-        ),
+      GotoParams gp => _buildGotoParams(context, ref, gp),
+      GroupParams gp => _buildGroupParams(context, ref, gp),
       _ => Text(cue.params.runtimeType.toString(), style: ScText.label),
     };
+  }
+
+  Widget _buildGotoParams(BuildContext context, WidgetRef ref, GotoParams gp) {
+    final cueList = ref.watch(domainCueListProvider);
+    return ScInlineField(
+      label: 'Ziel',
+      value: gp.targetNumber,
+      onChanged: (v) {
+        final matched = cueList?.cues.firstWhere(
+          (c) => c.number == v,
+          orElse: () => Cue(id: '', number: v, label: v, params: gp),
+        );
+        notifier.upsertDomainCue(
+          cue.copyWith(
+            params: gp.copyWith(
+              targetCueId: matched?.id ?? '',
+              targetNumber: v,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildGroupParams(BuildContext context, WidgetRef ref, GroupParams gp) {
+    final cueList = ref.watch(domainCueListProvider);
+    final otherCues = cueList?.cues.where((c) => c.id != cue.id).toList() ?? [];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Sequential toggle
+        Row(
+          children: [
+            SizedBox(
+              width: ScSpacing.inspectorLabelWidth,
+              child: Text('Sequentiell', style: ScText.label),
+            ),
+            Switch(
+              value: gp.sequential,
+              onChanged: (v) => notifier.upsertDomainCue(
+                cue.copyWith(params: gp.copyWith(sequential: v)),
+              ),
+              activeColor: ScColors.active,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        // Child cue list
+        ...gp.childCueIds.map((id) {
+          final child = cueList?.cueById(id);
+          final label = child != null ? '${child.number}  ${child.label}' : id;
+          return Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(label,
+                      style: ScText.label.copyWith(color: ScColors.textSecondary),
+                      overflow: TextOverflow.ellipsis),
+                ),
+                GestureDetector(
+                  onTap: () {
+                    final newIds = List<String>.from(gp.childCueIds)..remove(id);
+                    notifier.upsertDomainCue(
+                      cue.copyWith(params: gp.copyWith(childCueIds: newIds)),
+                    );
+                  },
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 4),
+                    child: Icon(Icons.close, size: 14, color: ScColors.textDim),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+        const SizedBox(height: 6),
+        // Add child button
+        ScButton(
+          label: '+ Kind-Cue',
+          variant: ScButtonVariant.ghost,
+          size: ScButtonSize.compact,
+          onPressed: otherCues.isEmpty
+              ? null
+              : () async {
+                  final picked = await showDialog<String>(
+                    context: context,
+                    builder: (ctx) => _PickChildCueDialog(
+                      candidates: otherCues
+                          .where((c) => !gp.childCueIds.contains(c.id))
+                          .toList(),
+                    ),
+                  );
+                  if (picked != null) {
+                    final newIds = [...gp.childCueIds, picked];
+                    notifier.upsertDomainCue(
+                      cue.copyWith(params: gp.copyWith(childCueIds: newIds)),
+                    );
+                  }
+                },
+        ),
+      ],
+    );
   }
 
   Widget _buildAudioParams(BuildContext context, WidgetRef ref, AudioParams ap) {
@@ -365,6 +472,75 @@ class _ParamsContent extends ConsumerWidget {
             ),
           ],
         );
+  }
+}
+
+// ── Auto-Continue toggle row ──────────────────────────────────────────────────
+
+class _AutoContinueRow extends StatelessWidget {
+  final Cue cue;
+  final ShowControlNotifier notifier;
+  const _AutoContinueRow({required this.cue, required this.notifier});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: ScSpacing.inspectorLabelWidth,
+          child: Text('Auto-Continue', style: ScText.label),
+        ),
+        Switch(
+          value: cue.timing.autoContinue,
+          onChanged: (v) => notifier.upsertDomainCue(
+            cue.copyWith(timing: cue.timing.copyWith(autoContinue: v)),
+          ),
+          activeColor: ScColors.active,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+      ],
+    );
+  }
+}
+
+// ── Pick-child-cue dialog ─────────────────────────────────────────────────────
+
+class _PickChildCueDialog extends StatelessWidget {
+  final List<Cue> candidates;
+  const _PickChildCueDialog({required this.candidates});
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: ScColors.surface,
+      title: Text('Kind-Cue hinzufügen', style: ScText.label.copyWith(color: ScColors.textPrimary)),
+      content: SizedBox(
+        width: 280,
+        child: candidates.isEmpty
+            ? Text('Keine weiteren Cues verfügbar.', style: ScText.label)
+            : ListView.builder(
+                shrinkWrap: true,
+                itemCount: candidates.length,
+                itemBuilder: (_, i) {
+                  final c = candidates[i];
+                  return ListTile(
+                    dense: true,
+                    title: Text(
+                      '${c.number}  ${c.label}',
+                      style: ScText.label.copyWith(color: ScColors.textSecondary),
+                    ),
+                    onTap: () => Navigator.of(context).pop(c.id),
+                  );
+                },
+              ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text('Abbrechen', style: ScText.label),
+        ),
+      ],
+    );
   }
 }
 

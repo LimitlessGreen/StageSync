@@ -169,7 +169,7 @@ class CueListRow extends StatelessWidget {
       row = GestureDetector(
         onTap: onTap,
         onSecondaryTapUp: onGo != null
-            ? (_) => _showContextMenu(context)
+            ? (details) => _showContextMenu(context, details.localPosition)
             : null,
         child: row,
       );
@@ -178,11 +178,19 @@ class CueListRow extends StatelessWidget {
     return row;
   }
 
-  void _showContextMenu(BuildContext context) {
-    // Context menu for desktop right-click
+  void _showContextMenu(BuildContext context, Offset localPosition) {
+    // Context menu for desktop right-click — opens at cursor position.
+    final RenderBox box = context.findRenderObject() as RenderBox;
+    final Offset global = box.localToGlobal(localPosition);
+    final size = MediaQuery.sizeOf(context);
     showMenu<String>(
       context: context,
-      position: RelativeRect.fromLTRB(200, 200, 0, 0),
+      position: RelativeRect.fromLTRB(
+        global.dx,
+        global.dy,
+        size.width - global.dx,
+        size.height - global.dy,
+      ),
       color: ScColors.surface2,
       items: [
         if (onGo != null)

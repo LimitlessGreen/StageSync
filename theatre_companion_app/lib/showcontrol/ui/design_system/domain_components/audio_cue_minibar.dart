@@ -39,7 +39,7 @@ class AudioCueMinibar extends StatelessWidget {
             const SizedBox(width: 6),
             Expanded(
               child: Text(
-                params.assetId,
+                asset?.name ?? (params.assetId.isEmpty ? 'Kein Asset' : params.assetId),
                 style: ScText.cueLabel.copyWith(fontSize: 12),
                 overflow: TextOverflow.ellipsis,
               ),
