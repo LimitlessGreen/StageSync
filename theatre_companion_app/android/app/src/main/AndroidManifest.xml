@@ -55,12 +55,20 @@
          ═══════════════════════════════════════════════════════════════════ -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <!-- FOREGROUND_SERVICE_CONNECTED_DEVICE: für BLE/Android 14+.
-         Erlaubt, dass ein Foreground Service mit verbundenen BLE-Geräten
-         kommuniziert, auch wenn die App im Hintergrund ist. -->
+    <!-- Foreground Service Typen (Android 14+) -->
     <uses-permission
         android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"
         tools:targetApi="34" />
+    <!-- MEDIA_PLAYBACK: hält Audio-Node aktiv wenn App im Hintergrund -->
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+        tools:targetApi="34" />
+    <!-- DATA_SYNC: hält gRPC-Streams aktiv wenn App im Hintergrund -->
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"
+        tools:targetApi="34" />
+    <!-- Batterieoptimierung deaktivieren (Nutzer muss explizit zustimmen) -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <!-- ═══════════════════════════════════════════════════════════════════
          Hardware-Feature-Deklaration

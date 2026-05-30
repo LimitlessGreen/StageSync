@@ -26,6 +26,7 @@ import '../design_system/domain_components/node_status_badge.dart';
 import '../design_system/domain_components/audio_cue_minibar.dart';
 import '../design_system/domain_components/cue_type_picker.dart';
 import '../screens/nodes/node_management_panel.dart';
+import '../screens/settings/settings_screen.dart';
 import '../screens/media/media_manager_screen.dart';
 import '../screens/audio/local_audio_panel.dart';
 import '../design_system/domain_components/patch_matrix.dart';
@@ -181,6 +182,12 @@ class _HeaderBar extends ConsumerWidget {
 
   const _HeaderBar({required this.sessionName, required this.onLeave});
 
+  void _openSettings(BuildContext context) {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => const SettingsScreen(),
+    ));
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final audioStatus = ref.watch(audioNodeProvider);
@@ -205,6 +212,14 @@ class _HeaderBar extends ConsumerWidget {
             _MaChip(status: maStatus),
             const SizedBox(width: 8),
           ],
+          IconButton(
+            icon: const Icon(Icons.settings, size: 16),
+            color: ScColors.textDim,
+            tooltip: 'Einstellungen',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            onPressed: () => _openSettings(context),
+          ),
           IconButton(
             icon: const Icon(Icons.logout, size: 16),
             color: ScColors.textDim,

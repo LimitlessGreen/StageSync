@@ -6,6 +6,7 @@ import '../../providers/session_provider.dart';
 import '../../providers/audio_node_provider.dart';
 import '../../providers/ma_node_provider.dart';
 import '../../grpc/generated/stagesync/v1/common.pb.dart' show NodeTask;
+import '../screens/settings/settings_screen.dart';
 import '../design_system/sc_colors.dart';
 import '../design_system/sc_spacing.dart';
 import '../design_system/sc_typography.dart';
@@ -79,6 +80,7 @@ class _MobileShellState extends ConsumerState<MobileShell> {
             _StatusStrip(
               sessionName: sessionState.session?.name ?? 'Show Control',
               nodes: domainState.nodes,
+              shellContext: context,
             ),
             const Divider(height: 1, color: ScColors.divider),
             // ── Read-only cue list ────────────────────────────────────────
@@ -111,8 +113,13 @@ class _MobileShellState extends ConsumerState<MobileShell> {
 class _StatusStrip extends StatelessWidget {
   final String sessionName;
   final List nodes;
+  final BuildContext shellContext;
 
-  const _StatusStrip({required this.sessionName, required this.nodes});
+  const _StatusStrip({
+    required this.sessionName,
+    required this.nodes,
+    required this.shellContext,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -131,8 +138,20 @@ class _StatusStrip extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          if (nodes.isNotEmpty)
+          if (nodes.isNotEmpty) ...[
             NodeHealthStrip(nodes: nodes.cast()),
+            const SizedBox(width: 4),
+          ],
+          IconButton(
+            icon: const Icon(Icons.settings, size: 16),
+            color: ScColors.textDim,
+            tooltip: 'Einstellungen',
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            onPressed: () => Navigator.of(shellContext).push(
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
+          ),
         ],
       ),
     );
