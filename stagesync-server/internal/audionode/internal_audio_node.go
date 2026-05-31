@@ -36,6 +36,7 @@ type InternalAudioNode struct {
 	dispatcher *node.Dispatcher
 	mediaStore *media.Store
 	engine     *audioengine.Engine
+	tbSink     *talkbackSink // Talkback Opus-Decode + Streaming-Handle
 
 	nodeID    string
 	sessionID string
@@ -76,6 +77,7 @@ func (n *InternalAudioNode) Start(ctx context.Context) {
 		return
 	}
 	n.engine = eng
+	n.tbSink = newTalkbackSink(eng)
 
 	// Audio-Gerät sofort initialisieren (nicht lazy beim ersten Preload) —
 	// verhindert WASAPI-Init-Latenz beim ersten GO-Befehl.
@@ -186,6 +188,10 @@ func (n *InternalAudioNode) handleCommand(cmd *pb.NodeCommandRequest) {
 		n.handleNodeConfig(c.NodeConfig)
 	case *pb.NodeCommandRequest_AudioTest:
 		n.handleTestSignal(c.AudioTest)
+	case *pb.NodeCommandRequest_AudioTalkback:
+		n.tbSink.handleChunk(c.AudioTalkback)
+	case *pb.NodeCommandRequest_AudioTalkbackCtrl:
+		n.handleTalkbackControl(c.AudioTalkbackCtrl)
 	default:
 		log.Printf("[audionode] unhandled command type: %T", cmd.Command)
 	}
@@ -194,6 +200,12 @@ func (n *InternalAudioNode) handleCommand(cmd *pb.NodeCommandRequest) {
 func (n *InternalAudioNode) handlePreload(cmd *pb.AudioPreloadCommand) {
 	if n.mediaStore == nil {
 		log.Printf("[audionode] PRELOAD skipped: no media store")
+		return
+	}
+	// Laufende Cue nicht unterbrechen — live-Änderungen (z.B. Lautstärke) kommen
+	// per AudioFadeCommand mit duration_ms=0 an, nicht über Preload.
+	if n.engine != nil && n.engine.IsPlaying(cmd.GetCueId()) {
+		log.Printf("[audionode] PRELOAD skipped: cue %s is currently playing", cmd.GetCueId())
 		return
 	}
 	assetID := cmd.GetAssetId()
@@ -214,6 +226,18 @@ func (n *InternalAudioNode) handlePreload(cmd *pb.AudioPreloadCommand) {
 	myGen := n.generation
 	n.genMu.Unlock()
 
+	// Fast-Path: Asset bereits im PCM-Cache → synchron preloaden, keine Goroutine.
+	// Kein Goroutine-Overhead, kein waitPreload-Wait → PLAY startet sofort.
+	if assetID != "" && n.engine.IsAssetCached(assetID) {
+		if p, err := n.mediaStore.FilePathBySHA256(assetID); err == nil {
+			if err2 := n.engine.PreloadByAsset(cueID, assetID, p); err2 == nil {
+				log.Printf("[audionode] PRELOAD (sync/cache) cueId=%s asset=%s...", cueID, shortAsset)
+				return
+			}
+		}
+	}
+
+	// Slow-Path: Datei muss vom Disk gelesen und dekodiert werden → async Goroutine.
 	// done-Channel registrieren BEVOR die Goroutine startet, damit ein
 	// unmittelbar folgendes PLAY via waitPreload() korrekt wartet.
 	done := make(chan struct{})
@@ -492,4 +516,31 @@ func (n *InternalAudioNode) handleNodeConfig(cmd *pb.NodeConfigCommand) {
 		Tasks:    []pb.NodeTask{pb.NodeTask_NODE_TASK_AUDIO_OUTPUT},
 		Online:   true,
 	})
+}
+
+// handleTalkbackControl verarbeitet Talkback-Steuerungsbefehle (START/STOP/DUCK).
+// START/STOP delegiert an talkbackSink; DUCK faded alle laufenden Cue-Handles ab.
+func (n *InternalAudioNode) handleTalkbackControl(cmd *pb.AudioTalkbackControlCommand) {
+	n.tbSink.handleControl(cmd)
+
+	if cmd.Action != pb.AudioTalkbackControlCommand_ACTION_DUCK {
+		return
+	}
+
+	// Ducking: alle laufenden Cue-Handles kurz absenken.
+	// Die Engine-API FadeVolume arbeitet pro Cue-ID — wir kennen die IDs nicht hier.
+	// Einfachster Weg: globalen Ducking-Multiplier via SetStreamingVolume aller
+	// Talkback-Handles auf 1.0 belassen und alle regulären Handles via StopAll
+	// NICHT stoppen. Stattdessen: Engine.DuckAll(duckDB, durationMs) hinzufügen.
+	duckDB := float64(cmd.DuckDb)
+	if duckDB == 0 {
+		duckDB = duckDefaultDB
+	}
+	duckMs := float64(cmd.DuckMs)
+	if duckMs == 0 {
+		duckMs = duckDefaultMs
+	}
+	if n.engine != nil {
+		n.engine.DuckAll(duckDB, duckMs)
+	}
 }

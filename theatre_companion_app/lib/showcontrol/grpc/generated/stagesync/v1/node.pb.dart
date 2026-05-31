@@ -1195,6 +1195,8 @@ enum NodeCommandRequest_Command {
   audioTest,
   nodeConfig,
   audioFade,
+  audioTalkback,
+  audioTalkbackCtrl,
   notSet
 }
 
@@ -1214,6 +1216,8 @@ class NodeCommandRequest extends $pb.GeneratedMessage {
     AudioTestSignalCommand? audioTest,
     NodeConfigCommand? nodeConfig,
     AudioFadeCommand? audioFade,
+    AudioTalkbackChunkCommand? audioTalkback,
+    AudioTalkbackControlCommand? audioTalkbackCtrl,
   }) {
     final result = create();
     if (sessionId != null) result.sessionId = sessionId;
@@ -1229,6 +1233,8 @@ class NodeCommandRequest extends $pb.GeneratedMessage {
     if (audioTest != null) result.audioTest = audioTest;
     if (nodeConfig != null) result.nodeConfig = nodeConfig;
     if (audioFade != null) result.audioFade = audioFade;
+    if (audioTalkback != null) result.audioTalkback = audioTalkback;
+    if (audioTalkbackCtrl != null) result.audioTalkbackCtrl = audioTalkbackCtrl;
     return result;
   }
 
@@ -1252,13 +1258,15 @@ class NodeCommandRequest extends $pb.GeneratedMessage {
     11: NodeCommandRequest_Command.audioTest,
     12: NodeCommandRequest_Command.nodeConfig,
     13: NodeCommandRequest_Command.audioFade,
+    14: NodeCommandRequest_Command.audioTalkback,
+    15: NodeCommandRequest_Command.audioTalkbackCtrl,
     0: NodeCommandRequest_Command.notSet
   };
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(
       _omitMessageNames ? '' : 'NodeCommandRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
       createEmptyInstance: create)
-    ..oo(0, [4, 5, 6, 7, 9, 10, 11, 12, 13])
+    ..oo(0, [4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15])
     ..aOS(1, _omitFieldNames ? '' : 'sessionId')
     ..aOS(2, _omitFieldNames ? '' : 'commandId')
     ..aOS(3, _omitFieldNames ? '' : 'targetNodeId')
@@ -1282,6 +1290,11 @@ class NodeCommandRequest extends $pb.GeneratedMessage {
         subBuilder: NodeConfigCommand.create)
     ..aOM<AudioFadeCommand>(13, _omitFieldNames ? '' : 'audioFade',
         subBuilder: AudioFadeCommand.create)
+    ..aOM<AudioTalkbackChunkCommand>(14, _omitFieldNames ? '' : 'audioTalkback',
+        subBuilder: AudioTalkbackChunkCommand.create)
+    ..aOM<AudioTalkbackControlCommand>(
+        15, _omitFieldNames ? '' : 'audioTalkbackCtrl',
+        subBuilder: AudioTalkbackControlCommand.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1312,6 +1325,8 @@ class NodeCommandRequest extends $pb.GeneratedMessage {
   @$pb.TagNumber(11)
   @$pb.TagNumber(12)
   @$pb.TagNumber(13)
+  @$pb.TagNumber(14)
+  @$pb.TagNumber(15)
   NodeCommandRequest_Command whichCommand() =>
       _NodeCommandRequest_CommandByTag[$_whichOneof(0)]!;
   @$pb.TagNumber(4)
@@ -1323,6 +1338,8 @@ class NodeCommandRequest extends $pb.GeneratedMessage {
   @$pb.TagNumber(11)
   @$pb.TagNumber(12)
   @$pb.TagNumber(13)
+  @$pb.TagNumber(14)
+  @$pb.TagNumber(15)
   void clearCommand() => $_clearField($_whichOneof(0));
 
   @$pb.TagNumber(1)
@@ -1459,6 +1476,29 @@ class NodeCommandRequest extends $pb.GeneratedMessage {
   void clearAudioFade() => $_clearField(13);
   @$pb.TagNumber(13)
   AudioFadeCommand ensureAudioFade() => $_ensure(12);
+
+  @$pb.TagNumber(14)
+  AudioTalkbackChunkCommand get audioTalkback => $_getN(13);
+  @$pb.TagNumber(14)
+  set audioTalkback(AudioTalkbackChunkCommand value) => $_setField(14, value);
+  @$pb.TagNumber(14)
+  $core.bool hasAudioTalkback() => $_has(13);
+  @$pb.TagNumber(14)
+  void clearAudioTalkback() => $_clearField(14);
+  @$pb.TagNumber(14)
+  AudioTalkbackChunkCommand ensureAudioTalkback() => $_ensure(13);
+
+  @$pb.TagNumber(15)
+  AudioTalkbackControlCommand get audioTalkbackCtrl => $_getN(14);
+  @$pb.TagNumber(15)
+  set audioTalkbackCtrl(AudioTalkbackControlCommand value) =>
+      $_setField(15, value);
+  @$pb.TagNumber(15)
+  $core.bool hasAudioTalkbackCtrl() => $_has(14);
+  @$pb.TagNumber(15)
+  void clearAudioTalkbackCtrl() => $_clearField(15);
+  @$pb.TagNumber(15)
+  AudioTalkbackControlCommand ensureAudioTalkbackCtrl() => $_ensure(14);
 }
 
 /// Konfigurationsbefehl vom Master an einen Node.
@@ -2432,6 +2472,207 @@ class NodeCommandResponse extends $pb.GeneratedMessage {
   $core.bool hasErrorMsg() => $_has(1);
   @$pb.TagNumber(2)
   void clearErrorMsg() => $_clearField(2);
+}
+
+/// Ein Talkback-Audio-Chunk: Opus-codiert, vom Server an den Node relayed.
+/// Der Node dekodiert Opus → PCM und mischt es in die Audio-Engine.
+class AudioTalkbackChunkCommand extends $pb.GeneratedMessage {
+  factory AudioTalkbackChunkCommand({
+    $core.String? clientId,
+    $core.List<$core.int>? opusData,
+    $fixnum.Int64? timestampMs,
+    $core.int? sequence,
+    $core.double? levelDb,
+  }) {
+    final result = create();
+    if (clientId != null) result.clientId = clientId;
+    if (opusData != null) result.opusData = opusData;
+    if (timestampMs != null) result.timestampMs = timestampMs;
+    if (sequence != null) result.sequence = sequence;
+    if (levelDb != null) result.levelDb = levelDb;
+    return result;
+  }
+
+  AudioTalkbackChunkCommand._();
+
+  factory AudioTalkbackChunkCommand.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory AudioTalkbackChunkCommand.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'AudioTalkbackChunkCommand',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'clientId')
+    ..a<$core.List<$core.int>>(
+        2, _omitFieldNames ? '' : 'opusData', $pb.PbFieldType.OY)
+    ..aInt64(3, _omitFieldNames ? '' : 'timestampMs')
+    ..aI(4, _omitFieldNames ? '' : 'sequence', fieldType: $pb.PbFieldType.OU3)
+    ..aD(5, _omitFieldNames ? '' : 'levelDb', fieldType: $pb.PbFieldType.OF)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  AudioTalkbackChunkCommand clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  AudioTalkbackChunkCommand copyWith(
+          void Function(AudioTalkbackChunkCommand) updates) =>
+      super.copyWith((message) => updates(message as AudioTalkbackChunkCommand))
+          as AudioTalkbackChunkCommand;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static AudioTalkbackChunkCommand create() => AudioTalkbackChunkCommand._();
+  @$core.override
+  AudioTalkbackChunkCommand createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static AudioTalkbackChunkCommand getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<AudioTalkbackChunkCommand>(create);
+  static AudioTalkbackChunkCommand? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get clientId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set clientId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasClientId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearClientId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.List<$core.int> get opusData => $_getN(1);
+  @$pb.TagNumber(2)
+  set opusData($core.List<$core.int> value) => $_setBytes(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasOpusData() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearOpusData() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $fixnum.Int64 get timestampMs => $_getI64(2);
+  @$pb.TagNumber(3)
+  set timestampMs($fixnum.Int64 value) => $_setInt64(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasTimestampMs() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearTimestampMs() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.int get sequence => $_getIZ(3);
+  @$pb.TagNumber(4)
+  set sequence($core.int value) => $_setUnsignedInt32(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasSequence() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearSequence() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.double get levelDb => $_getN(4);
+  @$pb.TagNumber(5)
+  set levelDb($core.double value) => $_setFloat(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasLevelDb() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearLevelDb() => $_clearField(5);
+}
+
+/// Talkback-Steuerung: Start/Stop/Duck eines Talkback-Streams auf dem Node.
+class AudioTalkbackControlCommand extends $pb.GeneratedMessage {
+  factory AudioTalkbackControlCommand({
+    AudioTalkbackControlCommand_Action? action,
+    $core.String? clientId,
+    $core.double? duckDb,
+    $core.int? duckMs,
+  }) {
+    final result = create();
+    if (action != null) result.action = action;
+    if (clientId != null) result.clientId = clientId;
+    if (duckDb != null) result.duckDb = duckDb;
+    if (duckMs != null) result.duckMs = duckMs;
+    return result;
+  }
+
+  AudioTalkbackControlCommand._();
+
+  factory AudioTalkbackControlCommand.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory AudioTalkbackControlCommand.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'AudioTalkbackControlCommand',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
+      createEmptyInstance: create)
+    ..aE<AudioTalkbackControlCommand_Action>(1, _omitFieldNames ? '' : 'action',
+        enumValues: AudioTalkbackControlCommand_Action.values)
+    ..aOS(2, _omitFieldNames ? '' : 'clientId')
+    ..aD(3, _omitFieldNames ? '' : 'duckDb', fieldType: $pb.PbFieldType.OF)
+    ..aI(4, _omitFieldNames ? '' : 'duckMs')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  AudioTalkbackControlCommand clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  AudioTalkbackControlCommand copyWith(
+          void Function(AudioTalkbackControlCommand) updates) =>
+      super.copyWith(
+              (message) => updates(message as AudioTalkbackControlCommand))
+          as AudioTalkbackControlCommand;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static AudioTalkbackControlCommand create() =>
+      AudioTalkbackControlCommand._();
+  @$core.override
+  AudioTalkbackControlCommand createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static AudioTalkbackControlCommand getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<AudioTalkbackControlCommand>(create);
+  static AudioTalkbackControlCommand? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  AudioTalkbackControlCommand_Action get action => $_getN(0);
+  @$pb.TagNumber(1)
+  set action(AudioTalkbackControlCommand_Action value) => $_setField(1, value);
+  @$pb.TagNumber(1)
+  $core.bool hasAction() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearAction() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get clientId => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set clientId($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasClientId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearClientId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.double get duckDb => $_getN(2);
+  @$pb.TagNumber(3)
+  set duckDb($core.double value) => $_setFloat(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasDuckDb() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearDuckDb() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.int get duckMs => $_getIZ(3);
+  @$pb.TagNumber(4)
+  set duckMs($core.int value) => $_setSignedInt32(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasDuckMs() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearDuckMs() => $_clearField(4);
 }
 
 const $core.bool _omitFieldNames =

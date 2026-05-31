@@ -20,6 +20,15 @@ abstract class AbstractAudioEngine {
   /// All cue IDs with an active (playing or preloaded) handle.
   List<String> get activeCueIds;
 
+  // ── Master volume ──────────────────────────────────────────────────────────
+
+  /// Current master output volume in dB (0 dB = unity, −∞ = mute).
+  double get masterVolumeDb;
+
+  /// Sets the master output volume immediately (no fade).
+  /// Affects all active and future playback handles.
+  void setMasterVolume(double db);
+
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   /// Initialises the engine on [device]. Falls back to system default if

@@ -46,12 +46,16 @@ class _NetworkBootstrap extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final managerAsync = ref.watch(networkIsolateManagerProvider);
-    return managerAsync.when(
-      loading: () => const _SplashScreen(),
-      error: (e, st) => _ErrorScreen(error: e.toString()),
-      data: (_) => const _AppShell(),
-    );
+    // BLE-Mesh-Netzwerk-Stack vorübergehend deaktiviert — startet direkt in Show-Ansicht.
+    // Original:
+    // final managerAsync = ref.watch(networkIsolateManagerProvider);
+    // return managerAsync.when(
+    //   loading: () => const _SplashScreen(),
+    //   error: (e, st) => _ErrorScreen(error: e.toString()),
+    //   // data: (_) => const _AppShell(),
+    //   data: (_) => const SessionScreen(),
+    // );
+    return const SessionScreen();
   }
 }
 

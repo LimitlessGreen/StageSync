@@ -65,5 +65,31 @@ class AudioTestSignalCommand_Kind extends $pb.ProtobufEnum {
   const AudioTestSignalCommand_Kind._(super.value, super.name);
 }
 
+class AudioTalkbackControlCommand_Action extends $pb.ProtobufEnum {
+  static const AudioTalkbackControlCommand_Action ACTION_START =
+      AudioTalkbackControlCommand_Action._(
+          0, _omitEnumNames ? '' : 'ACTION_START');
+  static const AudioTalkbackControlCommand_Action ACTION_STOP =
+      AudioTalkbackControlCommand_Action._(
+          1, _omitEnumNames ? '' : 'ACTION_STOP');
+  static const AudioTalkbackControlCommand_Action ACTION_DUCK =
+      AudioTalkbackControlCommand_Action._(
+          2, _omitEnumNames ? '' : 'ACTION_DUCK');
+
+  static const $core.List<AudioTalkbackControlCommand_Action> values =
+      <AudioTalkbackControlCommand_Action>[
+    ACTION_START,
+    ACTION_STOP,
+    ACTION_DUCK,
+  ];
+
+  static final $core.List<AudioTalkbackControlCommand_Action?> _byValue =
+      $pb.ProtobufEnum.$_initByValueList(values, 2);
+  static AudioTalkbackControlCommand_Action? valueOf($core.int value) =>
+      value < 0 || value >= _byValue.length ? null : _byValue[value];
+
+  const AudioTalkbackControlCommand_Action._(super.value, super.name);
+}
+
 const $core.bool _omitEnumNames =
     $core.bool.fromEnvironment('protobuf.omit_enum_names');

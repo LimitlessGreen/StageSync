@@ -30,6 +30,8 @@ class AudioNodeStatus {
   final AudioDevice? selectedDevice;
   final List<NetworkInterfaceInfo> availableInterfaces;
   final NetworkInterfaceInfo? selectedInterface;
+  /// Master output volume in dB (0 = unity, ≤ −60 = mute).
+  final double masterVolumeDb;
 
   const AudioNodeStatus({
     this.state = AudioNodeState.idle,
@@ -39,6 +41,7 @@ class AudioNodeStatus {
     this.selectedDevice,
     this.availableInterfaces = const [],
     this.selectedInterface,
+    this.masterVolumeDb = 0.0,
   });
 
   AudioNodeStatus copyWith({
@@ -49,6 +52,7 @@ class AudioNodeStatus {
     AudioDevice? selectedDevice,
     List<NetworkInterfaceInfo>? availableInterfaces,
     NetworkInterfaceInfo? selectedInterface,
+    double? masterVolumeDb,
   }) =>
       AudioNodeStatus(
         state: state ?? this.state,
@@ -58,6 +62,7 @@ class AudioNodeStatus {
         selectedDevice: selectedDevice ?? this.selectedDevice,
         availableInterfaces: availableInterfaces ?? this.availableInterfaces,
         selectedInterface: selectedInterface ?? this.selectedInterface,
+        masterVolumeDb: masterVolumeDb ?? this.masterVolumeDb,
       );
 }
 
@@ -360,6 +365,12 @@ class AudioNodeService {
       case NodeCommandRequest_Command.audioFade:
         await _handleFade(cmd.audioFade);
       case NodeCommandRequest_Command.maOsc:
+        break;
+      case NodeCommandRequest_Command.audioTalkback:
+        // Talkback-Chunks werden von externen Audio-Nodes nicht verarbeitet
+        // (nur von InternalAudioNode auf dem Server). Hier ignorieren.
+        break;
+      case NodeCommandRequest_Command.audioTalkbackCtrl:
         break;
       case NodeCommandRequest_Command.notSet:
         break;
@@ -716,6 +727,14 @@ class AudioNodeService {
       await _engine.stop(id, fadeOutMs: 100);
     }
     _logCmd('AUDITION STOP');
+  }
+
+  /// Sets the master output volume in dB immediately.
+  /// Safe to call while cues are playing — takes effect on next audio buffer.
+  void setMasterVolume(double db) {
+    _engine.setMasterVolume(db);
+    _status = _status.copyWith(masterVolumeDb: db);
+    _statusController.add(_status);
   }
 
   void dispose() {

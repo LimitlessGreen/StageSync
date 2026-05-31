@@ -455,6 +455,24 @@ const NodeCommandRequest$json = {
       '9': 0,
       '10': 'audioFade'
     },
+    {
+      '1': 'audio_talkback',
+      '3': 14,
+      '4': 1,
+      '5': 11,
+      '6': '.stagesync.v1.AudioTalkbackChunkCommand',
+      '9': 0,
+      '10': 'audioTalkback'
+    },
+    {
+      '1': 'audio_talkback_ctrl',
+      '3': 15,
+      '4': 1,
+      '5': 11,
+      '6': '.stagesync.v1.AudioTalkbackControlCommand',
+      '9': 0,
+      '10': 'audioTalkbackCtrl'
+    },
   ],
   '8': [
     {'1': 'command'},
@@ -477,7 +495,10 @@ final $typed_data.Uint8List nodeCommandRequestDescriptor = $convert.base64Decode
     'VkaW9UZXN0U2lnbmFsQ29tbWFuZEgAUglhdWRpb1Rlc3QSQgoLbm9kZV9jb25maWcYDCABKAsy'
     'Hy5zdGFnZXN5bmMudjEuTm9kZUNvbmZpZ0NvbW1hbmRIAFIKbm9kZUNvbmZpZxI/CgphdWRpb1'
     '9mYWRlGA0gASgLMh4uc3RhZ2VzeW5jLnYxLkF1ZGlvRmFkZUNvbW1hbmRIAFIJYXVkaW9GYWRl'
-    'QgkKB2NvbW1hbmQ=');
+    'ElAKDmF1ZGlvX3RhbGtiYWNrGA4gASgLMicuc3RhZ2VzeW5jLnYxLkF1ZGlvVGFsa2JhY2tDaH'
+    'Vua0NvbW1hbmRIAFINYXVkaW9UYWxrYmFjaxJbChNhdWRpb190YWxrYmFja19jdHJsGA8gASgL'
+    'Mikuc3RhZ2VzeW5jLnYxLkF1ZGlvVGFsa2JhY2tDb250cm9sQ29tbWFuZEgAUhFhdWRpb1RhbG'
+    'tiYWNrQ3RybEIJCgdjb21tYW5k');
 
 @$core.Deprecated('Use nodeConfigCommandDescriptor instead')
 const NodeConfigCommand$json = {
@@ -707,3 +728,59 @@ const NodeCommandResponse$json = {
 final $typed_data.Uint8List nodeCommandResponseDescriptor = $convert.base64Decode(
     'ChNOb2RlQ29tbWFuZFJlc3BvbnNlEhgKB3N1Y2Nlc3MYASABKAhSB3N1Y2Nlc3MSGwoJZXJyb3'
     'JfbXNnGAIgASgJUghlcnJvck1zZw==');
+
+@$core.Deprecated('Use audioTalkbackChunkCommandDescriptor instead')
+const AudioTalkbackChunkCommand$json = {
+  '1': 'AudioTalkbackChunkCommand',
+  '2': [
+    {'1': 'client_id', '3': 1, '4': 1, '5': 9, '10': 'clientId'},
+    {'1': 'opus_data', '3': 2, '4': 1, '5': 12, '10': 'opusData'},
+    {'1': 'timestamp_ms', '3': 3, '4': 1, '5': 3, '10': 'timestampMs'},
+    {'1': 'sequence', '3': 4, '4': 1, '5': 13, '10': 'sequence'},
+    {'1': 'level_db', '3': 5, '4': 1, '5': 2, '10': 'levelDb'},
+  ],
+};
+
+/// Descriptor for `AudioTalkbackChunkCommand`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List audioTalkbackChunkCommandDescriptor = $convert.base64Decode(
+    'ChlBdWRpb1RhbGtiYWNrQ2h1bmtDb21tYW5kEhsKCWNsaWVudF9pZBgBIAEoCVIIY2xpZW50SW'
+    'QSGwoJb3B1c19kYXRhGAIgASgMUghvcHVzRGF0YRIhCgx0aW1lc3RhbXBfbXMYAyABKANSC3Rp'
+    'bWVzdGFtcE1zEhoKCHNlcXVlbmNlGAQgASgNUghzZXF1ZW5jZRIZCghsZXZlbF9kYhgFIAEoAl'
+    'IHbGV2ZWxEYg==');
+
+@$core.Deprecated('Use audioTalkbackControlCommandDescriptor instead')
+const AudioTalkbackControlCommand$json = {
+  '1': 'AudioTalkbackControlCommand',
+  '2': [
+    {
+      '1': 'action',
+      '3': 1,
+      '4': 1,
+      '5': 14,
+      '6': '.stagesync.v1.AudioTalkbackControlCommand.Action',
+      '10': 'action'
+    },
+    {'1': 'client_id', '3': 2, '4': 1, '5': 9, '10': 'clientId'},
+    {'1': 'duck_db', '3': 3, '4': 1, '5': 2, '10': 'duckDb'},
+    {'1': 'duck_ms', '3': 4, '4': 1, '5': 5, '10': 'duckMs'},
+  ],
+  '4': [AudioTalkbackControlCommand_Action$json],
+};
+
+@$core.Deprecated('Use audioTalkbackControlCommandDescriptor instead')
+const AudioTalkbackControlCommand_Action$json = {
+  '1': 'Action',
+  '2': [
+    {'1': 'ACTION_START', '2': 0},
+    {'1': 'ACTION_STOP', '2': 1},
+    {'1': 'ACTION_DUCK', '2': 2},
+  ],
+};
+
+/// Descriptor for `AudioTalkbackControlCommand`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List audioTalkbackControlCommandDescriptor = $convert.base64Decode(
+    'ChtBdWRpb1RhbGtiYWNrQ29udHJvbENvbW1hbmQSSAoGYWN0aW9uGAEgASgOMjAuc3RhZ2VzeW'
+    '5jLnYxLkF1ZGlvVGFsa2JhY2tDb250cm9sQ29tbWFuZC5BY3Rpb25SBmFjdGlvbhIbCgljbGll'
+    'bnRfaWQYAiABKAlSCGNsaWVudElkEhcKB2R1Y2tfZGIYAyABKAJSBmR1Y2tEYhIXCgdkdWNrX2'
+    '1zGAQgASgFUgZkdWNrTXMiPAoGQWN0aW9uEhAKDEFDVElPTl9TVEFSVBAAEg8KC0FDVElPTl9T'
+    'VE9QEAESDwoLQUNUSU9OX0RVQ0sQAg==');

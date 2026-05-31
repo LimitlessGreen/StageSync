@@ -175,6 +175,14 @@ const AudioCueParams$json = {
       '10': 'declaredDurationMs'
     },
     {
+      '1': 'bus_sends',
+      '3': 15,
+      '4': 3,
+      '5': 11,
+      '6': '.stagesync.v1.BusSend',
+      '10': 'busSends'
+    },
+    {
       '1': 'pause_behavior',
       '3': 11,
       '4': 1,
@@ -223,13 +231,14 @@ final $typed_data.Uint8List audioCueParamsDescriptor = $convert.base64Decode(
     'RpbWVfbXMYBiABKAFSC3N0YXJ0VGltZU1zEh4KC2VuZF90aW1lX21zGAcgASgBUgllbmRUaW1l'
     'TXMSIwoNb3V0cHV0X2RldmljZRgIIAEoCVIMb3V0cHV0RGV2aWNlEhkKCGFzc2V0X2lkGAkgAS'
     'gJUgdhc3NldElkEjAKFGRlY2xhcmVkX2R1cmF0aW9uX21zGAogASgBUhJkZWNsYXJlZER1cmF0'
-    'aW9uTXMSUQoOcGF1c2VfYmVoYXZpb3IYCyABKA4yKi5zdGFnZXN5bmMudjEuQXVkaW9DdWVQYX'
-    'JhbXMuUGF1c2VCZWhhdmlvclINcGF1c2VCZWhhdmlvchIiCg1wYXVzZV9mYWRlX21zGAwgASgB'
-    'UgtwYXVzZUZhZGVNcxJUCg9yZXN1bWVfYmVoYXZpb3IYDSABKA4yKy5zdGFnZXN5bmMudjEuQX'
-    'VkaW9DdWVQYXJhbXMuUmVzdW1lQmVoYXZpb3JSDnJlc3VtZUJlaGF2aW9yEiQKDnJlc3VtZV9m'
-    'YWRlX21zGA4gASgBUgxyZXN1bWVGYWRlTXMiMwoNUGF1c2VCZWhhdmlvchIOCgpQQVVTRV9IQV'
-    'JEEAASEgoOUEFVU0VfRkFERV9PVVQQASJQCg5SZXN1bWVCZWhhdmlvchITCg9SRVNVTUVfQ09O'
-    'VElOVUUQABISCg5SRVNVTUVfRkFERV9JThABEhUKEVJFU1VNRV9GUk9NX1NUQVJUEAI=');
+    'aW9uTXMSMgoJYnVzX3NlbmRzGA8gAygLMhUuc3RhZ2VzeW5jLnYxLkJ1c1NlbmRSCGJ1c1Nlbm'
+    'RzElEKDnBhdXNlX2JlaGF2aW9yGAsgASgOMiouc3RhZ2VzeW5jLnYxLkF1ZGlvQ3VlUGFyYW1z'
+    'LlBhdXNlQmVoYXZpb3JSDXBhdXNlQmVoYXZpb3ISIgoNcGF1c2VfZmFkZV9tcxgMIAEoAVILcG'
+    'F1c2VGYWRlTXMSVAoPcmVzdW1lX2JlaGF2aW9yGA0gASgOMisuc3RhZ2VzeW5jLnYxLkF1ZGlv'
+    'Q3VlUGFyYW1zLlJlc3VtZUJlaGF2aW9yUg5yZXN1bWVCZWhhdmlvchIkCg5yZXN1bWVfZmFkZV'
+    '9tcxgOIAEoAVIMcmVzdW1lRmFkZU1zIjMKDVBhdXNlQmVoYXZpb3ISDgoKUEFVU0VfSEFSRBAA'
+    'EhIKDlBBVVNFX0ZBREVfT1VUEAEiUAoOUmVzdW1lQmVoYXZpb3ISEwoPUkVTVU1FX0NPTlRJTl'
+    'VFEAASEgoOUkVTVU1FX0ZBREVfSU4QARIVChFSRVNVTUVfRlJPTV9TVEFSVBAC');
 
 @$core.Deprecated('Use maOscCueParamsDescriptor instead')
 const MaOscCueParams$json = {
@@ -763,6 +772,14 @@ const PatchConfig$json = {
       '6': '.stagesync.v1.PatchDeviceAssign',
       '10': 'deviceAssigns'
     },
+    {
+      '1': 'buses',
+      '3': 10,
+      '4': 3,
+      '5': 11,
+      '6': '.stagesync.v1.AudioBus',
+      '10': 'buses'
+    },
   ],
 };
 
@@ -772,7 +789,7 @@ final $typed_data.Uint8List patchConfigDescriptor = $convert.base64Decode(
     'F0Y2hMb2dpY2FsT3V0cHV0Ug5sb2dpY2FsT3V0cHV0cxJACgxub2RlX2Fzc2lnbnMYAiADKAsy'
     'HS5zdGFnZXN5bmMudjEuUGF0Y2hOb2RlQXNzaWduUgtub2RlQXNzaWducxJGCg5kZXZpY2VfYX'
     'NzaWducxgDIAMoCzIfLnN0YWdlc3luYy52MS5QYXRjaERldmljZUFzc2lnblINZGV2aWNlQXNz'
-    'aWducw==');
+    'aWducxIsCgVidXNlcxgKIAMoCzIWLnN0YWdlc3luYy52MS5BdWRpb0J1c1IFYnVzZXM=');
 
 @$core.Deprecated('Use patchLogicalOutputDescriptor instead')
 const PatchLogicalOutput$json = {

@@ -143,15 +143,17 @@ message NodeCommandRequest {
   string   target_node_id = 3; // direkte NodeID (leer = task-basiert)
   NodeTask target_task    = 8; // task-basiertes Routing (wenn target_node_id leer)
   oneof command {
-    AudioPreloadCommand    audio_preload  = 4;
-    AudioPlayCommand       audio_play     = 5;
-    AudioStopCommand       audio_stop     = 6;
-    MaOscCommand           ma_osc         = 7;
-    AudioPauseCommand      audio_pause    = 9;
-    AudioResumeCommand     audio_resume   = 10;
-    AudioTestSignalCommand audio_test     = 11;
-    NodeConfigCommand      node_config    = 12; // Master → Node: Konfiguration ändern
-    AudioFadeCommand       audio_fade     = 13; // Lautstärke einer laufenden Cue faden
+    AudioPreloadCommand       audio_preload   = 4;
+    AudioPlayCommand          audio_play      = 5;
+    AudioStopCommand          audio_stop      = 6;
+    MaOscCommand              ma_osc          = 7;
+    AudioPauseCommand         audio_pause     = 9;
+    AudioResumeCommand        audio_resume    = 10;
+    AudioTestSignalCommand    audio_test      = 11;
+    NodeConfigCommand         node_config     = 12;
+    AudioFadeCommand          audio_fade      = 13;
+    AudioTalkbackChunkCommand audio_talkback  = 14; // Talkback PCM-Chunk (vom Server relayed)
+    AudioTalkbackControlCommand audio_talkback_ctrl = 15; // Start/Stop/Duck Steuerung
   }
 }
 
@@ -248,4 +250,29 @@ message MaOscCommand {
 message NodeCommandResponse {
   bool   success    = 1;
   string error_msg  = 2;
+}
+
+// ── Talkback Commands (Server → Audio-Node) ───────────────────────────────────
+
+// Ein Talkback-Audio-Chunk: Opus-codiert, vom Server an den Node relayed.
+// Der Node dekodiert Opus → PCM und mischt es in die Audio-Engine.
+message AudioTalkbackChunkCommand {
+  string client_id    = 1; // Quelle (für Multi-Talker Mixing als separate Handles)
+  bytes  opus_data    = 2; // Opus-Frame (10–20 ms)
+  int64  timestamp_ms = 3; // Original-Client-Timestamp (Latenz-Tracking)
+  uint32 sequence     = 4; // monoton steigend (Lücken-Erkennung)
+  float  level_db     = 5; // Bus-Level (0.0 = Unity)
+}
+
+// Talkback-Steuerung: Start/Stop/Duck eines Talkback-Streams auf dem Node.
+message AudioTalkbackControlCommand {
+  enum Action {
+    ACTION_START = 0; // Talkback-Handle anlegen (vor ersten Chunks)
+    ACTION_STOP  = 1; // Talkback-Handle entfernen (nach Stream-Ende)
+    ACTION_DUCK  = 2; // Cue-Lautstärke vorübergehend absenken (GO-Trigger)
+  }
+  Action action     = 1;
+  string client_id  = 2;
+  float  duck_db    = 3; // nur bei ACTION_DUCK: Ziel-Pegel (z.B. -12.0)
+  int32  duck_ms    = 4; // nur bei ACTION_DUCK: Rampen-Dauer in ms
 }

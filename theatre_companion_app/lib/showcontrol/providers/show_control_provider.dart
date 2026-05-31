@@ -236,6 +236,11 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
         .whereType<Cue>()
         .toList();
 
+    // Renumber sequentially so the list order always matches the numbers.
+    for (var i = 0; i < reordered.length; i++) {
+      reordered[i] = reordered[i].deepCopy()..number = '${i + 1}';
+    }
+
     final updated = list.deepCopy()
       ..cues.clear()
       ..cues.addAll(reordered);

@@ -246,7 +246,22 @@ func (e *Engine) Stop(ctx context.Context) error {
 		AffectedCue: activeCue,
 		OccurredAt:  nowProto(),
 	})
+
+	// Re-arm: nach STOP sofort die nächste Cue auf den Nodes vorpreparen,
+	// damit der folgende GO ohne Preload-Wartezeit startet.
+	go e.reArmNext()
+
 	return nil
+}
+
+// reArmNext lädt die nächste (oder erste) Cue nach einem STOP sofort vor.
+// Läuft im Hintergrund damit Stop() nicht blockiert wird.
+func (e *Engine) reArmNext() {
+	next, ok := e.store.NextCue(e.cueListID)
+	if !ok || next == nil {
+		return
+	}
+	e.armCue(context.Background(), next)
 }
 
 // pauseFadeMs / resumeFadeMs: kurze Fades gegen Knackser beim Pausieren/Fortsetzen.
@@ -612,6 +627,32 @@ func (e *Engine) ArmAll(ctx context.Context) {
 
 // ArmCue lädt eine Audio-Cue auf den zuständigen Nodes vor (Preload ohne Play).
 func (e *Engine) ArmCue(ctx context.Context, cue *pb.Cue) { e.armCue(ctx, cue) }
+
+// LiveUpdateVolume wendet eine Lautstärkeänderung sofort auf eine laufende Cue an
+// (duration_ms=0 = instantan). Wird von UpsertCue zusätzlich zu ArmCue gerufen.
+// Wenn die Cue gerade nicht spielt, ignoriert der Audio-Node den Befehl still.
+func (e *Engine) LiveUpdateVolume(cueID, targetNodeID string, volumeDb float64) {
+	if e.dispatcher == nil {
+		return
+	}
+	cmd := &pb.NodeCommandRequest{
+		SessionId:    e.sessionID,
+		TargetNodeId: targetNodeID,
+		Command: &pb.NodeCommandRequest_AudioFade{
+			AudioFade: &pb.AudioFadeCommand{
+				CueId:          cueID,
+				TargetVolumeDb: volumeDb,
+				DurationMs:     0,
+			},
+		},
+	}
+	ctx := context.Background()
+	if targetNodeID != "" {
+		_ = e.dispatcher.Dispatch(ctx, targetNodeID, cmd)
+	} else {
+		_ = e.dispatcher.DispatchToTask(ctx, pb.NodeTask_NODE_TASK_AUDIO_OUTPUT, cmd)
+	}
+}
 
 // armCue — interne Implementierung.
 func (e *Engine) armCue(_ context.Context, cue *pb.Cue) {

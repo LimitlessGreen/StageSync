@@ -1,0 +1,51 @@
+syntax = "proto3";
+
+package stagesync.v1;
+
+option go_package = "stagesync-server/gen/go/stagesync/v1;stagesyncv1";
+
+// ── Audio Bus System ──────────────────────────────────────────────────────────
+//
+// Buses sind benannte Summenkanäle zwischen Sources (Cues, Talkback, TestSignal)
+// und physischen Ausgängen. Das Modell entspricht einem digitalen Mischpult:
+//
+//   Sources ──[BusSend]──► Buses ──[BusNodeAssign]──► Nodes ──► Devices
+//
+// Jeder Bus hat einen Master-Fader (output_level_db) und ein Node-Patch
+// (welche Nodes + Geräte diesen Bus wiedergeben).
+
+enum AudioBusType {
+  AUDIO_BUS_TYPE_UNSPECIFIED = 0;
+  AUDIO_BUS_TYPE_MAIN        = 1; // Haupt-PA / FOH
+  AUDIO_BUS_TYPE_MONITOR     = 2; // Bühnenmonitore
+  AUDIO_BUS_TYPE_TALKBACK    = 3; // Talkback / Intercom
+  AUDIO_BUS_TYPE_AUX         = 4; // Aux-Send (Effekte, Recording)
+  AUDIO_BUS_TYPE_IEM         = 5; // In-Ear-Monitor
+}
+
+// Ein benannter Summenkanal.
+message AudioBus {
+  string       id               = 1; // stabile ID, z.B. "bus_main_lr"
+  string       name             = 2; // Anzeigename, z.B. "Main L/R"
+  AudioBusType type             = 3;
+  float        output_level_db  = 4; // Bus-Master-Fader (0.0 = Unity)
+  bool         muted            = 5;
+
+  // Bus → physische Ausgänge
+  repeated BusNodeAssign patch  = 6;
+}
+
+// Zuordnung eines Buses zu einem Node + Device.
+message BusNodeAssign {
+  string node_id       = 1;
+  int32  device_index  = 2; // physisches Ausgabegerät am Node
+  string device_name   = 3; // zur Anzeige / Validierung
+  int32  channel_offset = 4; // 0=L, 1=R bei Stereo-Device (default 0)
+}
+
+// Send-Zuweisung einer Source (Cue, Talkback) zu einem Bus.
+message BusSend {
+  string bus_id        = 1;
+  float  send_level_db = 2; // Send-Pegel (0.0 = Unity, negativ = Dämpfung)
+  bool   enabled       = 3; // false = Mute dieses Sends
+}

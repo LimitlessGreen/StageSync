@@ -21,9 +21,8 @@ android {
 
     defaultConfig {
         applicationId = "com.example.theatre_companion_app"
-        // BLE erfordert mindestens API 21 (Android 5.0).
-        // Für Android 12+ BLE-Permissions (neverForLocation) wird API 31 empfohlen.
-        minSdk = flutter.minSdkVersion
+        // API 33 = Android 13 — alle Zielgeräte unterstützen mindestens Android 13.
+        minSdk = 33
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -39,6 +38,14 @@ android {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
             version = "3.22.1"
+        }
+    }
+
+    packaging {
+        jniLibs {
+            // flutter_soloud und opus_flutter_android liefern beide libopus.so.
+            // flutter_soloud's Version gewinnt (aktueller, bereits vorhanden).
+            pickFirsts += setOf("**/libopus.so")
         }
     }
 

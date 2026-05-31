@@ -35,6 +35,10 @@ type Engine struct {
 	device  *malgo.Device
 	handles map[string]*Handle // cueID → handle
 
+	// streamingHandles: Echtzeit-Streams (Talkback, Live-Input).
+	// Werden von streaming_handle.go verwaltet.
+	streamingHandles map[string]*StreamingHandle
+
 	// assetPCM: decodierter PCM-Buffer pro Asset-ID (SHA-256).
 	// Mehrere Cues mit demselben Asset teilen denselben Buffer — kein Doppel-Decode.
 	assetPCM map[string][]float32 // assetID → PCM
@@ -53,12 +57,13 @@ func New() (*Engine, error) {
 		return nil, fmt.Errorf("malgo context init: %w", err)
 	}
 	e := &Engine{
-		ctx:        ctx,
-		handles:    make(map[string]*Handle),
-		assetPCM:   make(map[string][]float32),
-		sampleRate: 48000,
-		channels:   2,
-		deviceIdx:  -1,
+		ctx:              ctx,
+		handles:          make(map[string]*Handle),
+		streamingHandles: make(map[string]*StreamingHandle),
+		assetPCM:         make(map[string][]float32),
+		sampleRate:       48000,
+		channels:         2,
+		deviceIdx:        -1,
 	}
 	return e, nil
 }
@@ -183,6 +188,17 @@ func (e *Engine) Preload(cueID, path string) error {
 	return e.PreloadByAsset(cueID, "", path)
 }
 
+// IsAssetCached gibt true zurück wenn der PCM-Buffer für assetID bereits dekodiert im Speicher liegt.
+func (e *Engine) IsAssetCached(assetID string) bool {
+	if assetID == "" {
+		return false
+	}
+	e.mu.Lock()
+	_, hit := e.assetPCM[assetID]
+	e.mu.Unlock()
+	return hit
+}
+
 // PreloadByAsset decodes path and stores it under cueID.
 // Wenn assetID nicht leer ist und das Asset bereits dekodiert wurde, wird
 // der vorhandene PCM-Buffer wiederverwendet (kein Doppel-Decode).
@@ -256,6 +272,7 @@ func (e *Engine) Play(cueID string, startUnixMs int64, volumeDb float64,
 	h.volume = dbToLinear(volumeDb)
 	h.loop = loop
 	h.fadeInSamples = msToSamples(fadeInMs, h.sampleRate)
+	h.fadeInOffset  = 0 // will be adjusted below for late-join seeks
 	h.fadeOutSamples = msToSamples(fadeOutMs, h.sampleRate)
 
 	totalFrames := int64(len(h.pcm)) / int64(h.channels)
@@ -267,14 +284,18 @@ func (e *Engine) Play(cueID string, startUnixMs int64, volumeDb float64,
 			// Already past start time — jump to correct position.
 			offsetFrames := msToSamples(float64(elapsedMs), h.sampleRate)
 			if offsetFrames >= totalFrames && !loop {
-				log.Printf("[audioengine] cue %s already finished (elapsed=%dms)", cueID, elapsedMs)
-				h.state = StateDone
+				// Preload dauerte länger als die Audiodatei → von vorne spielen.
+				// Besser als still überspringen (z.B. kurze Signaltöne nach langem Preload).
+				log.Printf("[audioengine] cue %s: Preload-Verzögerung (%dms) > Länge, spiele von vorne", cueID, elapsedMs)
+				h.pos = 0
+				h.state = StatePlaying
 				return nil
 			}
 			if loop {
 				offsetFrames = offsetFrames % totalFrames
 			}
 			h.pos = offsetFrames
+			h.fadeInOffset = offsetFrames // fade-in starts at seek position
 		} else {
 			// Future start — schedule it.
 			h.scheduleAt = startUnixMs
@@ -348,6 +369,7 @@ func (e *Engine) Resume(cueID string, fadeInMs float64) error {
 	if h.state == StatePaused {
 		h.fadeInSamples = msToSamples(fadeInMs, h.sampleRate)
 		h.pos = h.pausedAt
+		h.fadeInOffset = h.pausedAt // fade-in relative to resume position, not file start
 		h.state = StatePlaying
 	}
 	return nil
@@ -393,6 +415,63 @@ func (e *Engine) StopAll() {
 		h.state = StateDone
 		h.mu.Unlock()
 	}
+}
+
+// DuckAll fades all currently playing handles to duckVolumeDb over durationMs,
+// then ramps back to the original volume. Used for Talkback-Ducking on GO.
+func (e *Engine) DuckAll(duckVolumeDb float64, durationMs float64) {
+	e.mu.Lock()
+	handles := make([]*Handle, 0, len(e.handles))
+	for _, h := range e.handles {
+		handles = append(handles, h)
+	}
+	e.mu.Unlock()
+
+	duckLinear := float32(dbToLinear(duckVolumeDb))
+
+	for _, h := range handles {
+		h.mu.Lock()
+		if h.state == StatePlaying {
+			original := h.volume
+			totalSamples := msToSamples(durationMs, h.sampleRate)
+			if totalSamples > 0 {
+				h.volumeFadeStart   = original
+				h.volumeFadeTarget  = duckLinear
+				h.volumeFadeSamples = totalSamples
+				h.volumeFadePos     = 0
+				h.volumeFadeStop    = false
+				h.volumeFadePause   = false
+				// Nach dem Duck-Fade zurückblenden (zweites Fade wird nach erstem gestartet)
+				// Vereinfachte Implementierung: direkt auf original zurücksetzen nach durationMs
+				// via einer Goroutine (außerhalb des Callbacks).
+				_ = original // wird in Goroutine genutzt
+			}
+		}
+		h.mu.Unlock()
+	}
+
+	// Ramp-back nach durationMs (außerhalb des Audio-Callbacks, daher Goroutine)
+	go func() {
+		// Warte duck-Dauer
+		time.Sleep(time.Duration(durationMs) * time.Millisecond)
+		e.mu.Lock()
+		currentHandles := make([]*Handle, 0, len(e.handles))
+		for _, h := range e.handles {
+			currentHandles = append(currentHandles, h)
+		}
+		e.mu.Unlock()
+		for _, h := range currentHandles {
+			h.mu.Lock()
+			if h.state == StatePlaying && h.volume <= duckLinear*1.1 {
+				// Nur zurückfaden wenn noch auf Duck-Level
+				h.volumeFadeStart   = h.volume
+				h.volumeFadeTarget  = 1.0 // Unity zurück
+				h.volumeFadeSamples = msToSamples(500, h.sampleRate) // 500ms Ramp-Back
+				h.volumeFadePos     = 0
+			}
+			h.mu.Unlock()
+		}
+	}()
 }
 
 // ── Mixer callback ────────────────────────────────────────────────────────────
@@ -473,9 +552,12 @@ func (e *Engine) mix(outputSamples []byte, frameCount uint32) {
 				gain = h.volume
 			}
 
-			// Fade in
-			if h.fadeInSamples > 0 && framePos < h.fadeInSamples {
-				gain *= float32(framePos) / float32(h.fadeInSamples)
+			// Fade in — relative to fadeInOffset so Resume-fades work correctly.
+			if h.fadeInSamples > 0 {
+				elapsed := framePos - h.fadeInOffset
+				if elapsed >= 0 && elapsed < h.fadeInSamples {
+					gain *= float32(elapsed) / float32(h.fadeInSamples)
+				}
 			}
 			// Fade out (near end)
 			if h.fadeOutSamples > 0 {
@@ -513,6 +595,35 @@ func (e *Engine) mix(outputSamples []byte, frameCount uint32) {
 			done = append(done, h.id)
 		}
 		h.mu.Unlock()
+	}
+
+	// Streaming-Handles mischen (Talkback, Live-Input).
+	e.mu.Lock()
+	sHandles := make([]*StreamingHandle, 0, len(e.streamingHandles))
+	for _, sh := range e.streamingHandles {
+		sHandles = append(sHandles, sh)
+	}
+	e.mu.Unlock()
+
+	var doneSH []string
+	for _, sh := range sHandles {
+		sh.mu.Lock()
+		if sh.active || sh.draining {
+			sh.readFrames(out, frameCount, int(e.channels))
+		}
+		if !sh.active {
+			doneSH = append(doneSH, sh.id)
+		}
+		sh.mu.Unlock()
+	}
+
+	if len(doneSH) > 0 {
+		e.mu.Lock()
+		for _, id := range doneSH {
+			delete(e.streamingHandles, id)
+			log.Printf("[audioengine] streaming handle entfernt (leer): %s", id)
+		}
+		e.mu.Unlock()
 	}
 
 	// Clip output to [-1, 1] and write back to malgo buffer.

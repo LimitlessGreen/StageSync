@@ -44,6 +44,7 @@ class AudioEngine implements AbstractAudioEngine {
 
   bool _initialized = false;
   AudioDevice? _selectedDevice;
+  double _masterVolumeDb = 0.0;
   // Internal SoLoud device handle — stored separately from AudioDevice
   // because PlaybackDevice.id is an unstable sequential index.
   // ignore: unused_field
@@ -142,6 +143,18 @@ class AudioEngine implements AbstractAudioEngine {
 
   @override
   bool get isInitialized => _initialized && _soloud.isInitialized;
+
+  @override
+  double get masterVolumeDb => _masterVolumeDb;
+
+  @override
+  void setMasterVolume(double db) {
+    _masterVolumeDb = db;
+    if (_initialized && _soloud.isInitialized) {
+      final linear = db <= -60 ? 0.0 : math.pow(10.0, db / 20.0).toDouble();
+      _soloud.setGlobalVolume(linear.clamp(0.0, 4.0)); // SoLoud max 4× gain
+    }
+  }
 
   @override
   AudioDevice? get selectedDevice => _selectedDevice;

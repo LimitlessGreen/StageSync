@@ -9,6 +9,7 @@ import '../../design_system/sc_colors.dart';
 import '../../design_system/sc_spacing.dart';
 import '../../design_system/sc_typography.dart';
 import '../../design_system/primitives/sc_button.dart';
+import '../../design_system/domain_components/master_volume_slider.dart';
 
 /// Desktop panel for local audio node management.
 /// Compact DAW-style layout: device list as selectable rows, inline controls.
@@ -58,6 +59,19 @@ class _LocalAudioPanelState extends ConsumerState<LocalAudioPanel> {
           onStop:   () => ref.read(audioNodeProvider.notifier).stopAudioNode(),
         ),
         const Divider(height: 1, color: ScColors.divider),
+        // ── Master Volume ───────────────────────────────────────────────────
+        if (isRunning)
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: ScSpacing.panelPad, vertical: 8,
+            ),
+            child: MasterVolumeSlider(
+              value: audioStatus.masterVolumeDb,
+              onChanged: ref.read(audioNodeProvider.notifier).setMasterVolume,
+              compact: true,
+            ),
+          ),
+        if (isRunning) const Divider(height: 1, color: ScColors.divider),
         Expanded(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,

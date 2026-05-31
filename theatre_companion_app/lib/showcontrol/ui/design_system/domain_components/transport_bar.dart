@@ -10,10 +10,12 @@ import '../sc_spacing.dart';
 import '../primitives/sc_button.dart';
 
 /// Transport bar — always visible, knows [PlayheadState] and [CueList].
-/// No gRPC/proto knowledge; callbacks go up to the shell/notifier.
 ///
-/// Desktop: shows all buttons + cue name + timer + shortcut hints.
-/// Mobile: shows only buttons + compact cue name.
+/// Desktop layout (left → right):
+///   [active cue + timer ............. next-cue preview]  [STOP] [PAUSE/RESUME] [═ GO ═]
+///
+/// All transport controls are grouped together on the right so the operator
+/// never has to jump across the screen. GO is the rightmost dominant element.
 class TransportBar extends StatefulWidget {
   final PlayheadState playhead;
   final CueList? cueList;
@@ -21,8 +23,7 @@ class TransportBar extends StatefulWidget {
   final VoidCallback? onStop;
   final VoidCallback? onPause;
   final VoidCallback? onResume;
-  final VoidCallback? onPanic;
-  final bool compact; // true for mobile
+  final bool compact;
 
   const TransportBar({
     super.key,
@@ -32,7 +33,6 @@ class TransportBar extends StatefulWidget {
     this.onStop,
     this.onPause,
     this.onResume,
-    this.onPanic,
     this.compact = false,
   });
 
@@ -52,9 +52,7 @@ class _TransportBarState extends State<TransportBar> {
   @override
   void didUpdateWidget(TransportBar old) {
     super.didUpdateWidget(old);
-    if (old.playhead.phase != widget.playhead.phase) {
-      _updateTicker();
-    }
+    if (old.playhead.phase != widget.playhead.phase) _updateTicker();
   }
 
   void _updateTicker() {
@@ -65,7 +63,6 @@ class _TransportBarState extends State<TransportBar> {
         if (mounted) setState(() {});
       });
     }
-    // done/paused/idle: kein Ticker nötig, Timer ist eingefroren oder 0:00
   }
 
   @override
@@ -77,132 +74,170 @@ class _TransportBarState extends State<TransportBar> {
   String get _elapsedStr {
     final start = widget.playhead.startedServerMs;
     if (start == null) return '0:00';
-
-    final int nowServerMs;
-    switch (widget.playhead.phase) {
-      case CueListPhase.running:
-        nowServerMs = ClockSync.instance.serverNow();
-      case CueListPhase.paused:
-        nowServerMs = widget.playhead.pausedAtServerMs ?? ClockSync.instance.serverNow();
-      case CueListPhase.done:
-        // Timer eingefroren beim genauen Endezeitpunkt der Cue
-        nowServerMs = widget.playhead.doneServerMs ?? ClockSync.instance.serverNow();
-      default:
-        return '0:00';
-    }
-
-    final ms = (nowServerMs - start).clamp(0, 99 * 60 * 1000);
+    final int nowMs = switch (widget.playhead.phase) {
+      CueListPhase.running => ClockSync.instance.serverNow(),
+      CueListPhase.paused  => widget.playhead.pausedAtServerMs ?? ClockSync.instance.serverNow(),
+      CueListPhase.done    => widget.playhead.doneServerMs ?? ClockSync.instance.serverNow(),
+      _                    => -1,
+    };
+    if (nowMs < 0) return '0:00';
+    final ms = (nowMs - start).clamp(0, 99 * 60 * 1000);
     final s = ms ~/ 1000;
     final m = s ~/ 60;
     final rs = (s % 60).toString().padLeft(2, '0');
     return '$m:$rs';
   }
 
-  Color get _timerColor {
-    return switch (widget.playhead.phase) {
-      CueListPhase.running => ScColors.active,
-      CueListPhase.paused  => ScColors.warn,
-      CueListPhase.done    => ScColors.textDim, // gedimmt = fertig
-      _                    => ScColors.textDim,
-    };
+  Color get _timerColor => switch (widget.playhead.phase) {
+    CueListPhase.running => ScColors.active,
+    CueListPhase.paused  => ScColors.warn,
+    CueListPhase.done    => ScColors.textDim,
+    _                    => ScColors.textDim,
+  };
+
+  IconData get _stateIcon => switch (widget.playhead.phase) {
+    CueListPhase.running => Icons.play_arrow,
+    CueListPhase.paused  => Icons.pause,
+    CueListPhase.done    => Icons.check,
+    _                    => Icons.hourglass_empty,
+  };
+
+  Color get _stateIconColor => switch (widget.playhead.phase) {
+    CueListPhase.running => ScColors.active,
+    CueListPhase.paused  => ScColors.warn,
+    _                    => ScColors.textDim,
+  };
+
+  Cue? get _activeCue {
+    final id = widget.playhead.activeCueId;
+    if (id == null || widget.cueList == null) return null;
+    return widget.cueList!.cueById(id);
   }
 
-  String get _activeCueLabel {
+  Cue? get _nextCue {
     final id = widget.playhead.activeCueId;
-    if (id == null || widget.cueList == null) return '';
-    final cue = widget.cueList!.cueById(id);
-    if (cue == null) return '';
-    return '${cue.number}  ${cue.label}';
+    if (id == null || widget.cueList == null) return null;
+    final cues = widget.cueList!.cues;
+    final idx = cues.indexWhere((c) => c.id == id);
+    if (idx < 0 || idx + 1 >= cues.length) return null;
+    return cues[idx + 1];
   }
 
   @override
   Widget build(BuildContext context) {
-    // shortcutHint text adds a second line — only show when bar is tall enough.
-    // Transport bar is fixed at 48px; hint labels need ~56px. Use tooltip only.
+    final active = _activeCue;
+    final next   = _nextCue;
+    final showPhase = widget.playhead.isRunning ||
+        widget.playhead.isPaused ||
+        widget.playhead.isDone;
+
     return Container(
       height: ScSpacing.transportBarHeight,
       color: ScColors.surface,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
         children: [
-          // GO
-          Tooltip(
-            message: 'GO  [Space]',
-            child: ScButton(
-              label: 'GO',
-              variant: ScButtonVariant.primary,
-              size: ScButtonSize.compact,
-              onPressed: widget.onGo,
+          // ── Left/Center: informational ───────────────────────────────
+          Expanded(
+            child: Row(
+              children: [
+                // Active cue state + label + timer
+                if (showPhase && active != null) ...[
+                  Icon(_stateIcon, size: 13, color: _stateIconColor),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      '${active.number}  ${active.label}',
+                      style: ScText.cueLabel.copyWith(color: ScColors.textPrimary),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    _elapsedStr,
+                    style: ScText.timer.copyWith(fontSize: 15, color: _timerColor),
+                  ),
+                ] else
+                  Text('—', style: ScText.cueLabel.copyWith(color: ScColors.textDim)),
+
+                // Next cue preview
+                if (next != null && !widget.compact) ...[
+                  Container(
+                    width: 1, height: 20,
+                    color: ScColors.divider,
+                    margin: const EdgeInsets.symmetric(horizontal: 12),
+                  ),
+                  const Text('NEXT', style: TextStyle(
+                    color: ScColors.textDim,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
+                  )),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      '${next.number}  ${next.label}',
+                      style: ScText.label.copyWith(color: ScColors.textSecondary),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
-          const SizedBox(width: 8),
+
+          // ── Right: ALL transport controls grouped together ───────────
+          const SizedBox(width: 12),
+          Container(width: 1, height: 24, color: ScColors.divider),
+          const SizedBox(width: 12),
+
           // STOP
           Tooltip(
             message: 'STOP  [Esc]',
             child: ScButton(
               label: 'STOP',
+              icon: Icons.stop,
               variant: ScButtonVariant.danger,
               size: ScButtonSize.compact,
               onPressed: widget.onStop,
             ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 6),
+
           // PAUSE / RESUME
-          if (widget.playhead.isPaused)
-            Tooltip(
-              message: 'RESUME  [P]',
+          Tooltip(
+            message: widget.playhead.isPaused ? 'RESUME  [P]' : 'PAUSE  [P]',
+            child: widget.playhead.isPaused
+                ? ScButton(
+                    label: 'RESUME',
+                    icon: Icons.play_arrow,
+                    variant: ScButtonVariant.secondary,
+                    size: ScButtonSize.compact,
+                    onPressed: widget.onResume,
+                  )
+                : ScButton(
+                    label: 'PAUSE',
+                    icon: Icons.pause,
+                    variant: ScButtonVariant.secondary,
+                    size: ScButtonSize.compact,
+                    onPressed: widget.onPause,
+                  ),
+          ),
+          const SizedBox(width: 10),
+
+          // GO — dominant, rightmost anchor
+          Tooltip(
+            message: 'GO  [Space]',
+            child: SizedBox(
+              width: 120,
               child: ScButton(
-                label: 'RESUME',
-                icon: Icons.play_arrow,
-                variant: ScButtonVariant.secondary,
-                size: ScButtonSize.compact,
-                onPressed: widget.onResume,
-              ),
-            )
-          else
-            Tooltip(
-              message: 'PAUSE  [P]',
-              child: ScButton(
-                label: 'PAUSE',
-                icon: Icons.pause,
-                variant: ScButtonVariant.secondary,
-                size: ScButtonSize.compact,
-                onPressed: widget.onPause,
+                label: 'GO',
+                variant: ScButtonVariant.primary,
+                size: ScButtonSize.transport,
+                onPressed: widget.onGo,
               ),
             ),
-          const SizedBox(width: 16),
-          // Active cue + timer
-          if (!widget.compact || widget.playhead.activeCueId != null)
-            Expanded(
-              child: Row(
-                children: [
-                  if (widget.playhead.isRunning)
-                    const Icon(Icons.play_arrow, size: 14, color: ScColors.active),
-                  if (widget.playhead.isPaused)
-                    const Icon(Icons.pause, size: 14, color: ScColors.warn),
-                  if (widget.playhead.isDone)
-                    const Icon(Icons.check, size: 14, color: ScColors.textDim),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      _activeCueLabel,
-                      style: ScText.cueLabel,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    _elapsedStr,
-                    style: (widget.playhead.isRunning
-                            ? ScText.timer
-                            : ScText.numberSmall)
-                        .copyWith(color: _timerColor),
-                  ),
-                ],
-              ),
-            )
-          else
-            const Spacer(),
+          ),
         ],
       ),
     );

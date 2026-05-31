@@ -6,7 +6,9 @@ list(APPEND FLUTTER_PLUGIN_LIST
   battery_plus
   bluetooth_low_energy_windows
   connectivity_plus
+  opus_flutter_windows
   permission_handler_windows
+  record_windows
   sqlite3_flutter_libs
 )
 

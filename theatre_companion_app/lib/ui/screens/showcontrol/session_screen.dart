@@ -6,6 +6,7 @@ import '../../../showcontrol/grpc/generated/stagesync/v1/common.pb.dart';
 import '../../../showcontrol/grpc/generated/stagesync/v1/session.pb.dart';
 import '../../../showcontrol/grpc/stage_sync_client.dart';
 import '../../../showcontrol/nodes/audio_node/media_server.dart';
+import '../../../showcontrol/preferences/device_preferences.dart';
 import '../../../showcontrol/providers/audio_node_provider.dart';
 import '../../../showcontrol/providers/ma_node_provider.dart';
 import '../../../showcontrol/providers/session_provider.dart';
@@ -20,13 +21,13 @@ class SessionScreen extends ConsumerStatefulWidget {
 }
 
 class _SessionScreenState extends ConsumerState<SessionScreen> {
-  final _hostCtrl = TextEditingController(text: '192.168.1.100');
+  final _hostCtrl = TextEditingController(text: '127.0.0.1');
   final _portCtrl = TextEditingController(text: '50051');
   final _sessionNameCtrl = TextEditingController(text: 'Aufführung 1');
   final _showNameCtrl = TextEditingController(text: 'Meine Show');
   final _passwordCtrl = TextEditingController();
   final _sessionIdCtrl = TextEditingController();
-  final _deviceNameCtrl = TextEditingController(text: 'Mein Gerät');
+  final _deviceNameCtrl = TextEditingController();
   final _maHostCtrl = TextEditingController(text: '192.168.1.200');
   final _maPortCtrl = TextEditingController(text: '8000');
 
@@ -41,6 +42,38 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
   String? _sessionLoadError;
   List<NetworkInterfaceInfo> _availableInterfaces = [];
   NetworkInterfaceInfo? _selectedInterface;
+  String? _deviceId;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPreferences();
+  }
+
+  Future<void> _loadPreferences() async {
+    final defaults = await DevicePreferences.loadConnectDefaults();
+    final id = await DevicePreferences.getDeviceId();
+    if (!mounted) return;
+    setState(() {
+      _deviceId = id;
+      _hostCtrl.text = defaults.host;
+      _portCtrl.text = defaults.port.toString();
+      if (defaults.deviceName.isNotEmpty) {
+        _deviceNameCtrl.text = defaults.deviceName;
+      } else {
+        // Fallback: letzter Teil der Device-ID als lesbarer Kurzname
+        _deviceNameCtrl.text = 'Gerät ${id.substring(id.length - 4).toUpperCase()}';
+      }
+    });
+  }
+
+  void _saveConnectPreferences() {
+    DevicePreferences.saveConnectDefaults(
+      host: _hostCtrl.text.trim(),
+      port: int.tryParse(_portCtrl.text.trim()) ?? 50051,
+      deviceName: _deviceNameCtrl.text.trim(),
+    );
+  }
 
   @override
   void dispose() {
@@ -151,6 +184,14 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
             // ── Gerät ────────────────────────────────────────────────────────
             _SectionHeader('Dieses Gerät'),
             _Field('Gerätename', _deviceNameCtrl),
+            if (_deviceId != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  'Geräte-ID: $_deviceId',
+                  style: const TextStyle(fontSize: 11, color: Colors.grey, fontFamily: 'monospace'),
+                ),
+              ),
             const SizedBox(height: 12),
             _NodeTaskSelector(
               selected: _selectedTasks,
@@ -275,6 +316,7 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
   }
 
   Future<void> _submit() async {
+    _saveConnectPreferences();
     final notifier = ref.read(sessionProvider.notifier);
     final host = _hostCtrl.text.trim();
     final port = int.tryParse(_portCtrl.text.trim()) ?? 50051;
@@ -299,6 +341,7 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
         tasks: tasks,
         password: _passwordCtrl.text,
         persistent: _isPersistent,
+        deviceId: _deviceId ?? '',
       );
     } else {
       final sessionId = _selectedSession?.sessionId ?? _sessionIdCtrl.text.trim();
@@ -311,6 +354,7 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
         nodeType: nodeType,
         tasks: tasks,
         password: _passwordCtrl.text,
+        deviceId: _deviceId ?? '',
       );
     }
 

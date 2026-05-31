@@ -42,6 +42,7 @@ class CueListRow extends StatefulWidget {
   // ── Action callbacks ──────────────────────────────────────────────────────
   final VoidCallback? onTap;
   final VoidCallback? onDoubleTap;
+  final VoidCallback? onLongPress;
   final VoidCallback? onDelete;
   final VoidCallback? onGo;
   final VoidCallback? onInsertBefore;
@@ -67,6 +68,7 @@ class CueListRow extends StatefulWidget {
     this.childRunStates,
     this.onTap,
     this.onDoubleTap,
+    this.onLongPress,
     this.onDelete,
     this.onGo,
     this.onInsertBefore,
@@ -270,16 +272,30 @@ class _CueListRowState extends State<CueListRow> {
                   ),
                 const SizedBox(width: 6),
 
-                // Cue number
+                // Cue number — AnimatedSwitcher so renumber after reorder is visible
                 SizedBox(
                   width: ScSpacing.cueNumberWidth,
-                  child: Text(
-                    widget.cue.number,
-                    style: (widget.isActive
-                            ? ScText.numberLarge
-                            : ScText.number)
-                        .copyWith(color: _stateColor),
-                    textAlign: TextAlign.right,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    transitionBuilder: (child, anim) => FadeTransition(
+                      opacity: anim,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, -0.4),
+                          end: Offset.zero,
+                        ).animate(anim),
+                        child: child,
+                      ),
+                    ),
+                    child: Text(
+                      widget.cue.number,
+                      key: ValueKey(widget.cue.number),
+                      style: (widget.isActive
+                              ? ScText.numberLarge
+                              : ScText.number)
+                          .copyWith(color: _stateColor),
+                      textAlign: TextAlign.right,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -346,10 +362,12 @@ class _CueListRowState extends State<CueListRow> {
     // Gesture detection
     if (widget.onTap != null ||
         widget.onGo != null ||
-        widget.onDoubleTap != null) {
+        widget.onDoubleTap != null ||
+        widget.onLongPress != null) {
       row = GestureDetector(
         onTap: widget.onTap,
         onDoubleTap: widget.onDoubleTap,
+        onLongPress: widget.onLongPress,
         onSecondaryTapUp: (details) =>
             _showContextMenu(context, details.localPosition),
         child: row,

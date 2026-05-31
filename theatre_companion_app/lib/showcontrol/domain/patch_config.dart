@@ -1,5 +1,41 @@
 import 'package:meta/meta.dart';
 
+// ── Audio Bus System ──────────────────────────────────────────────────────────
+
+enum AudioBusType { main, monitor, talkback, aux, iem }
+
+@immutable
+class BusNodeAssign {
+  final String nodeId;
+  final int deviceIndex;
+  final String deviceName;
+
+  const BusNodeAssign({
+    required this.nodeId,
+    required this.deviceIndex,
+    this.deviceName = '',
+  });
+}
+
+@immutable
+class AudioBus {
+  final String id;
+  final String name;
+  final AudioBusType type;
+  final double outputLevelDb;
+  final bool muted;
+  final List<BusNodeAssign> patch;
+
+  const AudioBus({
+    required this.id,
+    required this.name,
+    this.type = AudioBusType.main,
+    this.outputLevelDb = 0.0,
+    this.muted = false,
+    this.patch = const [],
+  });
+}
+
 /// Layer 1: A named logical audio output that cues reference.
 /// Cues store [LogicalOutput.id] in [Cue.logicalOutputId] — never a node ID.
 @immutable
@@ -61,31 +97,39 @@ class AuditionBus {
 /// Immutable — changes produce a new instance.
 @immutable
 class PatchConfig {
-  final List<LogicalOutput> logicalOutputs; // Layer 1 definitions
-  final List<NodePatch> nodePatches;         // Layer 2: bus → nodes
-  final List<DevicePatch> devicePatches;     // Layer 3: bus → device on node
+  final List<LogicalOutput> logicalOutputs; // Legacy Layer 1 definitions
+  final List<NodePatch> nodePatches;         // Legacy Layer 2: bus → nodes
+  final List<DevicePatch> devicePatches;     // Legacy Layer 3: bus → device on node
   final List<AuditionBus> auditionBuses;     // Layer 4: per-node preview
+  final List<AudioBus> buses;               // Audio Bus System (neues Modell)
 
   const PatchConfig({
     this.logicalOutputs = const [],
     this.nodePatches = const [],
     this.devicePatches = const [],
     this.auditionBuses = const [],
+    this.buses = const [],
   });
 
   static const PatchConfig empty = PatchConfig();
+
+  /// Alle Buses vom Typ [type].
+  List<AudioBus> busesOfType(AudioBusType type) =>
+      buses.where((b) => b.type == type).toList();
 
   PatchConfig copyWith({
     List<LogicalOutput>? logicalOutputs,
     List<NodePatch>? nodePatches,
     List<DevicePatch>? devicePatches,
     List<AuditionBus>? auditionBuses,
+    List<AudioBus>? buses,
   }) =>
       PatchConfig(
         logicalOutputs: logicalOutputs ?? this.logicalOutputs,
         nodePatches: nodePatches ?? this.nodePatches,
         devicePatches: devicePatches ?? this.devicePatches,
         auditionBuses: auditionBuses ?? this.auditionBuses,
+        buses: buses ?? this.buses,
       );
 
   /// All node IDs that are routed to [logicalOutputId].

@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'sc_shortcuts.dart';
+import '../../../ui/widgets/talkback_bar.dart';
+import '../../../ui/widgets/bus_config_sheet.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/show_control_provider.dart';
 import '../../providers/show_control_domain_provider.dart';
@@ -17,7 +19,6 @@ import '../design_system/sc_colors.dart';
 import '../design_system/sc_spacing.dart';
 import '../design_system/sc_typography.dart';
 import '../design_system/primitives/sc_button.dart';
-import '../design_system/primitives/sc_chip.dart';
 import '../design_system/primitives/sc_panel.dart';
 import '../design_system/primitives/sc_split_view.dart';
 import '../design_system/primitives/sc_inline_field.dart';
@@ -27,7 +28,9 @@ import '../design_system/domain_components/cue_list_row.dart';
 import '../design_system/domain_components/active_cue_monitor.dart';
 import '../design_system/domain_components/node_status_badge.dart';
 import '../design_system/domain_components/audio_cue_minibar.dart';
+import '../design_system/primitives/sc_timing_ruler.dart';
 import '../design_system/domain_components/cue_type_picker.dart';
+import '../design_system/domain_components/cue_list_header.dart';
 import '../screens/nodes/node_management_panel.dart';
 import '../screens/settings/settings_screen.dart';
 import '../screens/media/media_manager_screen.dart';
@@ -35,6 +38,7 @@ import '../screens/audio/local_audio_panel.dart';
 import '../design_system/domain_components/patch_matrix.dart';
 import '../../domain/show.dart';
 import '../../domain/cue_params.dart';
+import '../../domain/patch_config.dart';
 import '../../domain/playhead.dart';
 
 /// Full desktop shell: TransportBar top + three panels + tab bar.
@@ -46,17 +50,20 @@ class DesktopShell extends ConsumerStatefulWidget {
 }
 
 class _DesktopShellState extends ConsumerState<DesktopShell>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   String? _selectedCueId;
   late TabController _tabController;
+  late TabController _rightTabController;
   late final AppLifecycleListener _lifecycleListener;
   bool _bottomPanelOpen = false;
   int _lastOpenTab = 0;
+  double _bottomPanelHeight = 320.0;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
+    _rightTabController = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(showControlProvider.notifier).initialize();
       _handleAutoReconnectNodeStart();
@@ -95,6 +102,7 @@ void _handleAutoReconnectNodeStart() {
   @override
   void dispose() {
     _tabController.dispose();
+    _rightTabController.dispose();
     _lifecycleListener.dispose();
     super.dispose();
   }
@@ -135,6 +143,16 @@ void _handleAutoReconnectNodeStart() {
           _HeaderBar(
             sessionName: sessionState.session?.name ?? 'Show Control',
             onLeave: _leaveSession,
+            onOpenAudioPanel: () => setState(() {
+              _bottomPanelOpen = true;
+              _lastOpenTab = 3;
+              _tabController.animateTo(3);
+            }),
+            onOpenNodesPanel: () => setState(() {
+              _bottomPanelOpen = true;
+              _lastOpenTab = 2;
+              _tabController.animateTo(2);
+            }),
           ),
           // ── Connection banner ─────────────────────────────────────────
           if (sessionState.health != ConnectionHealth.connected)
@@ -149,39 +167,62 @@ void _handleAutoReconnectNodeStart() {
             onResume: () => notifier.resume(),
           ),
           const Divider(height: 1, color: ScColors.divider),
-          // ── Main three-panel area ─────────────────────────────────────
+          // ── Main two-panel area (Cue-Liste | Inspector + Monitor) ────
           Expanded(
-            child: ScThreePaneView(
-              leftWidth:  ScSpacing.cueListWidth,
-              rightWidth: ScSpacing.monitoringWidth,
+            child: ScSplitView(
+              persistKey: 'desktop.mainSplit',
+              initialFraction: 0.40,
+              minFraction: 0.20,
+              maxFraction: 0.65,
               left: _CueListPanel(
                 domainState: domainState,
                 selectedCueId: _selectedCueId,
-                onCueSelected: (id) => setState(() => _selectedCueId = id),
+                onCueSelected: (id) {
+                  setState(() => _selectedCueId = id);
+                  _rightTabController.animateTo(0); // Inspector-Tab
+                },
                 notifier: notifier,
               ),
-              center: _InspectorPanel(
+              right: _RightPanel(
+                tabController: _rightTabController,
                 selectedCueId: _selectedCueId,
                 domainState: domainState,
                 notifier: notifier,
               ),
-              right: _MonitoringPanel(domainState: domainState),
             ),
           ),
           // ── Bottom tab bar + expandable panel ────────────────────────
           const Divider(height: 1, color: ScColors.divider),
-          AnimatedSize(
-            duration: const Duration(milliseconds: 180),
-            curve: Curves.easeInOut,
-            child: _bottomPanelOpen
-                ? SizedBox(
-                    height: 260,
-                    child: _BottomTabPanel(controller: _tabController),
-                  )
-                : const SizedBox.shrink(),
-          ),
-          if (_bottomPanelOpen)
+          if (_bottomPanelOpen) ...[
+            // Drag handle — vertical resize
+            GestureDetector(
+              onPanUpdate: (d) => setState(() {
+                _bottomPanelHeight =
+                    (_bottomPanelHeight - d.delta.dy).clamp(160.0, 600.0);
+              }),
+              child: MouseRegion(
+                cursor: SystemMouseCursors.resizeRow,
+                child: Container(
+                  height: 8,
+                  color: ScColors.surface,
+                  child: Center(
+                    child: Container(
+                      width: 40, height: 3,
+                      decoration: BoxDecoration(
+                        color: ScColors.divider,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            SizedBox(
+              height: _bottomPanelHeight,
+              child: _BottomTabPanel(controller: _tabController),
+            ),
             const Divider(height: 1, color: ScColors.divider),
+          ],
           _BottomBar(
             controller: _tabController,
             onTabTap: (i) => setState(() {
@@ -204,8 +245,15 @@ void _handleAutoReconnectNodeStart() {
 class _HeaderBar extends ConsumerWidget {
   final String sessionName;
   final VoidCallback onLeave;
+  final VoidCallback onOpenAudioPanel;
+  final VoidCallback onOpenNodesPanel;
 
-  const _HeaderBar({required this.sessionName, required this.onLeave});
+  const _HeaderBar({
+    required this.sessionName,
+    required this.onLeave,
+    required this.onOpenAudioPanel,
+    required this.onOpenNodesPanel,
+  });
 
   void _openSettings(BuildContext context) {
     Navigator.of(context).push(MaterialPageRoute(
@@ -229,12 +277,28 @@ class _HeaderBar extends ConsumerWidget {
           const SizedBox(width: 8),
           Text(sessionName, style: ScText.panelTitle),
           const Spacer(),
+          // Service status indicators — only shown when this device runs the service
           if (tasks.contains(NodeTask.NODE_TASK_AUDIO_OUTPUT)) ...[
-            _AudioChip(status: audioStatus),
+            _ServiceStatusPill(
+              icon: Icons.speaker,
+              label: _audioLabel(audioStatus),
+              sublabel: audioStatus.state == AudioNodeState.connected && audioStatus.playingCueIds.isNotEmpty
+                  ? '${audioStatus.playingCueIds.length}♪'
+                  : null,
+              color: _audioColor(audioStatus),
+              tooltip: _audioTooltip(audioStatus),
+              onTap: onOpenAudioPanel,
+            ),
             const SizedBox(width: 8),
           ],
           if (tasks.contains(NodeTask.NODE_TASK_MA_OSC)) ...[
-            _MaChip(status: maStatus),
+            _ServiceStatusPill(
+              icon: Icons.tune,
+              label: _maLabel(maStatus),
+              color: _maColor(maStatus),
+              tooltip: _maTooltip(maStatus),
+              onTap: onOpenNodesPanel,
+            ),
             const SizedBox(width: 8),
           ],
           IconButton(
@@ -257,35 +321,123 @@ class _HeaderBar extends ConsumerWidget {
       ),
     );
   }
+
+  static String _audioLabel(AudioNodeStatus s) => switch (s.state) {
+    AudioNodeState.connected => 'Wiedergabe bereit',
+    AudioNodeState.error     => 'Audio-Fehler',
+    _                        => 'Audio gestoppt',
+  };
+
+  static Color _audioColor(AudioNodeStatus s) => switch (s.state) {
+    AudioNodeState.connected => ScColors.active,
+    AudioNodeState.error     => ScColors.error,
+    _                        => ScColors.textDim,
+  };
+
+  static String _audioTooltip(AudioNodeStatus s) => switch (s.state) {
+    AudioNodeState.connected =>
+      s.selectedDevice != null
+        ? 'Ausgang: ${s.selectedDevice!.name}  ·  Klicken → Audio-Panel'
+        : 'Audio-Engine läuft  ·  Klicken → Audio-Panel',
+    AudioNodeState.error =>
+      s.errorMessage != null ? '${s.errorMessage}  ·  Klicken → Audio-Panel' : 'Fehler  ·  Klicken → Audio-Panel',
+    _ => 'Audio-Engine ist nicht gestartet  ·  Klicken → Audio-Panel',
+  };
+
+  static String _maLabel(MaNodeStatus s) => switch (s.state) {
+    MaNodeState.connected => 'MA verbunden',
+    MaNodeState.error     => 'MA-Fehler',
+    _                     => 'MA getrennt',
+  };
+
+  static Color _maColor(MaNodeStatus s) => switch (s.state) {
+    MaNodeState.connected => ScColors.active,
+    MaNodeState.error     => ScColors.error,
+    _                     => ScColors.textDim,
+  };
+
+  static String _maTooltip(MaNodeStatus s) => switch (s.state) {
+    MaNodeState.connected => 'GrandMA OSC verbunden  ·  Klicken → Nodes-Panel',
+    MaNodeState.error     => 'GrandMA OSC Verbindungsfehler  ·  Klicken → Nodes-Panel',
+    _                     => 'GrandMA OSC nicht verbunden  ·  Klicken → Nodes-Panel',
+  };
 }
 
-class _AudioChip extends StatelessWidget {
-  final AudioNodeStatus status;
-  const _AudioChip({required this.status});
+/// Minimaler Service-Status-Indikator im Header.
+///
+/// Normalzustand: Icon + farbiger Dot. Text nur bei Fehler.
+/// Laufende Cues: kleiner Zähler als Badge.
+/// Tap öffnet das zugehörige Panel.
+class _ServiceStatusPill extends StatelessWidget {
+  final IconData icon;
+  final String label;        // Wird NUR bei Fehler angezeigt
+  final String? sublabel;    // z.B. "3♪" für laufende Cues
+  final Color color;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  const _ServiceStatusPill({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.tooltip,
+    required this.onTap,
+    this.sublabel,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final chipState = switch (status.state) {
-      AudioNodeState.connected => ScChipState.ok,
-      AudioNodeState.error     => ScChipState.error,
-      _                        => ScChipState.idle,
-    };
-    return ScChip(label: 'AUDIO', state: chipState);
-  }
-}
+    final isError = color == ScColors.error;
 
-class _MaChip extends StatelessWidget {
-  final MaNodeStatus status;
-  const _MaChip({required this.status});
-
-  @override
-  Widget build(BuildContext context) {
-    final chipState = switch (status.state) {
-      MaNodeState.connected => ScChipState.ok,
-      MaNodeState.error     => ScChipState.error,
-      _                     => ScChipState.idle,
-    };
-    return ScChip(label: 'MA', state: chipState);
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(4),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 13, color: color),
+              const SizedBox(width: 4),
+              // Status dot
+              Container(
+                width: 5, height: 5,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              // Text label — nur bei Fehler sichtbar
+              if (isError) ...[
+                const SizedBox(width: 4),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+              // Spielende-Cues-Zähler
+              if (sublabel != null) ...[
+                const SizedBox(width: 4),
+                Text(
+                  sublabel!,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -391,6 +543,8 @@ class _CueListPanel extends StatelessWidget {
             ],
           ),
         ),
+        const Divider(height: 1, color: ScColors.divider),
+        const CueListHeader(showDragHandle: true),
         const Divider(height: 1, color: ScColors.divider),
         // Cue rows
         Expanded(
@@ -590,6 +744,7 @@ class _CueInspector extends StatefulWidget {
 class _CueInspectorState extends State<_CueInspector> {
   late Cue _draft;
   bool _saving = false;
+  bool _dirty  = false; // true while user has unsaved local edits
   Timer? _debounce;
 
   /// Saves params per type so switching types and back restores previous values.
@@ -608,10 +763,9 @@ class _CueInspectorState extends State<_CueInspector> {
       // Different cue selected — reset everything.
       _debounce?.cancel();
       _paramsCache.clear();
-      setState(() { _draft = widget.cue; _saving = false; });
-    } else if (_debounce?.isActive != true && !_saving && widget.cue != _draft) {
-      // Same cue, no pending local edit, server sent updated data
-      // → accept server version so other devices' changes appear immediately.
+      setState(() { _draft = widget.cue; _saving = false; _dirty = false; });
+    } else if (!_dirty && !_saving && _debounce?.isActive != true) {
+      // No pending local edit → accept server version (multi-device sync).
       setState(() => _draft = widget.cue);
     }
   }
@@ -623,6 +777,7 @@ class _CueInspectorState extends State<_CueInspector> {
   }
 
   void _update(Cue updated) {
+    _dirty = true;
     setState(() => _draft = updated);
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 350), _flush);
@@ -641,11 +796,11 @@ class _CueInspectorState extends State<_CueInspector> {
   }
 
   Future<void> _flush() async {
-    _debounce = null; // mark as no longer pending so sync can resume
+    _debounce = null;
     if (!mounted) return;
     setState(() => _saving = true);
     await widget.notifier.upsertDomainCue(_draft);
-    if (mounted) setState(() => _saving = false);
+    if (mounted) setState(() { _saving = false; _dirty = false; });
   }
 
   @override
@@ -680,24 +835,26 @@ class _CueInspectorState extends State<_CueInspector> {
             _Section(title: 'TIMING', children: [
               ScInlineField(
                 label: 'Pre-Wait',
-                value: _draft.timing.preWaitMs.toStringAsFixed(0),
-                suffix: 'ms',
-                keyboardType: TextInputType.number,
+                value: (_draft.timing.preWaitMs / 1000).toStringAsFixed(2),
+                suffix: 's',
+                tooltip: '${_draft.timing.preWaitMs.toStringAsFixed(0)} ms',
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 onChanged: (v) => _update(_draft.copyWith(
                   timing: _draft.timing.copyWith(
-                    preWaitMs: double.tryParse(v) ?? _draft.timing.preWaitMs,
+                    preWaitMs: (double.tryParse(v) ?? _draft.timing.preWaitMs / 1000) * 1000,
                   ),
                 )),
               ),
               const SizedBox(height: 6),
               ScInlineField(
                 label: 'Post-Wait',
-                value: _draft.timing.postWaitMs.toStringAsFixed(0),
-                suffix: 'ms',
-                keyboardType: TextInputType.number,
+                value: (_draft.timing.postWaitMs / 1000).toStringAsFixed(2),
+                suffix: 's',
+                tooltip: '${_draft.timing.postWaitMs.toStringAsFixed(0)} ms',
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 onChanged: (v) => _update(_draft.copyWith(
                   timing: _draft.timing.copyWith(
-                    postWaitMs: double.tryParse(v) ?? _draft.timing.postWaitMs,
+                    postWaitMs: (double.tryParse(v) ?? _draft.timing.postWaitMs / 1000) * 1000,
                   ),
                 )),
               ),
@@ -1121,6 +1278,19 @@ class _AudioParamsEditor extends ConsumerWidget {
           ),
         ],
       ]),
+      const SizedBox(height: 12),
+      // ── Timing Visualizer ─────────────────────────────────────────
+      ScTimingRuler(
+        totalDurationMs: asset?.audio?.declaredDurationMs.toDouble(),
+        startMs: params.startTimeMs,
+        endMs: params.endTimeMs,
+        fadeInMs: params.fadeInMs,
+        fadeOutMs: params.fadeOutMs,
+        onStartChanged: (v) => onChanged(params.copyWith(startTimeMs: v)),
+        onEndChanged: (v) => onChanged(params.copyWith(endTimeMs: v)),
+        onFadeInChanged: (v) => onChanged(params.copyWith(fadeInMs: v)),
+        onFadeOutChanged: (v) => onChanged(params.copyWith(fadeOutMs: v)),
+      ),
       const SizedBox(height: 8),
       AudioCueMinibar(params: params, asset: asset),
       const SizedBox(height: 8),
@@ -1606,6 +1776,62 @@ class _EnumField<T> extends StatelessWidget {
   }
 }
 
+// ── Right Area: Inspector + Monitor Tabs ──────────────────────────────────────
+
+class _RightPanel extends StatelessWidget {
+  final TabController tabController;
+  final String? selectedCueId;
+  final ShowControlDomainState domainState;
+  final ShowControlNotifier notifier;
+
+  const _RightPanel({
+    required this.tabController,
+    required this.selectedCueId,
+    required this.domainState,
+    required this.notifier,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          height: 36,
+          color: ScColors.surface,
+          child: TabBar(
+            controller: tabController,
+            dividerHeight: 0,
+            indicatorColor: ScColors.active,
+            labelColor: ScColors.active,
+            unselectedLabelColor: ScColors.textDim,
+            labelStyle: ScText.labelBold,
+            unselectedLabelStyle: ScText.label,
+            tabs: const [
+              Tab(text: 'INSPECTOR', height: 36),
+              Tab(text: 'MONITOR',   height: 36),
+            ],
+          ),
+        ),
+        const Divider(height: 1, color: ScColors.divider),
+        Expanded(
+          child: TabBarView(
+            controller: tabController,
+            physics: const NeverScrollableScrollPhysics(),
+            children: [
+              _InspectorPanel(
+                selectedCueId: selectedCueId,
+                domainState: domainState,
+                notifier: notifier,
+              ),
+              _MonitoringPanel(domainState: domainState),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 // ── Right Panel: Monitoring ────────────────────────────────────────────────────
 
 class _MonitoringPanel extends StatelessWidget {
@@ -1671,6 +1897,7 @@ class _BottomTabPanel extends ConsumerWidget {
         const MediaManagerScreen(),
         const NodeManagementPanel(),
         const LocalAudioPanel(),
+        _TalkbackPanel(domainState: domainState),
       ],
     );
   }
@@ -1702,10 +1929,11 @@ class _BottomBar extends StatelessWidget {
             tabAlignment: TabAlignment.start,
             onTap: onTabTap,
             tabs: const [
-              Tab(text: 'PATCH',  height: 36),
-              Tab(text: 'MEDIA',  height: 36),
-              Tab(text: 'NODES',  height: 36),
-              Tab(text: 'AUDIO',  height: 36),
+              Tab(text: 'PATCH',     height: 36),
+              Tab(text: 'MEDIA',     height: 36),
+              Tab(text: 'NODES',     height: 36),
+              Tab(text: 'AUDIO',     height: 36),
+              Tab(text: 'TALKBACK',  height: 36),
             ],
           ),
           const Spacer(),
@@ -1732,7 +1960,7 @@ class _ClockInfo extends StatelessWidget {
         const SizedBox(width: 12),
         _hint('↑↓', 'Nav'),
         const SizedBox(width: 12),
-        _hint('Del', '🗑'),
+        _hint('Del', 'DEL'),
       ],
     );
   }
@@ -1751,6 +1979,47 @@ class _ClockInfo extends StatelessWidget {
         ),
         const SizedBox(width: 3),
         Text(label, style: ScText.statusSmall),
+      ],
+    );
+  }
+}
+
+// ── Talkback Panel (Desktop Bottom Tab) ───────────────────────────────────────
+
+class _TalkbackPanel extends ConsumerWidget {
+  final ShowControlDomainState domainState;
+  const _TalkbackPanel({required this.domainState});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final buses    = domainState.patchConfig.busesOfType(AudioBusType.talkback);
+    final busIds   = buses.map((b) => b.id).toList();
+    final busNames = {for (final b in buses) b.id: b.name};
+
+    return Column(
+      children: [
+        // Bus-Verwaltung öffnen
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+          child: Row(
+            children: [
+              const Text('Talkback-Routing',
+                  style: TextStyle(color: Color(0xFF888888), fontSize: 11, letterSpacing: 0.8)),
+              const Spacer(),
+              TextButton.icon(
+                onPressed: () => showBusConfigSheet(context, ref),
+                icon: const Icon(Icons.speaker_group_outlined, size: 16, color: Color(0xFF64B5F6)),
+                label: const Text('Buses konfigurieren',
+                    style: TextStyle(color: Color(0xFF64B5F6), fontSize: 12)),
+              ),
+            ],
+          ),
+        ),
+        // Talkback-Bar
+        Padding(
+          padding: const EdgeInsets.all(8),
+          child: TalkbackBar(availableBusIds: busIds, busNames: busNames),
+        ),
       ],
     );
   }

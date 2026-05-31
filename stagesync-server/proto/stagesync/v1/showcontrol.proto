@@ -4,6 +4,7 @@ package stagesync.v1;
 
 import "stagesync/v1/common.proto";
 import "stagesync/v1/node.proto";
+import "stagesync/v1/bus.proto";
 import "google/protobuf/empty.proto";
 
 option go_package = "stagesync-server/gen/go/stagesync/v1;stagesyncv1";
@@ -97,6 +98,10 @@ message AudioCueParams {
   string  output_device  = 8; // leer = System-Default
   string  asset_id       = 9; // SHA-256 des Assets (bevorzugt gegenüber file_path)
   double  declared_duration_ms = 10; // deklarierte Abspieldauer aus Asset-Metadaten; 0 = unbekannt
+
+  // Bus-Routing: welche Buses dieses Asset empfangen.
+  // Leer = alle Buses vom Typ MAIN aus der PatchConfig (Migrations-Default).
+  repeated BusSend bus_sends = 15;
 
   // ── Pause / Resume Verhalten ──────────────────────────────────────────────
   enum PauseBehavior {
@@ -285,9 +290,14 @@ message ShowDefinitionEvent {
 // ── PatchConfig (4-Ebenen Audio-Routing) ──────────────────────────────────────
 
 message PatchConfig {
-  repeated PatchLogicalOutput logical_outputs = 1; // Ebene 1: benannte logische Ausgänge
-  repeated PatchNodeAssign    node_assigns    = 2; // Ebene 2: Bus → Nodes
-  repeated PatchDeviceAssign  device_assigns  = 3; // Ebene 3: Node → physisches Gerät
+  // Legacy 4-Ebenen-Routing (wird beim Laden in buses[] migriert).
+  repeated PatchLogicalOutput logical_outputs = 1;
+  repeated PatchNodeAssign    node_assigns    = 2;
+  repeated PatchDeviceAssign  device_assigns  = 3;
+
+  // Audio Buses (neues Modell: Sources → Buses → Nodes → Devices).
+  // Wenn buses nicht leer ist, wird legacy routing ignoriert.
+  repeated AudioBus buses = 10;
 }
 
 // Layer 1: ein benannter logischer Ausgang (z.B. "Main L/R", "Monitor").

@@ -45,6 +45,12 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!-- •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
+         Mikrofon (Talkback)
+         ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••• -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-feature android:name="android.hardware.microphone" android:required="false" />
+
+    <!-- •••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••
          Kamera-Berechtigung (QR-Code / Barcode-Scanner)
          ••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••••• -->
     <uses-permission android:name="android.permission.CAMERA" />

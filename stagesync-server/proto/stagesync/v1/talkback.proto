@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+package stagesync.v1;
+
+option go_package = "stagesync-server/gen/go/stagesync/v1;stagesyncv1";
+
+// ── Talkback Service ──────────────────────────────────────────────────────────
+//
+// Ermöglicht Live-Sprache vom Smartphone-Mikrofon auf Audio-Nodes (PTT).
+// Transport: Opus-codierte Frames über gRPC Bidirectional Streaming.
+//
+// Flow:
+//   Client ──[TalkbackFrame(init)]──► Server
+//   Client ──[TalkbackFrame(audio)]──► Server ──► AudioNodes (via NodeCommand)
+//   Server ──[TalkbackStatus]──────► Client   (aktive Talker, Latenz)
+
+service TalkbackService {
+  // Bidirektionaler Stream: Client sendet Audio, Server liefert Status-Updates.
+  // Erstes Frame MUSS TalkbackInitFrame sein.
+  rpc StreamTalkback(stream TalkbackFrame) returns (stream TalkbackStatus);
+
+  // Aktive Talkback-Sessions der aktuellen Session abfragen (Einmal-Abfrage).
+  rpc ListActiveTalkers(ListActiveTalkersRequest) returns (ListActiveTalkersResponse);
+}
+
+// ── Nachrichten ───────────────────────────────────────────────────────────────
+
+// Init-Frame: erstes Frame eines StreamTalkback-Calls.
+message TalkbackInitFrame {
+  string session_id   = 1;
+  string token        = 2;
+  string client_id    = 3; // eindeutige Client-ID (z.B. Node-ID des Smartphones)
+  string display_name = 4; // z.B. "Stage Manager"
+
+  // Routing: leer = alle Buses vom Typ TALKBACK aus der PatchConfig.
+  // Explizit: nur die genannten Bus-IDs.
+  repeated string target_bus_ids = 5;
+
+  // Audio-Format des Streams (Opus erwartet)
+  int32 sample_rate = 6; // 48000
+  int32 channels    = 7; // 1 (Mono) oder 2 (Stereo)
+}
+
+// Ein Opus-codiertes Audio-Frame.
+message AudioChunk {
+  bytes  opus_data     = 1; // Opus-codiertes Frame (10–20 ms)
+  int64  timestamp_ms  = 2; // Client-seitiger Timestamp (für Latenz-Messung)
+  uint32 sequence      = 3; // monoton steigend (für Lücken-Erkennung)
+}
+
+// Multiplexed Frame-Typ (Init oder Audio).
+message TalkbackFrame {
+  oneof payload {
+    TalkbackInitFrame init  = 1;
+    AudioChunk        audio = 2;
+  }
+}
+
+// Status-Update vom Server an den sendenden Client.
+message TalkbackStatus {
+  bool                  active          = 1; // true = Stream ist aktiv und wird relayed
+  repeated ActiveTalker active_talkers  = 2; // alle gerade sprechenden Clients
+  string                error_msg       = 3; // gesetzt bei Fehler (kein Routing etc.)
+}
+
+// Ein aktiver Sprecher in der Session.
+message ActiveTalker {
+  string client_id    = 1;
+  string display_name = 2;
+  int64  latency_ms   = 3; // gemessene Server-Relay-Latenz
+  repeated string bus_ids = 4; // auf welche Buses geroutet
+}
+
+// ── List ──────────────────────────────────────────────────────────────────────
+
+message ListActiveTalkersRequest {
+  string session_id = 1;
+  string token      = 2;
+}
+
+message ListActiveTalkersResponse {
+  repeated ActiveTalker talkers = 1;
+}

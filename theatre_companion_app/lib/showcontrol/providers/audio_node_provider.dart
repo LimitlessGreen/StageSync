@@ -40,6 +40,13 @@ class AudioNodeNotifier extends StateNotifier<AudioNodeStatus> {
 
   Future<void> auditionStop() => _service.auditionStop();
 
+  /// Sets the master output volume in dB immediately.
+  /// Affects all active handles; safe to call while cues are playing.
+  void setMasterVolume(double db) {
+    _service.setMasterVolume(db);
+    state = state.copyWith(masterVolumeDb: db);
+  }
+
   @override
   void dispose() {
     _service.dispose();

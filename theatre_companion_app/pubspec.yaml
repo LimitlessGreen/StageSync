@@ -70,6 +70,21 @@ dependencies:
   ffi: ^2.2.0
   wakelock_plus: ^1.5.2
 
+  # ── Talkback (Mikrofon + Opus-Codec) ─────────────────────────────────────────
+  # Mikrofon-Aufnahme: plattformübergreifend, niedrigster Buffer-Modus
+  record: ^6.2.1
+  # Opus-Codec: Encode (Client→Server) + Decode (für zukünftige Monitor-Feeds)
+  opus_flutter: ^3.0.3
+  opus_dart: ^3.0.1
+
+# Lokale Patches für Abhängigkeiten mit Build-Problemen
+dependency_overrides:
+  # record_windows 1.0.7 hat irrtümlich cmake_minimum_required(VERSION 3.23)
+  # obwohl der Kommentar direkt darüber sagt "do not increase this version".
+  # Diese lokale Kopie enthält den Fix auf 3.14.
+  record_windows:
+    path: local_packages/record_windows
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

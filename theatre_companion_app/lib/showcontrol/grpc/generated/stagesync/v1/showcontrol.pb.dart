@@ -15,8 +15,9 @@ import 'dart:core' as $core;
 import 'package:fixnum/fixnum.dart' as $fixnum;
 import 'package:protobuf/protobuf.dart' as $pb;
 
+import 'bus.pb.dart' as $3;
 import 'common.pb.dart' as $2;
-import 'node.pb.dart' as $3;
+import 'node.pb.dart' as $4;
 import 'showcontrol.pbenum.dart';
 
 export 'package:protobuf/protobuf.dart' show GeneratedMessageGenericExtensions;
@@ -384,6 +385,7 @@ class AudioCueParams extends $pb.GeneratedMessage {
     $core.double? pauseFadeMs,
     AudioCueParams_ResumeBehavior? resumeBehavior,
     $core.double? resumeFadeMs,
+    $core.Iterable<$3.BusSend>? busSends,
   }) {
     final result = create();
     if (filePath != null) result.filePath = filePath;
@@ -401,6 +403,7 @@ class AudioCueParams extends $pb.GeneratedMessage {
     if (pauseFadeMs != null) result.pauseFadeMs = pauseFadeMs;
     if (resumeBehavior != null) result.resumeBehavior = resumeBehavior;
     if (resumeFadeMs != null) result.resumeFadeMs = resumeFadeMs;
+    if (busSends != null) result.busSends.addAll(busSends);
     return result;
   }
 
@@ -435,6 +438,8 @@ class AudioCueParams extends $pb.GeneratedMessage {
         13, _omitFieldNames ? '' : 'resumeBehavior',
         enumValues: AudioCueParams_ResumeBehavior.values)
     ..aD(14, _omitFieldNames ? '' : 'resumeFadeMs')
+    ..pPM<$3.BusSend>(15, _omitFieldNames ? '' : 'busSends',
+        subBuilder: $3.BusSend.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -583,6 +588,11 @@ class AudioCueParams extends $pb.GeneratedMessage {
   $core.bool hasResumeFadeMs() => $_has(13);
   @$pb.TagNumber(14)
   void clearResumeFadeMs() => $_clearField(14);
+
+  /// Bus-Routing: welche Buses dieses Asset empfangen.
+  /// Leer = alle Buses vom Typ MAIN aus der PatchConfig (Migrations-Default).
+  @$pb.TagNumber(15)
+  $pb.PbList<$3.BusSend> get busSends => $_getList(14);
 }
 
 class MaOscCueParams extends $pb.GeneratedMessage {
@@ -2372,11 +2382,13 @@ class PatchConfig extends $pb.GeneratedMessage {
     $core.Iterable<PatchLogicalOutput>? logicalOutputs,
     $core.Iterable<PatchNodeAssign>? nodeAssigns,
     $core.Iterable<PatchDeviceAssign>? deviceAssigns,
+    $core.Iterable<$3.AudioBus>? buses,
   }) {
     final result = create();
     if (logicalOutputs != null) result.logicalOutputs.addAll(logicalOutputs);
     if (nodeAssigns != null) result.nodeAssigns.addAll(nodeAssigns);
     if (deviceAssigns != null) result.deviceAssigns.addAll(deviceAssigns);
+    if (buses != null) result.buses.addAll(buses);
     return result;
   }
 
@@ -2399,6 +2411,8 @@ class PatchConfig extends $pb.GeneratedMessage {
         subBuilder: PatchNodeAssign.create)
     ..pPM<PatchDeviceAssign>(3, _omitFieldNames ? '' : 'deviceAssigns',
         subBuilder: PatchDeviceAssign.create)
+    ..pPM<$3.AudioBus>(10, _omitFieldNames ? '' : 'buses',
+        subBuilder: $3.AudioBus.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -2420,6 +2434,7 @@ class PatchConfig extends $pb.GeneratedMessage {
       $pb.GeneratedMessage.$_defaultFor<PatchConfig>(create);
   static PatchConfig? _defaultInstance;
 
+  /// Legacy 4-Ebenen-Routing (wird beim Laden in buses[] migriert).
   @$pb.TagNumber(1)
   $pb.PbList<PatchLogicalOutput> get logicalOutputs => $_getList(0);
 
@@ -2428,6 +2443,11 @@ class PatchConfig extends $pb.GeneratedMessage {
 
   @$pb.TagNumber(3)
   $pb.PbList<PatchDeviceAssign> get deviceAssigns => $_getList(2);
+
+  /// Audio Buses (neues Modell: Sources → Buses → Nodes → Devices).
+  /// Wenn buses nicht leer ist, wird legacy routing ignoriert.
+  @$pb.TagNumber(10)
+  $pb.PbList<$3.AudioBus> get buses => $_getList(3);
 }
 
 /// Layer 1: ein benannter logischer Ausgang (z.B. "Main L/R", "Monitor").
@@ -2968,7 +2988,7 @@ class NodeHealthEvent extends $pb.GeneratedMessage {
     $2.Timestamp? occurredAt,
     $2.NodeInfo? node,
     $fixnum.Int64? clockDeltaMs,
-    $3.NodeCapabilities? capabilities,
+    $4.NodeCapabilities? capabilities,
   }) {
     final result = create();
     if (seq != null) result.seq = seq;
@@ -3001,8 +3021,8 @@ class NodeHealthEvent extends $pb.GeneratedMessage {
     ..aOM<$2.NodeInfo>(10, _omitFieldNames ? '' : 'node',
         subBuilder: $2.NodeInfo.create)
     ..aInt64(11, _omitFieldNames ? '' : 'clockDeltaMs')
-    ..aOM<$3.NodeCapabilities>(12, _omitFieldNames ? '' : 'capabilities',
-        subBuilder: $3.NodeCapabilities.create)
+    ..aOM<$4.NodeCapabilities>(12, _omitFieldNames ? '' : 'capabilities',
+        subBuilder: $4.NodeCapabilities.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -3074,15 +3094,15 @@ class NodeHealthEvent extends $pb.GeneratedMessage {
   void clearClockDeltaMs() => $_clearField(11);
 
   @$pb.TagNumber(12)
-  $3.NodeCapabilities get capabilities => $_getN(5);
+  $4.NodeCapabilities get capabilities => $_getN(5);
   @$pb.TagNumber(12)
-  set capabilities($3.NodeCapabilities value) => $_setField(12, value);
+  set capabilities($4.NodeCapabilities value) => $_setField(12, value);
   @$pb.TagNumber(12)
   $core.bool hasCapabilities() => $_has(5);
   @$pb.TagNumber(12)
   void clearCapabilities() => $_clearField(12);
   @$pb.TagNumber(12)
-  $3.NodeCapabilities ensureCapabilities() => $_ensure(5);
+  $4.NodeCapabilities ensureCapabilities() => $_ensure(5);
 }
 
 class WatchMediaSyncRequest extends $pb.GeneratedMessage {

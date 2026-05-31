@@ -246,12 +246,14 @@ class SessionNotifier extends StateNotifier<SessionState> {
     List<NodeTask> tasks = const [],
     String password = '',
     bool persistent = false,
+    String deviceId = '',
   }) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
       await StageSyncClient.instance.connect(host, port);
 
       final myNode = NodeInfo()
+        ..nodeId = deviceId
         ..name = deviceName
         ..nodeType = nodeType
         ..nodeRole = NodeRole.NODE_ROLE_MASTER
@@ -310,12 +312,14 @@ class SessionNotifier extends StateNotifier<SessionState> {
     required NodeType nodeType,
     List<NodeTask> tasks = const [],
     String password = '',
+    String deviceId = '',
   }) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
       await StageSyncClient.instance.connect(host, port);
 
       final myNode = NodeInfo()
+        ..nodeId = deviceId
         ..name = deviceName
         ..nodeType = nodeType
         ..tasks.addAll(tasks);

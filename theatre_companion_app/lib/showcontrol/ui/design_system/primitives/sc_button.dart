@@ -4,7 +4,12 @@ import '../sc_spacing.dart';
 import '../sc_typography.dart';
 
 enum ScButtonVariant { primary, danger, secondary, ghost }
-enum ScButtonSize { large, normal, compact }
+
+/// [large]     → 80px (mobile full-screen GO)
+/// [transport] → 44px (desktop transport-bar GO, visually dominant)
+/// [normal]    → 36px
+/// [compact]   → 28px
+enum ScButtonSize { large, transport, normal, compact }
 
 /// Primitive SC button — no domain knowledge.
 ///
@@ -51,9 +56,10 @@ class _ScButtonState extends State<ScButton> {
     };
 
     final height = switch (widget.size) {
-      ScButtonSize.large   => ScSpacing.buttonHeightLarge,
-      ScButtonSize.normal  => ScSpacing.buttonHeightDefault,
-      ScButtonSize.compact => ScSpacing.buttonHeightCompact,
+      ScButtonSize.large     => ScSpacing.buttonHeightLarge,
+      ScButtonSize.transport => 44.0,
+      ScButtonSize.normal    => ScSpacing.buttonHeightDefault,
+      ScButtonSize.compact   => ScSpacing.buttonHeightCompact,
     };
 
     // Visual states — withValues(alpha:) is the correct way to tint;
@@ -73,7 +79,7 @@ class _ScButtonState extends State<ScButton> {
         : Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (widget.size == ScButtonSize.large)
+              if (widget.size == ScButtonSize.large || widget.size == ScButtonSize.transport)
                 _buildLargeContent(effectiveColor, onColor, enabled)
               else
                 _buildNormalContent(effectiveColor, onColor, enabled, isFilled),
@@ -132,9 +138,10 @@ class _ScButtonState extends State<ScButton> {
   }
 
   Widget _buildLargeContent(Color color, Color onColor, bool enabled) {
+    final isTransport = widget.size == ScButtonSize.transport;
     return Text(
       widget.label,
-      style: ScText.goButton.copyWith(
+      style: (isTransport ? ScText.goButton.copyWith(fontSize: 18, letterSpacing: 4) : ScText.goButton).copyWith(
         color: enabled ? onColor : ScColors.textDim,
       ),
     );

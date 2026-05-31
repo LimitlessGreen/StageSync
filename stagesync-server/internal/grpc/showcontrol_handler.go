@@ -59,14 +59,28 @@ func (d *commandDedup) cleanupLoop() {
 	}
 }
 
+// TalkbackDucker ist ein Interface für den Talkback-Relay — verhindert
+// einen zyklischen Import zwischen showcontrol_handler und talkback.
+type TalkbackDucker interface {
+	DuckOnGo(sessionID string, duckDB float32, durationMs int32)
+	HasActiveTalkers() bool
+}
+
+// BusRouterUpdater synchronisiert den Bus-Router wenn sich die PatchConfig ändert.
+type BusRouterUpdater interface {
+	Update(patch *pb.PatchConfig)
+}
+
 // ShowControlHandler verwaltet CueLists und die ShowEngine pro Session.
 type ShowControlHandler struct {
 	pb.UnimplementedShowControlServiceServer
 	sessionMgr  *session.Manager
 	dispatcher  *node.Dispatcher
 	persistence *showcontrol.Persistence
-	mediaStore  *media.Store          // für WatchMediaSync (nil = kein Media-Store)
+	mediaStore  *media.Store            // für WatchMediaSync (nil = kein Media-Store)
 	warmer      showcontrol.AssetWarmer // RAM-Cache-Preloader (nil = deaktiviert)
+	busRouter   BusRouterUpdater        // Bus-Routing (nil = deaktiviert)
+	talkback    TalkbackDucker          // Talkback-Ducking bei GO (nil = deaktiviert)
 	dedup       *commandDedup
 
 	mu      sync.RWMutex
@@ -87,8 +101,6 @@ func NewShowControlHandler(mgr *session.Manager, disp *node.Dispatcher, persist 
 }
 
 // SetWarmer setzt den Asset-Warmer für alle Engines dieser Handler-Instanz.
-// Muss vor der ersten Session aufgerufen werden; bestehende Engines werden
-// ebenfalls aktualisiert.
 func (h *ShowControlHandler) SetWarmer(w showcontrol.AssetWarmer) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -96,6 +108,20 @@ func (h *ShowControlHandler) SetWarmer(w showcontrol.AssetWarmer) {
 	for _, e := range h.engines {
 		e.SetWarmer(w)
 	}
+}
+
+// SetBusRouter verbindet den Bus-Router — wird bei PatchConfig-Änderungen informiert.
+func (h *ShowControlHandler) SetBusRouter(r BusRouterUpdater) {
+	h.mu.Lock()
+	h.busRouter = r
+	h.mu.Unlock()
+}
+
+// SetTalkbackRelay verbindet den Talkback-Relay für GO-Ducking.
+func (h *ShowControlHandler) SetTalkbackRelay(t TalkbackDucker) {
+	h.mu.Lock()
+	h.talkback = t
+	h.mu.Unlock()
 }
 
 func (h *ShowControlHandler) getOrCreateStore(sessionID string) *showcontrol.Store {
@@ -210,9 +236,13 @@ func (h *ShowControlHandler) UpsertCue(ctx context.Context, req *pb.UpsertCueReq
 		return nil, status.Error(codes.NotFound, "cue list not found")
 	}
 	h.persistence.Save(req.SessionId, store)
-	// Neue/geänderte Audio-Cue sofort auf Nodes vorladen
 	if engine, ok := h.getEngine(req.SessionId); ok {
 		go engine.ArmCue(ctx, cue)
+		// Lautstärke sofort auf laufende Cue anwenden (kein Preload-Interrupt).
+		// Wenn die Cue nicht spielt, ignoriert der Node den Befehl still.
+		if audio, ok2 := cue.Params.(*pb.Cue_Audio); ok2 {
+			go engine.LiveUpdateVolume(cue.CueId, cue.TargetNodeId, float64(audio.Audio.VolumeDb))
+		}
 	}
 	return &pb.CueResponse{Cue: cue}, nil
 }
@@ -249,6 +279,14 @@ func (h *ShowControlHandler) Go(ctx context.Context, req *pb.GoRequest) (*pb.GoR
 		cueDesc = "(next)"
 	}
 	log.Printf("[showcontrol] GO session=%s cue=%s cmd=%s", req.SessionId, cueDesc, req.CommandId)
+
+	// Talkback-Ducking beim GO-Trigger (falls aktive Talker vorhanden)
+	h.mu.RLock()
+	tb := h.talkback
+	h.mu.RUnlock()
+	if tb != nil && tb.HasActiveTalkers() {
+		tb.DuckOnGo(req.SessionId, -12.0, 2000)
+	}
 
 	executing, next, err := engine.Go(ctx, req.CueId)
 	if err != nil {
@@ -319,6 +357,15 @@ func (h *ShowControlHandler) UpdatePatchConfig(ctx context.Context, req *pb.Upda
 	store := h.getOrCreateStore(req.SessionId)
 	store.SetPatchConfig(req.PatchConfig)
 	h.persistence.Save(req.SessionId, store)
+
+	// BusRouter über neue PatchConfig informieren
+	h.mu.RLock()
+	busRouter := h.busRouter
+	h.mu.RUnlock()
+	if busRouter != nil {
+		busRouter.Update(req.PatchConfig)
+	}
+
 	return &pb.PatchConfigResponse{PatchConfig: store.GetPatchConfig()}, nil
 }
 

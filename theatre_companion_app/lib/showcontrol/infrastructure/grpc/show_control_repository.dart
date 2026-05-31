@@ -2,6 +2,7 @@ import 'package:flutter/material.dart' show Color;
 import 'package:path/path.dart' as p;
 
 import '../../grpc/generated/stagesync/v1/showcontrol.pb.dart' as pb;
+import '../../grpc/generated/stagesync/v1/bus.pb.dart' as pb_bus;
 import '../../grpc/generated/stagesync/v1/common.pb.dart' as pb_common;
 import '../../domain/show.dart';
 import '../../domain/cue_params.dart';
@@ -223,8 +224,40 @@ class ShowControlRepository {
                 deviceName: a.deviceName,
               ))
           .toList(),
+      buses: proto.buses.map(_audioBusFromProto).toList(),
     );
   }
+
+  static AudioBus _audioBusFromProto(pb_bus.AudioBus b) => AudioBus(
+        id: b.id,
+        name: b.name,
+        type: _busTypeFromProto(b.type),
+        outputLevelDb: b.outputLevelDb.toDouble(),
+        muted: b.muted,
+        patch: b.patch
+            .map((a) => BusNodeAssign(
+                  nodeId: a.nodeId,
+                  deviceIndex: a.deviceIndex,
+                  deviceName: a.deviceName,
+                ))
+            .toList(),
+      );
+
+  static AudioBusType _busTypeFromProto(pb_bus.AudioBusType t) => switch (t) {
+        pb_bus.AudioBusType.AUDIO_BUS_TYPE_MONITOR  => AudioBusType.monitor,
+        pb_bus.AudioBusType.AUDIO_BUS_TYPE_TALKBACK => AudioBusType.talkback,
+        pb_bus.AudioBusType.AUDIO_BUS_TYPE_AUX      => AudioBusType.aux,
+        pb_bus.AudioBusType.AUDIO_BUS_TYPE_IEM      => AudioBusType.iem,
+        _                                        => AudioBusType.main,
+      };
+
+  static pb_bus.AudioBusType _busTypeToProto(AudioBusType t) => switch (t) {
+        AudioBusType.monitor  => pb_bus.AudioBusType.AUDIO_BUS_TYPE_MONITOR,
+        AudioBusType.talkback => pb_bus.AudioBusType.AUDIO_BUS_TYPE_TALKBACK,
+        AudioBusType.aux      => pb_bus.AudioBusType.AUDIO_BUS_TYPE_AUX,
+        AudioBusType.iem      => pb_bus.AudioBusType.AUDIO_BUS_TYPE_IEM,
+        AudioBusType.main     => pb_bus.AudioBusType.AUDIO_BUS_TYPE_MAIN,
+      };
 
   static pb.PatchConfig patchConfigToProto(PatchConfig domain) {
     return pb.PatchConfig(
@@ -243,6 +276,22 @@ class ShowControlRepository {
                 nodeId: p.nodeId,
                 deviceIndex: p.deviceIndex,
                 deviceName: p.deviceName,
+              ))
+          .toList(),
+      buses: domain.buses
+          .map((b) => pb_bus.AudioBus(
+                id: b.id,
+                name: b.name,
+                type: _busTypeToProto(b.type),
+                outputLevelDb: b.outputLevelDb,
+                muted: b.muted,
+                patch: b.patch
+                    .map((a) => pb_bus.BusNodeAssign(
+                          nodeId: a.nodeId,
+                          deviceIndex: a.deviceIndex,
+                          deviceName: a.deviceName,
+                        ))
+                    .toList(),
               ))
           .toList(),
     );

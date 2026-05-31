@@ -1,6 +1,6 @@
 module stagesync-server
 
-go 1.23.2
+go 1.24.0
 
 require (
 	github.com/gen2brain/malgo v0.11.25
@@ -24,6 +24,7 @@ require (
 	github.com/mewkiz/pkg v0.0.0-20250417130911-3f050ff8c56d // indirect
 	github.com/mewpkg/term v0.0.0-20241026122259-37a80af23985 // indirect
 	github.com/miekg/dns v1.1.27 // indirect
+	github.com/pion/opus v0.0.0-20260530062302-292081249302 // indirect
 	golang.org/x/crypto v0.36.0 // indirect
 	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect

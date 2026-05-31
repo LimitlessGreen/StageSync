@@ -110,6 +110,17 @@ class MiniaudioEngine implements AbstractAudioEngine {
 
   // ── AbstractAudioEngine ────────────────────────────────────────────────────
 
+  double _masterVolumeDb = 0.0;
+
+  @override
+  double get masterVolumeDb => _masterVolumeDb;
+
+  @override
+  void setMasterVolume(double db) {
+    _masterVolumeDb = db;
+    // TODO: expose miniaudio global volume via FFI
+  }
+
   @override
   bool get isInitialized => _initialized;
 

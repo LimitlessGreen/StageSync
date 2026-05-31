@@ -18,12 +18,14 @@ import (
 	pb "stagesync-server/gen/go/stagesync/v1"
 
 	"stagesync-server/internal/audionode"
+	"stagesync-server/internal/busengine"
 	"stagesync-server/internal/discovery"
 	grpchandlers "stagesync-server/internal/grpc"
 	"stagesync-server/internal/media"
 	"stagesync-server/internal/node"
 	"stagesync-server/internal/session"
 	"stagesync-server/internal/showcontrol"
+	"stagesync-server/internal/talkback"
 )
 
 var (
@@ -77,12 +79,20 @@ func main() {
 		grpc.MaxSendMsgSize(512*1024*1024),
 	)
 
+	// ── Bus-Router + Talkback-Relay ─────────────────────────────────────────────
+	busRouter := busengine.NewRouter()
+	talkbackRelay := talkback.NewRelay(busRouter, dispatcher)
+	talkbackHandler := talkback.NewHandler(sessionMgr, talkbackRelay, busRouter)
+
 	pb.RegisterSessionServiceServer(grpcServer, grpchandlers.NewSessionHandler(sessionMgr))
 	pb.RegisterNodeServiceServer(grpcServer, grpchandlers.NewNodeHandler(sessionMgr, dispatcher))
 	showControlHandler := grpchandlers.NewShowControlHandler(sessionMgr, dispatcher, persistence, mediaStore)
 	showControlHandler.SetWarmer(storeWarmer)
+	showControlHandler.SetBusRouter(busRouter)
+	showControlHandler.SetTalkbackRelay(talkbackRelay)
 	pb.RegisterShowControlServiceServer(grpcServer, showControlHandler)
 	pb.RegisterMediaServiceServer(grpcServer, mediaGRPC)
+	pb.RegisterTalkbackServiceServer(grpcServer, talkbackHandler)
 
 	reflection.Register(grpcServer)
 

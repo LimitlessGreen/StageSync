@@ -33,6 +33,7 @@ type Handle struct {
 
 	// Fade in/out at natural boundaries (end of file or explicit fade params).
 	fadeInSamples  int64
+	fadeInOffset   int64 // absolute frame position where the current fade-in started
 	fadeOutSamples int64
 
 	// Stop/pause fade — counts down from stopFadeOutSamples to 0.

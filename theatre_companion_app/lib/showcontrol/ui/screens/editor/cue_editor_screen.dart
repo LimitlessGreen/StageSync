@@ -251,7 +251,7 @@ class _ParamsContent extends ConsumerWidget {
   const _ParamsContent({required this.cue, required this.notifier});
 
   static double _autoVolume(double lufs) =>
-      (_kTargetLufs - lufs).clamp(-40.0, 20.0);
+      (_kTargetLufs - lufs).clamp(-40.0, 40.0);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -382,96 +382,49 @@ class _ParamsContent extends ConsumerWidget {
   }
 
   Widget _buildAudioParams(BuildContext context, WidgetRef ref, AudioParams ap) {
-    final asset      = ref.watch(assetWithReadinessProvider(ap.assetId));
-    final lufs       = asset?.audio?.loudnessLufs;
-    final autoVolDb  = lufs != null ? _autoVolume(lufs) : null;
-    final isAutoVol  = autoVolDb != null && (ap.volumeDb - autoVolDb).abs() < 0.05;
+    final asset     = ref.watch(assetWithReadinessProvider(ap.assetId));
+    final lufs      = asset?.audio?.loudnessLufs;
+    final autoVolDb = lufs != null ? _autoVolume(lufs) : null;
 
     return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            AudioCueMinibar(params: ap, asset: asset),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: ScDragField(
-                    label: 'Lautstärke',
-                    value: ap.volumeDb,
-                    min: -40,
-                    max: 20,
-                    step: 0.2,
-                    suffix: 'dB',
-                    decimalPlaces: 1,
-                    onChanged: (v) => notifier.upsertDomainCue(
-                      cue.copyWith(params: ap.copyWith(volumeDb: v)),
-                    ),
-                  ),
-                ),
-                if (isAutoVol) ...[
-                  const SizedBox(width: 6),
-                  Tooltip(
-                    message: 'Automatisch normiert auf $_kTargetLufs LUFS (EBU R128)',
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: ScColors.active.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text('EBU',
-                          style: ScText.label.copyWith(
-                              color: ScColors.active, fontSize: 9, fontWeight: FontWeight.w800)),
-                    ),
-                  ),
-                ] else if (autoVolDb != null) ...[
-                  const SizedBox(width: 6),
-                  Tooltip(
-                    message: 'Auf EBU R128 normieren (${autoVolDb.toStringAsFixed(1)} dB)',
-                    child: GestureDetector(
-                      onTap: () => notifier.upsertDomainCue(
-                        cue.copyWith(params: ap.copyWith(volumeDb: autoVolDb)),
-                      ),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                        decoration: BoxDecoration(
-                          border: Border.all(color: ScColors.textDim),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text('EBU',
-                            style: ScText.label.copyWith(
-                                color: ScColors.textDim, fontSize: 9, fontWeight: FontWeight.w700)),
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-            ScDragField(
-              label: 'Fade In',
-              value: ap.fadeInMs,
-              min: 0,
-              max: 60000,
-              step: 10,
-              suffix: 'ms',
-              decimalPlaces: 0,
-              onChanged: (v) => notifier.upsertDomainCue(
-                cue.copyWith(params: ap.copyWith(fadeInMs: v)),
-              ),
-            ),
-            ScDragField(
-              label: 'Fade Out',
-              value: ap.fadeOutMs,
-              min: 0,
-              max: 60000,
-              step: 10,
-              suffix: 'ms',
-              decimalPlaces: 0,
-              onChanged: (v) => notifier.upsertDomainCue(
-                cue.copyWith(params: ap.copyWith(fadeOutMs: v)),
-              ),
-            ),
-          ],
-        );
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AudioCueMinibar(params: ap, asset: asset),
+        const SizedBox(height: 8),
+        _AudioVolumeRow(
+          volumeDb: ap.volumeDb,
+          fileLufs: lufs,
+          autoVolDb: autoVolDb,
+          onChanged: (v) => notifier.upsertDomainCue(
+            cue.copyWith(params: ap.copyWith(volumeDb: v)),
+          ),
+        ),
+        ScDragField(
+          label: 'Fade In',
+          value: ap.fadeInMs,
+          min: 0,
+          max: 60000,
+          step: 10,
+          suffix: 'ms',
+          decimalPlaces: 0,
+          onChanged: (v) => notifier.upsertDomainCue(
+            cue.copyWith(params: ap.copyWith(fadeInMs: v)),
+          ),
+        ),
+        ScDragField(
+          label: 'Fade Out',
+          value: ap.fadeOutMs,
+          min: 0,
+          max: 60000,
+          step: 10,
+          suffix: 'ms',
+          decimalPlaces: 0,
+          onChanged: (v) => notifier.upsertDomainCue(
+            cue.copyWith(params: ap.copyWith(fadeOutMs: v)),
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -623,6 +576,153 @@ class _EditorCueTypeSwitcher extends StatelessWidget {
           ),
         );
       }).toList(),
+    );
+  }
+}
+
+// ── Audio Volume Row (dB / LUFS Toggle) ──────────────────────────────────────
+
+/// Lautstärke-Zeile mit umschaltbarem dB- und LUFS-Slider.
+/// Der LUFS-Slider ist nur verfügbar wenn [fileLufs] bekannt ist (aus Asset-Metadaten).
+/// Beide Slider sind gekoppelt: LUFS = fileLufs + volumeDb.
+class _AudioVolumeRow extends StatefulWidget {
+  final double volumeDb;
+  final double? fileLufs;
+  final double? autoVolDb;
+  final ValueChanged<double> onChanged;
+
+  const _AudioVolumeRow({
+    required this.volumeDb,
+    required this.onChanged,
+    this.fileLufs,
+    this.autoVolDb,
+  });
+
+  @override
+  State<_AudioVolumeRow> createState() => _AudioVolumeRowState();
+}
+
+class _AudioVolumeRowState extends State<_AudioVolumeRow> {
+  bool _showLufs = false;
+
+  static const _kMinDb   = -40.0;
+  static const _kMaxDb   = 40.0;
+  static const _kTargetL = _kTargetLufs; // -23 LUFS (EBU R128)
+
+  double get _effectiveLufs => (widget.fileLufs ?? 0.0) + widget.volumeDb;
+  double get _lufsMin => (widget.fileLufs ?? 0.0) + _kMinDb;
+  double get _lufsMax => (widget.fileLufs ?? 0.0) + _kMaxDb;
+
+  bool get _canShowLufs => widget.fileLufs != null;
+  bool get _isEbuNormed =>
+      widget.autoVolDb != null && (widget.volumeDb - widget.autoVolDb!).abs() < 0.05;
+
+  void _onDbChanged(double db) => widget.onChanged(db);
+
+  void _onLufsChanged(double lufs) {
+    final db = (lufs - (widget.fileLufs ?? 0.0)).clamp(_kMinDb, _kMaxDb);
+    widget.onChanged(db);
+  }
+
+  void _onEbuTap() {
+    if (widget.autoVolDb != null) {
+      widget.onChanged(widget.autoVolDb!);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        // ── Slider (dB oder LUFS) ───────────────────────────────────────────
+        Expanded(
+          child: _showLufs && _canShowLufs
+              ? ScDragField(
+                  label: 'Lautstärke',
+                  value: _effectiveLufs,
+                  min: _lufsMin,
+                  max: _lufsMax,
+                  step: 0.1,
+                  suffix: 'LUFS',
+                  decimalPlaces: 1,
+                  onChanged: _onLufsChanged,
+                )
+              : ScDragField(
+                  label: 'Lautstärke',
+                  value: widget.volumeDb,
+                  min: _kMinDb,
+                  max: _kMaxDb,
+                  step: 0.2,
+                  suffix: 'dB',
+                  decimalPlaces: 1,
+                  onChanged: _onDbChanged,
+                ),
+        ),
+
+        // ── dB / LUFS Toggle ────────────────────────────────────────────────
+        if (_canShowLufs) ...[
+          const SizedBox(width: 6),
+          Tooltip(
+            message: _showLufs ? 'Auf dB umschalten' : 'Auf LUFS umschalten',
+            child: GestureDetector(
+              onTap: () => setState(() => _showLufs = !_showLufs),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: BoxDecoration(
+                  color: _showLufs
+                      ? ScColors.active.withValues(alpha: 0.15)
+                      : Colors.transparent,
+                  border: Border.all(
+                    color: _showLufs ? ScColors.active : ScColors.textDim,
+                  ),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  _showLufs ? 'LUFS' : 'dB',
+                  style: ScText.label.copyWith(
+                    color: _showLufs ? ScColors.active : ScColors.textDim,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+
+        // ── EBU R128 Button ─────────────────────────────────────────────────
+        if (widget.autoVolDb != null) ...[
+          const SizedBox(width: 6),
+          Tooltip(
+            message: _isEbuNormed
+                ? 'Normiert auf $_kTargetL LUFS (EBU R128)'
+                : 'Auf EBU R128 normieren (${widget.autoVolDb!.toStringAsFixed(1)} dB)',
+            child: GestureDetector(
+              onTap: _isEbuNormed ? null : _onEbuTap,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                decoration: BoxDecoration(
+                  color: _isEbuNormed
+                      ? ScColors.active.withValues(alpha: 0.15)
+                      : Colors.transparent,
+                  border: Border.all(
+                    color: _isEbuNormed ? ScColors.active : ScColors.textDim,
+                  ),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'EBU',
+                  style: ScText.label.copyWith(
+                    color: _isEbuNormed ? ScColors.active : ScColors.textDim,
+                    fontSize: 9,
+                    fontWeight: _isEbuNormed ? FontWeight.w800 : FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

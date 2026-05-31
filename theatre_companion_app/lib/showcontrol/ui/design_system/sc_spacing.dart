@@ -20,7 +20,7 @@ abstract final class ScSpacing {
   static const double inspectorLabelWidth = 64.0;
 
   // ── Transport bar ─────────────────────────────────────────────────────────
-  static const double transportBarHeight = 48.0;
+  static const double transportBarHeight = 56.0;
 
   // ── Buttons ───────────────────────────────────────────────────────────────
   static const double buttonHeightLarge   = 80.0;
