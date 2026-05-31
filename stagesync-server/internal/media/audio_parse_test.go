@@ -31,7 +31,7 @@ func TestParseAudio_UsesMP3Parser(t *testing.T) {
 		return want
 	}
 
-	got := parseAudio("C:\\tmp\\test.mp3")
+	got := parseAudioRaw("C:\\tmp\\test.mp3")
 	if !mp3Called {
 		t.Fatal("expected MP3 parser to be called")
 	}

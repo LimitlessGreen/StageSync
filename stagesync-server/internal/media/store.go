@@ -77,11 +77,18 @@ type hashEntry struct {
 	sha         string
 }
 
+type audioEntry struct {
+	modUnixNano int64
+	size        int64
+	info        *AudioInfo
+}
+
 // Store verwaltet ein Verzeichnis mit Mediendateien thread-safe.
 type Store struct {
-	dir       string
-	mu        sync.Mutex
-	hashCache map[string]hashEntry // name → gecachter Hash (nach mtime+size)
+	dir        string
+	mu         sync.Mutex
+	hashCache  map[string]hashEntry  // name → gecachter Hash (nach mtime+size)
+	audioCache map[string]audioEntry // name → gecachte AudioInfo (nach mtime+size)
 
 	subsMu sync.Mutex
 	subs   map[chan struct{}]struct{} // Abonnenten für Änderungs-Notifications
@@ -92,9 +99,10 @@ func NewStore(dir string) (*Store, error) {
 		return nil, err
 	}
 	return &Store{
-		dir:       dir,
-		hashCache: make(map[string]hashEntry),
-		subs:      make(map[chan struct{}]struct{}),
+		dir:        dir,
+		hashCache:  make(map[string]hashEntry),
+		audioCache: make(map[string]audioEntry),
+		subs:       make(map[chan struct{}]struct{}),
 	}, nil
 }
 
@@ -169,7 +177,7 @@ func (s *Store) List() ([]FileInfo, error) {
 			ModifiedMs: fi.ModTime().UnixMilli(),
 			MimeType:   mimeForExt(strings.ToLower(filepath.Ext(e.Name()))),
 		}
-		info.Audio = parseAudio(filepath.Join(s.dir, e.Name()))
+		info.Audio = s.parseAudioCached(e.Name(), fi)
 		out = append(out, info)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
@@ -198,24 +206,54 @@ func (s *Store) Stat(name string) (FileInfo, error) {
 		ModifiedMs: fi.ModTime().UnixMilli(),
 		MimeType:   mimeForExt(strings.ToLower(filepath.Ext(SafeName(name)))),
 	}
-	result.Audio = parseAudio(s.path(SafeName(name)))
+	result.Audio = s.parseAudioCached(SafeName(name), fi)
 	return result, nil
 }
 
 var (
-	parseWAVFn = parseWAV
-	parseMP3Fn = parseMP3
+	parseWAVFn  = parseWAV
+	parseMP3Fn  = parseMP3
+	parseFLACFn = parseFLAC
+	parseOGGFn  = parseOGG
+	parseAIFFFn = parseAIFF
 )
 
-func parseAudio(path string) *AudioInfo {
+func parseAudioRaw(path string) *AudioInfo {
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".wav":
 		return parseWAVFn(path)
 	case ".mp3":
 		return parseMP3Fn(path)
+	case ".flac":
+		return parseFLACFn(path)
+	case ".ogg":
+		return parseOGGFn(path)
+	case ".aiff", ".aif":
+		return parseAIFFFn(path)
 	default:
 		return nil
 	}
+}
+
+// parseAudioCached gibt AudioInfo zurück, gecacht nach mtime+size.
+// Aufrufer muss s.mu halten.
+func (s *Store) parseAudioCached(name string, fi os.FileInfo) *AudioInfo {
+	key := SafeName(name)
+	if c, ok := s.audioCache[key]; ok &&
+		c.modUnixNano == fi.ModTime().UnixNano() && c.size == fi.Size() {
+		return c.info
+	}
+	path := filepath.Join(s.dir, key)
+	// Mutex kurz freigeben für die teure I/O-Operation.
+	s.mu.Unlock()
+	info := parseAudioRaw(path)
+	s.mu.Lock()
+	s.audioCache[key] = audioEntry{
+		modUnixNano: fi.ModTime().UnixNano(),
+		size:        fi.Size(),
+		info:        info,
+	}
+	return info
 }
 
 // hashLocked berechnet/cached den SHA-256 einer Datei. Aufrufer hält s.mu.
@@ -266,7 +304,8 @@ func (s *Store) Save(name string, r io.Reader) (FileInfo, error) {
 	}
 
 	s.mu.Lock()
-	delete(s.hashCache, safe) // Cache invalidieren
+	delete(s.hashCache, safe)
+	delete(s.audioCache, safe)
 	s.mu.Unlock()
 
 	s.notifyChange()
@@ -307,6 +346,7 @@ func (s *Store) Delete(name string) error {
 	err := os.Remove(s.path(safe))
 	s.mu.Lock()
 	delete(s.hashCache, safe)
+	delete(s.audioCache, safe)
 	s.mu.Unlock()
 	if err != nil {
 		if os.IsNotExist(err) {

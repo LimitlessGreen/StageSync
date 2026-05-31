@@ -7,8 +7,11 @@ import (
 	"path/filepath"
 	"strings"
 
+	goaudioaiff "github.com/go-audio/aiff"
 	goaudiowav "github.com/go-audio/wav"
 	mp3dec "github.com/hajimehoshi/go-mp3"
+	"github.com/jfreymuth/oggvorbis"
+	"github.com/mewkiz/flac"
 )
 
 // decodeFile decodes an audio file to f32 interleaved PCM at the target
@@ -23,6 +26,12 @@ func decodeFile(path string, targetRate, targetChannels uint32) ([]float32, uint
 		return decodeWAV(path, targetRate, targetChannels)
 	case ".mp3":
 		return decodeMP3(path, targetRate, targetChannels)
+	case ".flac":
+		return decodeFLAC(path, targetRate, targetChannels)
+	case ".ogg":
+		return decodeOGG(path, targetRate, targetChannels)
+	case ".aiff", ".aif":
+		return decodeAIFF(path, targetRate, targetChannels)
 	default:
 		return nil, 0, 0, fmt.Errorf("unsupported audio format: %q", ext)
 	}
@@ -192,4 +201,98 @@ func getSample(pcm []float32, frame, ch, channels, totalFrames int) float32 {
 		return 0
 	}
 	return pcm[idx]
+}
+
+// ── FLAC ──────────────────────────────────────────────────────────────────────
+
+func decodeFLAC(path string, targetRate, targetChannels uint32) ([]float32, uint32, uint32, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	defer f.Close()
+	stream, err := flac.New(f)
+	if err != nil {
+		return nil, 0, 0, fmt.Errorf("FLAC open: %w", err)
+	}
+
+	srcRate := uint32(stream.Info.SampleRate)
+	srcChannels := uint32(stream.Info.NChannels)
+	scale := float32(1.0 / math.Pow(2, float64(stream.Info.BitsPerSample-1)))
+
+	var raw []float32
+	for {
+		frame, err := stream.ParseNext()
+		if err != nil {
+			break
+		}
+		nSamples := len(frame.Subframes[0].Samples)
+		for i := 0; i < nSamples; i++ {
+			for ch := 0; ch < int(srcChannels); ch++ {
+				raw = append(raw, float32(frame.Subframes[ch].Samples[i])*scale)
+			}
+		}
+	}
+
+	out := resample(raw, srcRate, srcChannels, targetRate, targetChannels)
+	return out, targetRate, targetChannels, nil
+}
+
+// ── OGG Vorbis ────────────────────────────────────────────────────────────────
+
+func decodeOGG(path string, targetRate, targetChannels uint32) ([]float32, uint32, uint32, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	defer f.Close()
+
+	r, err := oggvorbis.NewReader(f)
+	if err != nil {
+		return nil, 0, 0, fmt.Errorf("OGG open: %w", err)
+	}
+
+	srcRate := uint32(r.SampleRate())
+	srcChannels := uint32(r.Channels())
+
+	var raw []float32
+	buf := make([]float32, 4096)
+	for {
+		n, err := r.Read(buf)
+		raw = append(raw, buf[:n]...)
+		if err != nil {
+			break
+		}
+	}
+
+	out := resample(raw, srcRate, srcChannels, targetRate, targetChannels)
+	return out, targetRate, targetChannels, nil
+}
+
+// ── AIFF ──────────────────────────────────────────────────────────────────────
+
+func decodeAIFF(path string, targetRate, targetChannels uint32) ([]float32, uint32, uint32, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	defer f.Close()
+
+	dec := goaudioaiff.NewDecoder(f)
+	if !dec.IsValidFile() {
+		return nil, 0, 0, fmt.Errorf("invalid AIFF file: %s", path)
+	}
+
+	srcRate := uint32(dec.SampleRate)
+	srcChannels := uint32(dec.NumChans)
+	bitDepth := dec.BitDepth
+
+	buf, err := dec.FullPCMBuffer()
+	if err != nil {
+		return nil, 0, 0, fmt.Errorf("AIFF decode: %w", err)
+	}
+
+	raw := intSamplesToF32(buf.Data, bitDepth)
+	out := resample(raw, srcRate, srcChannels, targetRate, targetChannels)
+	return out, targetRate, targetChannels, nil
 }

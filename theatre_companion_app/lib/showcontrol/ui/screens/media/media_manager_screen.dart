@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -30,7 +31,6 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
   @override
   void initState() {
     super.initState();
-    // Load on first open; don't block if already loaded.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (ref.read(mediaProvider).assets.isEmpty) {
         ref.read(mediaProvider.notifier).refresh();
@@ -51,42 +51,48 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
     );
     if (result == null || result.files.isEmpty) return;
 
+    final files = <({String filename, Uint8List bytes})>[];
     for (final f in result.files) {
       if (f.path == null) continue;
       final bytes = await File(f.path!).readAsBytes();
-      await ref.read(mediaProvider.notifier).upload(f.name, bytes);
+      files.add((filename: f.name, bytes: bytes));
     }
+    if (files.isEmpty) return;
+
+    await ref.read(mediaProvider.notifier).uploadFiles(files);
   }
 
   @override
   Widget build(BuildContext context) {
     final state  = ref.watch(mediaProvider);
     final assets = ref.watch(enrichedAssetsProvider);
+    final queue  = state.uploadQueue;
+    final showQueue = queue.isNotEmpty;
 
     return Column(
       children: [
-        // ── Toolbar ──────────────────────────────────────────────────────
         _Toolbar(
           isLoading: state.isLoading,
-          isUploading: state.isUploading,
+          activeUploads: queue.where((u) =>
+              u.status == UploadStatus.uploading ||
+              u.status == UploadStatus.pending ||
+              u.status == UploadStatus.analyzing).length,
           onRefresh: () => ref.read(mediaProvider.notifier).refresh(),
           onUpload: _pickAndUpload,
         ),
         const Divider(height: 1, color: ScColors.divider),
-        // ── Error banners ─────────────────────────────────────────────────
         if (state.error != null)
           _ErrorBanner(
             message: state.error!,
             type: _BannerType.error,
             onDismiss: () => ref.read(mediaProvider.notifier).clearError(),
           ),
-        if (state.uploadError != null)
-          _ErrorBanner(
-            message: state.uploadError!,
-            type: _BannerType.warn,
-            onDismiss: () => ref.read(mediaProvider.notifier).clearError(),
+        if (showQueue)
+          _UploadQueuePanel(
+            queue: queue,
+            onClear: () => ref.read(mediaProvider.notifier).clearUploadQueue(),
           ),
-        // ── Content ───────────────────────────────────────────────────────
+        if (showQueue) const Divider(height: 1, color: ScColors.divider),
         Expanded(
           child: state.isLoading && assets.isEmpty
               ? const Center(child: CircularProgressIndicator(color: ScColors.active))
@@ -94,7 +100,6 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
                   ? _EmptyState(onUpload: _pickAndUpload)
                   : _AssetTable(
                       assets: assets,
-                      isUploading: state.isUploading,
                       isAudioConnected: () {
                         final isLocalAudioConnected =
                             ref.watch(audioNodeProvider).state ==
@@ -114,7 +119,7 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
                             : 0.0;
                         setState(() => _auditingAssetId = asset.id);
                         ref.read(audioNodeProvider.notifier).auditionPlay(
-                          assetId: asset.id, // SHA-256, nicht Dateiname
+                          assetId: asset.id,
                           volumeDb: volumeDb,
                         );
                       },
@@ -133,13 +138,13 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
 
 class _Toolbar extends StatelessWidget {
   final bool isLoading;
-  final bool isUploading;
+  final int activeUploads;
   final VoidCallback onRefresh;
   final VoidCallback onUpload;
 
   const _Toolbar({
     required this.isLoading,
-    required this.isUploading,
+    required this.activeUploads,
     required this.onRefresh,
     required this.onUpload,
   });
@@ -154,7 +159,7 @@ class _Toolbar extends StatelessWidget {
         children: [
           Text('MEDIA', style: ScText.panelTitle),
           const Spacer(),
-          if (isUploading) ...[
+          if (activeUploads > 0) ...[
             const SizedBox(
               width: 14,
               height: 14,
@@ -162,7 +167,12 @@ class _Toolbar extends StatelessWidget {
                   strokeWidth: 2, color: ScColors.active),
             ),
             const SizedBox(width: 8),
-            Text('Uploading…', style: ScText.label),
+            Text(
+              activeUploads == 1
+                  ? '1 Upload läuft…'
+                  : '$activeUploads Uploads laufen…',
+              style: ScText.label,
+            ),
             const SizedBox(width: 16),
           ],
           ScButton(
@@ -178,7 +188,145 @@ class _Toolbar extends StatelessWidget {
             icon: Icons.upload_file,
             variant: ScButtonVariant.secondary,
             size: ScButtonSize.compact,
-            onPressed: isUploading ? null : onUpload,
+            onPressed: onUpload,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Upload Queue Panel ─────────────────────────────────────────────────────────
+
+class _UploadQueuePanel extends StatelessWidget {
+  final List<UploadItem> queue;
+  final VoidCallback onClear;
+
+  const _UploadQueuePanel({required this.queue, required this.onClear});
+
+  @override
+  Widget build(BuildContext context) {
+    final hasDone = queue.any((u) =>
+        u.status == UploadStatus.done || u.status == UploadStatus.error);
+
+    return Container(
+      color: ScColors.surface,
+      constraints: const BoxConstraints(maxHeight: 160),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Panel header
+          Padding(
+            padding: const EdgeInsets.symmetric(
+                horizontal: ScSpacing.panelPad, vertical: 4),
+            child: Row(
+              children: [
+                Text('UPLOADS', style: ScText.panelTitle),
+                const SizedBox(width: 8),
+                Text(
+                  '${queue.length} Datei${queue.length == 1 ? "" : "en"}',
+                  style: ScText.statusSmall,
+                ),
+                const Spacer(),
+                if (hasDone)
+                  InkWell(
+                    onTap: onClear,
+                    borderRadius: BorderRadius.circular(4),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      child: Text('Abgeschlossene entfernen',
+                          style: ScText.statusSmall
+                              .copyWith(color: ScColors.textSecondary)),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          // File rows
+          Flexible(
+            child: ListView.builder(
+              shrinkWrap: true,
+              itemCount: queue.length,
+              itemBuilder: (_, i) => _UploadRow(item: queue[i]),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _UploadRow extends StatelessWidget {
+  final UploadItem item;
+  const _UploadRow({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final (icon, iconColor) = switch (item.status) {
+      UploadStatus.done     => (Icons.check_circle_outline, ScColors.active),
+      UploadStatus.error    => (Icons.error_outline, ScColors.error),
+      UploadStatus.pending  => (Icons.schedule, ScColors.textDim),
+      _                     => (Icons.upload, ScColors.active),
+    };
+
+    final statusText = switch (item.status) {
+      UploadStatus.pending   => 'Wartend',
+      UploadStatus.uploading => '${(item.progress * 100).toStringAsFixed(0)}%',
+      UploadStatus.analyzing => 'Analysiere…',
+      UploadStatus.done      => 'Fertig',
+      UploadStatus.error     => item.error ?? 'Fehler',
+    };
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+          horizontal: ScSpacing.panelPad, vertical: 3),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: iconColor),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 3,
+            child: Text(
+              item.filename,
+              style: ScText.label,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            flex: 2,
+            child: item.status == UploadStatus.uploading ||
+                    item.status == UploadStatus.analyzing
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(2),
+                    child: LinearProgressIndicator(
+                      value: item.status == UploadStatus.analyzing
+                          ? null // indeterminate während Server analysiert
+                          : item.progress,
+                      minHeight: 4,
+                      backgroundColor: ScColors.divider,
+                      valueColor:
+                          const AlwaysStoppedAnimation<Color>(ScColors.active),
+                    ),
+                  )
+                : const SizedBox.shrink(),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 80,
+            child: Text(
+              statusText,
+              style: ScText.statusSmall.copyWith(
+                color: switch (item.status) {
+                  UploadStatus.done  => ScColors.active,
+                  UploadStatus.error => ScColors.error,
+                  _                  => ScColors.textSecondary,
+                },
+              ),
+              textAlign: TextAlign.right,
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
@@ -190,7 +338,6 @@ class _Toolbar extends StatelessWidget {
 
 class _AssetTable extends StatelessWidget {
   final List<Asset> assets;
-  final bool isUploading;
   final bool isAudioConnected;
   final String? auditingAssetId;
   final ValueChanged<String> onDelete;
@@ -199,7 +346,6 @@ class _AssetTable extends StatelessWidget {
 
   const _AssetTable({
     required this.assets,
-    required this.isUploading,
     required this.isAudioConnected,
     required this.auditingAssetId,
     required this.onDelete,
@@ -211,7 +357,6 @@ class _AssetTable extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        // Header row
         Container(
           height: 32,
           color: ScColors.surface,
@@ -224,12 +369,11 @@ class _AssetTable extends StatelessWidget {
               _HeaderCell('GRÖßE', flex: 1),
               _HeaderCell('STATUS', flex: 1),
               _HeaderCell('HOCHGELADEN', flex: 2),
-              SizedBox(width: 80), // actions column
+              SizedBox(width: 80),
             ],
           ),
         ),
         const Divider(height: 1, color: ScColors.divider),
-        // Asset rows
         Expanded(
           child: ListView.separated(
             itemCount: assets.length,
@@ -245,7 +389,6 @@ class _AssetTable extends StatelessWidget {
             ),
           ),
         ),
-        // Footer: asset count + audition stop
         Container(
           height: 28,
           color: ScColors.surface,
@@ -264,11 +407,13 @@ class _AssetTable extends StatelessWidget {
                     onTap: onAuditionStop,
                     borderRadius: BorderRadius.circular(4),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 4),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.stop, size: 12, color: ScColors.textDim),
+                          const Icon(Icons.stop,
+                              size: 12, color: ScColors.textDim),
                           const SizedBox(width: 4),
                           Text('Stop Vorhören', style: ScText.statusSmall),
                         ],
@@ -340,7 +485,6 @@ class _AssetRowState extends State<_AssetRow> {
         padding: const EdgeInsets.symmetric(horizontal: ScSpacing.panelPad),
         child: Row(
           children: [
-            // Name + icon
             Expanded(
               flex: 4,
               child: Row(
@@ -361,7 +505,6 @@ class _AssetRowState extends State<_AssetRow> {
                 ],
               ),
             ),
-            // Format / codec
             Expanded(
               flex: 1,
               child: Text(
@@ -369,7 +512,6 @@ class _AssetRowState extends State<_AssetRow> {
                 style: ScText.label,
               ),
             ),
-            // Loudness
             Expanded(
               flex: 1,
               child: a.audio?.loudnessLufs != null
@@ -380,9 +522,10 @@ class _AssetRowState extends State<_AssetRow> {
                         style: ScText.numberSmall,
                       ),
                     )
-                  : Text('—', style: ScText.label.copyWith(color: ScColors.textDim)),
+                  : Text('—',
+                      style: ScText.label
+                          .copyWith(color: ScColors.textDim)),
             ),
-            // Size
             Expanded(
               flex: 1,
               child: Text(
@@ -390,12 +533,10 @@ class _AssetRowState extends State<_AssetRow> {
                 style: ScText.numberSmall,
               ),
             ),
-            // Readiness status
             Expanded(
               flex: 1,
               child: _ReadinessChip(readiness: a.readiness),
             ),
-            // Upload date
             Expanded(
               flex: 2,
               child: Text(
@@ -403,7 +544,6 @@ class _AssetRowState extends State<_AssetRow> {
                 style: ScText.label,
               ),
             ),
-            // Action buttons — audition always visible, delete on hover
             SizedBox(
               width: 72,
               child: Row(
@@ -429,18 +569,13 @@ class _AssetRowState extends State<_AssetRow> {
                           child: Padding(
                             padding: const EdgeInsets.all(4),
                             child: isPlaying
-                                ? const Icon(
-                                    Icons.graphic_eq,
-                                    size: 15,
-                                    color: ScColors.active,
-                                  )
-                                : Icon(
-                                    Icons.headphones,
+                                ? const Icon(Icons.graphic_eq,
+                                    size: 15, color: ScColors.active)
+                                : Icon(Icons.headphones,
                                     size: 15,
                                     color: widget.isAudioConnected
                                         ? ScColors.textSecondary
-                                        : ScColors.textDim,
-                                  ),
+                                        : ScColors.textDim),
                           ),
                         ),
                       );
@@ -595,27 +730,29 @@ class _EmptyState extends StatelessWidget {
 
 // ── Error Banner ───────────────────────────────────────────────────────────────
 
-enum _BannerType { error, warn }
+enum _BannerType { error }
 
 class _ErrorBanner extends StatelessWidget {
   final String message;
   final _BannerType type;
   final VoidCallback? onDismiss;
-  const _ErrorBanner({required this.message, required this.type, this.onDismiss});
+  const _ErrorBanner(
+      {required this.message, required this.type, this.onDismiss});
 
   @override
   Widget build(BuildContext context) {
-    final color = type == _BannerType.error ? ScColors.error : ScColors.warn;
+    final color = ScColors.error;
     return Container(
       width: double.infinity,
       color: color.withValues(alpha: 0.1),
-      padding: const EdgeInsets.symmetric(
-          horizontal: ScSpacing.panelPad, vertical: 6),
+      padding:
+          const EdgeInsets.symmetric(horizontal: ScSpacing.panelPad, vertical: 6),
       child: Row(
         children: [
           Icon(Icons.warning_amber_rounded, size: 14, color: color),
           const SizedBox(width: 8),
-          Expanded(child: Text(message, style: ScText.label.copyWith(color: color))),
+          Expanded(
+              child: Text(message, style: ScText.label.copyWith(color: color))),
           if (onDismiss != null)
             InkWell(
               onTap: onDismiss,

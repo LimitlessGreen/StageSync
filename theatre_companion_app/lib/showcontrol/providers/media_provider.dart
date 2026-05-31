@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:typed_data';
+import 'dart:typed_data'; // ignore: unused_import (Uint8List used via record type)
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -8,39 +8,84 @@ import '../media/media_grpc_client.dart';
 import '../media/server_media_client.dart' show MediaFile;
 import 'show_control_domain_provider.dart';
 
+// ── Upload Queue ──────────────────────────────────────────────────────────────
+
+enum UploadStatus { pending, uploading, analyzing, done, error }
+
+class UploadItem {
+  final String id;
+  final String filename;
+  final int totalBytes;
+  final int sentBytes;
+  final UploadStatus status;
+  final String? error;
+
+  const UploadItem({
+    required this.id,
+    required this.filename,
+    required this.totalBytes,
+    this.sentBytes = 0,
+    this.status = UploadStatus.pending,
+    this.error,
+  });
+
+  double get progress =>
+      totalBytes > 0 ? (sentBytes / totalBytes).clamp(0.0, 1.0) : 0.0;
+
+  UploadItem copyWith({
+    int? sentBytes,
+    UploadStatus? status,
+    String? error,
+  }) =>
+      UploadItem(
+        id: id,
+        filename: filename,
+        totalBytes: totalBytes,
+        sentBytes: sentBytes ?? this.sentBytes,
+        status: status ?? this.status,
+        error: error ?? this.error,
+      );
+}
+
 // ── State ─────────────────────────────────────────────────────────────────────
 
 class MediaState {
   final List<Asset> assets;
   final bool isLoading;
-  final bool isUploading;
+  final List<UploadItem> uploadQueue;
   final String? error;
-  final String? uploadError;
 
   const MediaState({
     this.assets = const [],
     this.isLoading = false,
-    this.isUploading = false,
+    this.uploadQueue = const [],
     this.error,
-    this.uploadError,
   });
+
+  bool get isUploading =>
+      uploadQueue.any((u) => u.status == UploadStatus.uploading ||
+                             u.status == UploadStatus.pending ||
+                             u.status == UploadStatus.analyzing);
+
+  String? get uploadError {
+    final failed = uploadQueue.where((u) => u.status == UploadStatus.error);
+    if (failed.isEmpty) return null;
+    if (failed.length == 1) return 'Upload fehlgeschlagen: ${failed.first.filename}';
+    return '${failed.length} Uploads fehlgeschlagen';
+  }
 
   MediaState copyWith({
     List<Asset>? assets,
     bool? isLoading,
-    bool? isUploading,
+    List<UploadItem>? uploadQueue,
     String? error,
-    String? uploadError,
     bool clearError = false,
-    bool clearUploadError = false,
   }) =>
       MediaState(
         assets: assets ?? this.assets,
         isLoading: isLoading ?? this.isLoading,
-        isUploading: isUploading ?? this.isUploading,
+        uploadQueue: uploadQueue ?? this.uploadQueue,
         error: clearError ? null : (error ?? this.error),
-        uploadError:
-            clearUploadError ? null : (uploadError ?? this.uploadError),
       );
 
   /// Returns the asset with the given [id] (SHA-256), or null.
@@ -158,22 +203,67 @@ class MediaNotifier extends StateNotifier<MediaState> {
     startWatching();
   }
 
-  /// Lädt [bytes] als [filename] per gRPC-Streaming auf den Server.
-  Future<void> upload(String filename, List<int> bytes) async {
-    state = state.copyWith(isUploading: true, clearUploadError: true);
-    try {
-      await _grpc.uploadFile(filename, Uint8List.fromList(bytes));
-      state = state.copyWith(isUploading: false);
-      // Kein manuelles refresh nötig — WatchManifest liefert ASSET_ADDED-Event
-    } catch (e) {
-      state = state.copyWith(
-        isUploading: false,
-        uploadError: 'Upload fehlgeschlagen: $e',
-      );
+  /// Fügt mehrere Dateien zur Upload-Queue hinzu und startet sie sequenziell.
+  Future<void> uploadFiles(List<({String filename, Uint8List bytes})> files) async {
+    final items = files.map((f) => UploadItem(
+      id: '${DateTime.now().microsecondsSinceEpoch}_${f.filename}',
+      filename: f.filename,
+      totalBytes: f.bytes.length,
+    )).toList();
+
+    state = state.copyWith(uploadQueue: [...state.uploadQueue, ...items]);
+
+    for (var i = 0; i < files.length; i++) {
+      final item = items[i];
+      _updateItem(item.id, item.copyWith(status: UploadStatus.uploading));
+      try {
+        await _grpc.uploadFile(
+          files[i].filename,
+          files[i].bytes,
+          onProgress: (sent, total) {
+            _updateItem(item.id, item.copyWith(
+              status: UploadStatus.uploading,
+              sentBytes: sent,
+            ));
+          },
+        );
+        // Bytes vollständig gesendet, Server analysiert noch (EBU R128)
+        _updateItem(item.id, item.copyWith(
+          status: UploadStatus.analyzing,
+          sentBytes: files[i].bytes.length,
+        ));
+        // WatchManifest-Event markiert den Upload als abgeschlossen
+        _updateItem(item.id, item.copyWith(status: UploadStatus.done));
+      } catch (e) {
+        _updateItem(item.id, item.copyWith(
+          status: UploadStatus.error,
+          error: e.toString(),
+        ));
+      }
     }
   }
 
-  void clearError() => state = state.copyWith(clearError: true, clearUploadError: true);
+  void _updateItem(String id, UploadItem updated) {
+    state = state.copyWith(
+      uploadQueue: [
+        for (final u in state.uploadQueue)
+          if (u.id == id) updated else u,
+      ],
+    );
+  }
+
+  /// Entfernt abgeschlossene und fehlgeschlagene Einträge aus der Queue.
+  void clearUploadQueue() {
+    state = state.copyWith(
+      uploadQueue: state.uploadQueue
+          .where((u) => u.status == UploadStatus.uploading ||
+                        u.status == UploadStatus.pending ||
+                        u.status == UploadStatus.analyzing)
+          .toList(),
+    );
+  }
+
+  void clearError() => state = state.copyWith(clearError: true);
 
   /// Löscht ein Asset per gRPC.
   Future<void> delete(String name) async {

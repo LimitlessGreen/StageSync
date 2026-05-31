@@ -196,28 +196,11 @@ func (n *InternalAudioNode) handlePreload(cmd *pb.AudioPreloadCommand) {
 		log.Printf("[audionode] PRELOAD skipped: no media store")
 		return
 	}
-	if cmd.GetAssetId() == "" && cmd.GetFilePath() == "" {
+	assetID := cmd.GetAssetId()
+	filePath := cmd.GetFilePath()
+	if assetID == "" && filePath == "" {
 		log.Printf("[audionode] PRELOAD: missing assetId/filePath")
 		return
-	}
-
-	var path string
-	assetID := cmd.GetAssetId()
-	if assetID != "" {
-		if p, err := n.mediaStore.FilePathBySHA256(assetID); err == nil {
-			path = p
-		}
-	}
-	if path == "" {
-		name := cmd.GetFilePath()
-		if name == "" {
-			name = assetID
-		}
-		if _, statErr := n.mediaStore.Stat(name); statErr != nil {
-			log.Printf("[audionode] PRELOAD: asset %q nicht im Store gefunden: %v", assetID, statErr)
-			return
-		}
-		path = n.mediaStore.FilePath(name)
 	}
 
 	cueID := cmd.GetCueId()
@@ -225,21 +208,22 @@ func (n *InternalAudioNode) handlePreload(cmd *pb.AudioPreloadCommand) {
 	if len(shortAsset) > 12 {
 		shortAsset = shortAsset[:12] + "..."
 	}
-	log.Printf("[audionode] PRELOAD cueId=%s asset=%s path=%s", cueID, shortAsset, path)
 
 	// Aktuelle Generation: wenn STOP ALL feuert, steigt n.generation.
-	// Veraltete Goroutinen (vor dem Stop gestartet) überspringen Dekodierung.
 	n.genMu.Lock()
 	myGen := n.generation
 	n.genMu.Unlock()
 
-	// Dekodierung asynchron: blockiert den Command-Channel nicht.
-	// PLAY wartet via waitPreload() auf Fertigstellung.
+	// done-Channel registrieren BEVOR die Goroutine startet, damit ein
+	// unmittelbar folgendes PLAY via waitPreload() korrekt wartet.
 	done := make(chan struct{})
 	n.preloadsMu.Lock()
 	n.preloads[cueID] = done
 	n.preloadsMu.Unlock()
 
+	// Pfad-Auflösung UND Dekodierung asynchron — blockiert den Command-Channel
+	// nicht. FilePathBySHA256 ruft List() auf, das EBU-R128-Messung enthält
+	// und mehrere Sekunden dauern kann.
 	go func() {
 		defer func() {
 			close(done)
@@ -247,6 +231,7 @@ func (n *InternalAudioNode) handlePreload(cmd *pb.AudioPreloadCommand) {
 			delete(n.preloads, cueID)
 			n.preloadsMu.Unlock()
 		}()
+
 		n.genMu.Lock()
 		stale := n.generation != myGen
 		n.genMu.Unlock()
@@ -254,6 +239,28 @@ func (n *InternalAudioNode) handlePreload(cmd *pb.AudioPreloadCommand) {
 			log.Printf("[audionode] PRELOAD veraltet (STOP ALL seit Dispatch): %s", cueID)
 			return
 		}
+
+		// Pfad-Auflösung (kann langsam sein — außerhalb des Run-Loops)
+		var path string
+		if assetID != "" {
+			if p, err := n.mediaStore.FilePathBySHA256(assetID); err == nil {
+				path = p
+			}
+		}
+		if path == "" {
+			name := filePath
+			if name == "" {
+				name = assetID
+			}
+			if _, statErr := n.mediaStore.Stat(name); statErr != nil {
+				log.Printf("[audionode] PRELOAD: asset %q nicht im Store gefunden: %v", assetID, statErr)
+				return
+			}
+			path = n.mediaStore.FilePath(name)
+		}
+
+		log.Printf("[audionode] PRELOAD cueId=%s asset=%s path=%s", cueID, shortAsset, path)
+
 		if err := n.engine.PreloadByAsset(cueID, assetID, path); err != nil {
 			log.Printf("[audionode] PRELOAD FEHLER cueId=%s: %v", cueID, err)
 		} else {

@@ -119,11 +119,15 @@ class MediaGrpcClient {
   // ── UploadFile ─────────────────────────────────────────────────────────────
 
   /// Lädt [bytes] als [filename] auf den Server hoch.
+  /// [onProgress] wird nach jedem gesendeten Chunk aufgerufen: (bytesSent, totalBytes).
   /// Gibt das [MediaFile] des neu gespeicherten Assets zurück.
-  Future<MediaFile> uploadFile(String filename, Uint8List bytes) async {
+  Future<MediaFile> uploadFile(
+    String filename,
+    Uint8List bytes, {
+    void Function(int sent, int total)? onProgress,
+  }) async {
     final controller = StreamController<pb.UploadChunk>();
 
-    // Erstes Paket: Metadaten
     controller.add(pb.UploadChunk(meta: pb.UploadMeta(
       sessionId:  StageSyncClient.instance.sessionId ?? '',
       token:      StageSyncClient.instance.token ?? '',
@@ -131,10 +135,12 @@ class MediaGrpcClient {
       totalBytes: Int64(bytes.length),
     )));
 
-    // Datei in Chunks aufteilen
+    var sent = 0;
     for (var off = 0; off < bytes.length; off += _chunkSize) {
       final end = (off + _chunkSize).clamp(0, bytes.length);
       controller.add(pb.UploadChunk(data: bytes.sublist(off, end)));
+      sent += end - off;
+      onProgress?.call(sent, bytes.length);
     }
     controller.close();
 
