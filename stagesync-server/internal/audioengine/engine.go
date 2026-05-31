@@ -46,6 +46,10 @@ type Engine struct {
 	sampleRate uint32
 	channels   uint32
 	deviceIdx  int // -1 = system default
+
+	// mixBuf: wiederverwendeter Ausgabepuffer für mix(). Wird bei Bedarf vergrößert,
+	// nie verkleinert — verhindert GC-Allokation im heißen Audio-Callback-Pfad.
+	mixBuf []float32
 }
 
 // New allocates the malgo context. Call Close when done.
@@ -478,7 +482,14 @@ func (e *Engine) DuckAll(duckVolumeDb float64, durationMs float64) {
 
 // mix is called by the malgo device callback to fill outputSamples (f32LE).
 func (e *Engine) mix(outputSamples []byte, frameCount uint32) {
-	out := make([]float32, int(frameCount)*int(e.channels))
+	need := int(frameCount) * int(e.channels)
+	if len(e.mixBuf) < need {
+		e.mixBuf = make([]float32, need)
+	}
+	out := e.mixBuf[:need]
+	for i := range out {
+		out[i] = 0
+	}
 
 	nowMs := time.Now().UnixMilli()
 
