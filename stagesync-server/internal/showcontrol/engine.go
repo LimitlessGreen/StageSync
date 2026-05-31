@@ -302,6 +302,13 @@ func (e *Engine) Pause(ctx context.Context) error {
 		}
 	}
 
+	// Die Fade-Dauer zur bereits verstrichenen Zeit addieren: Audio spielt während
+	// des Ausblendvorgangs weiter. Resume muss den Playhead hinter dem Fade-Ende
+	// verankern, sonst springt der Timer beim Fortsetzen zurück.
+	e.mu.Lock()
+	e.pausedElapsed += time.Duration(fadeOut) * time.Millisecond
+	e.mu.Unlock()
+
 	// Audio auf allen Nodes anhalten (nicht stoppen) — mit Fade.
 	if activeCue != nil && e.dispatcher != nil {
 		opCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -317,10 +324,13 @@ func (e *Engine) Pause(ctx context.Context) error {
 		})
 	}
 
+	// OccurredAt = tatsächliches Stummschalt-Ende (Zeitpunkt + Fade-Dauer).
+	// Flutter-Clients frieren den Timer an dieser Position ein, nicht am Druckzeitpunkt.
+	effectivePausedMs := pausedAt.UnixMilli() + int64(fadeOut)
 	e.store.BroadcastExec(&pb.ShowExecutionEvent{
 		Type:        pb.ShowExecutionEvent_CUE_PAUSED,
 		AffectedCue: activeCue,
-		OccurredAt:  &pb.Timestamp{UnixMillis: pausedAt.UnixMilli()},
+		OccurredAt:  &pb.Timestamp{UnixMillis: effectivePausedMs},
 	})
 	return nil
 }
