@@ -565,6 +565,10 @@ class _TimingColumn extends StatelessWidget {
     final preWait = cue.timing.preWaitMs;
     final postWait = cue.timing.postWaitMs;
 
+    // Auto-Skip-Silence aktiv wenn startTimeMs == 0 und eine assetId gesetzt ist
+    final autoSkip = cue.params case AudioParams ap
+        when ap.assetId.isNotEmpty && ap.startTimeMs == 0;
+
     return SizedBox(
       width: ScSpacing.cueDurationWidth + 10,
       child: Column(
@@ -585,6 +589,17 @@ class _TimingColumn extends StatelessWidget {
             Text(
               _waitHint(preWait, postWait),
               style: ScText.statusSmall.copyWith(fontSize: 9),
+            ),
+          // Kleiner Indikator wenn Auto-Skip-Silence aktiv ist
+          if (autoSkip && !isActive)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.skip_next, size: 9, color: ScColors.textDim),
+                Text('AUTO',
+                    style: ScText.statusSmall
+                        .copyWith(fontSize: 8, color: ScColors.textDim)),
+              ],
             ),
         ],
       ),

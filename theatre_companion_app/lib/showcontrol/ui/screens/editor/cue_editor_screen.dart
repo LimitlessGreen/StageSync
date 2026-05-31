@@ -386,6 +386,9 @@ class _ParamsContent extends ConsumerWidget {
     final lufs      = asset?.audio?.loudnessLufs;
     final autoVolDb = lufs != null ? _autoVolume(lufs) : null;
 
+    // startTimeMs == 0 → Auto-Skip-Silence aktiv (Server erkennt automatisch)
+    final autoSkipActive = ap.startTimeMs == 0 && ap.assetId.isNotEmpty;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -402,11 +405,8 @@ class _ParamsContent extends ConsumerWidget {
         ScDragField(
           label: 'Fade In',
           value: ap.fadeInMs,
-          min: 0,
-          max: 60000,
-          step: 10,
-          suffix: 'ms',
-          decimalPlaces: 0,
+          min: 0, max: 60000, step: 10,
+          suffix: 'ms', decimalPlaces: 0,
           onChanged: (v) => notifier.upsertDomainCue(
             cue.copyWith(params: ap.copyWith(fadeInMs: v)),
           ),
@@ -414,16 +414,140 @@ class _ParamsContent extends ConsumerWidget {
         ScDragField(
           label: 'Fade Out',
           value: ap.fadeOutMs,
-          min: 0,
-          max: 60000,
-          step: 10,
-          suffix: 'ms',
-          decimalPlaces: 0,
+          min: 0, max: 60000, step: 10,
+          suffix: 'ms', decimalPlaces: 0,
           onChanged: (v) => notifier.upsertDomainCue(
             cue.copyWith(params: ap.copyWith(fadeOutMs: v)),
           ),
         ),
+        if (ap.endTimeMs > 0)
+          ScDragField(
+            label: 'End',
+            value: ap.endTimeMs,
+            min: 0, max: 3600000, step: 10,
+            suffix: 'ms', decimalPlaces: 0,
+            onChanged: (v) => notifier.upsertDomainCue(
+              cue.copyWith(params: ap.copyWith(endTimeMs: v)),
+            ),
+          ),
+        const SizedBox(height: 6),
+
+        // ── Stille überspringen ─────────────────────────────────────────────
+        if (ap.assetId.isNotEmpty) ...[
+          _SilenceSkipToggle(
+            autoSkipActive: autoSkipActive,
+            startTimeMs: ap.startTimeMs,
+            onToggle: (enabled) => notifier.upsertDomainCue(
+              cue.copyWith(
+                params: ap.copyWith(
+                  startTimeMs: enabled ? 0 : 0.001,
+                ),
+              ),
+            ),
+            onStartTimeMsChanged: (ms) => notifier.upsertDomainCue(
+              cue.copyWith(params: ap.copyWith(startTimeMs: ms)),
+            ),
+          ),
+        ],
       ],
+    );
+  }
+}
+
+// ── Stille-überspringen-Toggle ────────────────────────────────────────────────
+
+/// Wiederverwendbarer Toggle für den Auto-Skip-Silence-Modus.
+///
+/// Wenn [autoSkipActive] → startTimeMs == 0 → Server erkennt den ersten
+/// nicht-stillen Frame und verwendet ihn als Startpunkt.
+/// Wenn deaktiviert → startTimeMs = 0.001ms (Sentinel) oder manueller Wert.
+class _SilenceSkipToggle extends StatelessWidget {
+  final bool autoSkipActive;
+  final double startTimeMs;
+  final ValueChanged<bool> onToggle;
+  final ValueChanged<double> onStartTimeMsChanged;
+
+  const _SilenceSkipToggle({
+    required this.autoSkipActive,
+    required this.startTimeMs,
+    required this.onToggle,
+    required this.onStartTimeMsChanged,
+  });
+
+  static String _fmtMs(double ms) {
+    if (ms < 1000) return '${ms.round()}ms';
+    return '${(ms / 1000).toStringAsFixed(1)}s';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            SizedBox(
+              width: ScSpacing.inspectorLabelWidth,
+              child: Row(
+                children: [
+                  const Icon(Icons.skip_next, size: 13, color: ScColors.textSecondary),
+                  const SizedBox(width: 4),
+                  Flexible(child: Text('Stille skip', style: ScText.label)),
+                ],
+              ),
+            ),
+            Switch(
+              value: autoSkipActive,
+              onChanged: onToggle,
+              activeColor: ScColors.active,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            const SizedBox(width: 6),
+            if (autoSkipActive)
+              _Badge(label: 'AUTO', color: ScColors.active)
+            else if (startTimeMs > 0.001)
+              Text(_fmtMs(startTimeMs),
+                  style: ScText.numberSmall.copyWith(color: ScColors.textSecondary)),
+          ],
+        ),
+        // Manuelles Startzeit-Feld wenn Auto-Skip deaktiviert und ein manueller Wert gesetzt
+        if (!autoSkipActive && startTimeMs > 0.001) ...[
+          ScDragField(
+            label: 'Startzeit',
+            value: startTimeMs,
+            min: 0, max: 600000, step: 10,
+            suffix: 'ms', decimalPlaces: 0,
+            onChanged: onStartTimeMsChanged,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _Badge extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _Badge({required this.label, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 9,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.8,
+        ),
+      ),
     );
   }
 }

@@ -73,6 +73,22 @@ class AudioCueMinibar extends StatelessWidget {
               const SizedBox(width: 12),
               const Icon(Icons.loop, size: 12, color: ScColors.textDim),
             ],
+            // Startzeit-Anzeige
+            if (params.assetId.isNotEmpty && params.startTimeMs == 0) ...[
+              const SizedBox(width: 12),
+              const Icon(Icons.skip_next, size: 11, color: ScColors.active),
+              Text(
+                'AUTO',
+                style: ScText.label.copyWith(color: ScColors.active, fontSize: 9),
+              ),
+            ] else if (params.startTimeMs > 0.001) ...[
+              const SizedBox(width: 12),
+              Icon(Icons.skip_next, size: 11, color: ScColors.textDim),
+              Text(
+                _formatDuration(params.startTimeMs),
+                style: ScText.label.copyWith(color: ScColors.textDim),
+              ),
+            ],
             if (asset?.audio != null) ...[
               const SizedBox(width: 12),
               Text(
