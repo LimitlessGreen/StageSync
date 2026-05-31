@@ -1009,5 +1009,5 @@ func (e *Engine) dispatchGroupParallel(ctx context.Context, children []*pb.Cue) 
 			return err
 		}
 	}
-	return ctx.Err()
+	return nil
 }
