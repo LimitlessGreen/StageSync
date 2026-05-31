@@ -14,6 +14,7 @@ import '../../design_system/sc_spacing.dart';
 import '../../design_system/sc_typography.dart';
 import '../../design_system/primitives/sc_button.dart';
 import '../../design_system/primitives/sc_chip.dart';
+import '../../design_system/primitives/sc_floating_panel.dart';
 import '../../../domain/asset.dart';
 
 /// Desktop-only media manager.
@@ -27,6 +28,7 @@ class MediaManagerScreen extends ConsumerStatefulWidget {
 
 class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
   String? _auditingAssetId;
+  bool _queueVisible = false;
 
   @override
   void initState() {
@@ -40,6 +42,13 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
       if (mounted) {
         ref.read(audioNodeProvider.notifier).ensureEngineInitialized();
       }
+    });
+  }
+
+  void _closeQueue() {
+    setState(() => _queueVisible = false);
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted) ref.read(mediaProvider.notifier).clearUploadQueue();
     });
   }
 
@@ -59,7 +68,15 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
     }
     if (files.isEmpty) return;
 
+    setState(() => _queueVisible = true);
     await ref.read(mediaProvider.notifier).uploadFiles(files);
+
+    // Auto-Dismiss nach 4s wenn alle fertig
+    if (mounted) {
+      Future.delayed(const Duration(seconds: 4), () {
+        if (mounted) _closeQueue();
+      });
+    }
   }
 
   @override
@@ -67,7 +84,6 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
     final state  = ref.watch(mediaProvider);
     final assets = ref.watch(enrichedAssetsProvider);
     final queue  = state.uploadQueue;
-    final showQueue = queue.isNotEmpty;
 
     return Column(
       children: [
@@ -126,17 +142,27 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
                       },
                     ),
               // ── Upload-Queue: floating unten rechts ────────────────────
-              if (showQueue)
-                Positioned(
-                  right: 12,
-                  bottom: 12,
-                  width: 340,
-                  child: _UploadQueuePanel(
-                    queue: queue,
-                    onClear: () =>
-                        ref.read(mediaProvider.notifier).clearUploadQueue(),
-                  ),
+              Positioned(
+                right: 12,
+                bottom: 12,
+                width: 340,
+                child: ScFloatingPanel(
+                  visible: _queueVisible,
+                  title: 'UPLOADS',
+                  subtitle: '${queue.length} Datei${queue.length == 1 ? "" : "en"}',
+                  onClose: _closeQueue,
+                  actions: [
+                    if (queue.any((u) => u.status == UploadStatus.done ||
+                        u.status == UploadStatus.error))
+                      _ClearDoneButton(
+                        onTap: () => ref
+                            .read(mediaProvider.notifier)
+                            .clearUploadQueue(),
+                      ),
+                  ],
+                  child: _UploadQueueContent(queue: queue),
                 ),
+              ),
             ],
           ),
         ),
@@ -207,68 +233,40 @@ class _Toolbar extends StatelessWidget {
   }
 }
 
-// ── Upload Queue Panel ─────────────────────────────────────────────────────────
+// ── Upload Queue Content ───────────────────────────────────────────────────────
 
-class _UploadQueuePanel extends StatelessWidget {
+class _UploadQueueContent extends StatelessWidget {
   final List<UploadItem> queue;
-  final VoidCallback onClear;
-
-  const _UploadQueuePanel({required this.queue, required this.onClear});
+  const _UploadQueueContent({required this.queue});
 
   @override
   Widget build(BuildContext context) {
-    final hasDone = queue.any((u) =>
-        u.status == UploadStatus.done || u.status == UploadStatus.error);
-
-    return Material(
-      elevation: 8,
-      borderRadius: BorderRadius.circular(8),
-      color: ScColors.surface2,
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: Container(
-      constraints: const BoxConstraints(maxHeight: 200),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Panel header
-          Padding(
-            padding: const EdgeInsets.symmetric(
-                horizontal: ScSpacing.panelPad, vertical: 4),
-            child: Row(
-              children: [
-                Text('UPLOADS', style: ScText.panelTitle),
-                const SizedBox(width: 8),
-                Text(
-                  '${queue.length} Datei${queue.length == 1 ? "" : "en"}',
-                  style: ScText.statusSmall,
-                ),
-                const Spacer(),
-                if (hasDone)
-                  InkWell(
-                    onTap: onClear,
-                    borderRadius: BorderRadius.circular(4),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      child: Text('Abgeschlossene entfernen',
-                          style: ScText.statusSmall
-                              .copyWith(color: ScColors.textSecondary)),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          // File rows
-          Flexible(
-            child: ListView.builder(
-              shrinkWrap: true,
-              itemCount: queue.length,
-              itemBuilder: (_, i) => _UploadRow(item: queue[i]),
-            ),
-          ),
-        ],
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxHeight: 180),
+      child: ListView.builder(
+        shrinkWrap: true,
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        itemCount: queue.length,
+        itemBuilder: (_, i) => _UploadRow(item: queue[i]),
       ),
+    );
+  }
+}
+
+class _ClearDoneButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const _ClearDoneButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Abgeschlossene entfernen',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(4),
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+          child: Icon(Icons.playlist_remove, size: 14, color: ScColors.textDim),
         ),
       ),
     );
