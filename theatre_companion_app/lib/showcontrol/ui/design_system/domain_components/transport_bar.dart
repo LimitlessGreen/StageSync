@@ -58,7 +58,10 @@ class _TransportBarState extends State<TransportBar> {
   void _updateTicker() {
     _ticker?.cancel();
     _ticker = null;
-    if (widget.playhead.isRunning) {
+    // Ticker auch während paused laufen lassen: Im Fade-Out-Fenster muss
+    // _elapsedStr weiter hochzählen. Nach dem Fade friert _elapsedStr von
+    // selbst ein (gibt pausedAtServerMs zurück), setState ist dann billig.
+    if (widget.playhead.isRunning || widget.playhead.isPaused) {
       _ticker = Timer.periodic(const Duration(milliseconds: 100), (_) {
         if (mounted) setState(() {});
       });
