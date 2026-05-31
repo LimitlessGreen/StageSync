@@ -43,6 +43,10 @@ type Engine struct {
 	// Mehrere Cues mit demselben Asset teilen denselben Buffer — kein Doppel-Decode.
 	assetPCM map[string][]float32 // assetID → PCM
 
+	// assetSilenceMs: erkannter Stille-Start in ms pro Asset-ID.
+	// Wird einmalig beim Preload berechnet; 0 = kein Skip nötig.
+	assetSilenceMs map[string]int64
+
 	sampleRate uint32
 	channels   uint32
 	deviceIdx  int // -1 = system default
@@ -65,6 +69,7 @@ func New() (*Engine, error) {
 		handles:          make(map[string]*Handle),
 		streamingHandles: make(map[string]*StreamingHandle),
 		assetPCM:         make(map[string][]float32),
+		assetSilenceMs:   make(map[string]int64),
 		sampleRate:       48000,
 		channels:         2,
 		deviceIdx:        -1,
@@ -236,9 +241,14 @@ func (e *Engine) PreloadByAsset(cueID, assetID, path string) error {
 		log.Printf("[audioengine] preloaded cueID=%s (%d frames, sr=%d, ch=%d)",
 			cueID, len(pcm)/int(ch), sr, ch)
 		if assetID != "" {
+			silenceMs := detectSilenceStart(pcm, ch, sr)
 			e.mu.Lock()
 			e.assetPCM[assetID] = pcm // PCM für spätere Cues cachen
+			e.assetSilenceMs[assetID] = silenceMs
 			e.mu.Unlock()
+			if silenceMs > 0 {
+				log.Printf("[audioengine] silence detected: asset %s… skip=%.0fms", assetID[:min(8, len(assetID))], float64(silenceMs))
+			}
 		}
 	}
 
@@ -685,6 +695,65 @@ func (e *Engine) mix(outputSamples []byte, frameCount uint32) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+// AssetSilenceStartMs liefert den erkannten Stille-Offset am Anfang eines Assets in ms.
+// Gibt (0, false) zurück wenn das Asset nicht im Cache ist oder keine Stille erkannt wurde.
+func (e *Engine) AssetSilenceStartMs(assetID string) (int64, bool) {
+	if assetID == "" {
+		return 0, false
+	}
+	e.mu.Lock()
+	ms, ok := e.assetSilenceMs[assetID]
+	e.mu.Unlock()
+	return ms, ok && ms > 0
+}
+
+// ── Stille-Erkennung ─────────────────────────────────────────────────────────
+
+// silenceWindowMs: Fenstergröße für die Peak-Analyse (ms).
+// Kleinere Fenster erkennen kürzere Stille-Abschnitte, erhöhen aber Rechenzeit.
+const silenceWindowMs = 20.0
+
+// silenceThresholdLinear: Samples unterhalb dieser Amplitude gelten als Stille.
+// Entspricht ca. −60 dBFS — Rauschen/Digitalstille-Artefakte werden ignoriert.
+const silenceThresholdLinear = float32(0.001)
+
+// detectSilenceStart scannt den dekodiertes PCM-Buffer und gibt zurück, ab wie
+// vielen Millisekunden das erste nicht-stille Fenster beginnt. Gibt 0 zurück
+// wenn die Datei sofort mit Inhalt beginnt oder zu kurz ist.
+func detectSilenceStart(pcm []float32, channels, sampleRate uint32) int64 {
+	if len(pcm) == 0 || channels == 0 || sampleRate == 0 {
+		return 0
+	}
+	windowFrames := int(float64(sampleRate) * silenceWindowMs / 1000)
+	if windowFrames < 1 {
+		windowFrames = 1
+	}
+	totalFrames := len(pcm) / int(channels)
+
+	for startFrame := 0; startFrame+windowFrames <= totalFrames; startFrame += windowFrames {
+		endFrame := startFrame + windowFrames
+		// Peak-Amplitude im Fenster bestimmen.
+		var peak float32
+		for f := startFrame; f < endFrame; f++ {
+			for c := 0; c < int(channels); c++ {
+				s := pcm[f*int(channels)+c]
+				if s < 0 {
+					s = -s
+				}
+				if s > peak {
+					peak = s
+				}
+			}
+		}
+		if peak > silenceThresholdLinear {
+			// Erstes nicht-stilles Fenster gefunden.
+			ms := int64(float64(startFrame) / float64(sampleRate) * 1000)
+			return ms
+		}
+	}
+	return 0 // gesamtes File ist still
+}
 
 func dbToLinear(db float64) float32 {
 	if db <= -100 {

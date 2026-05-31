@@ -519,6 +519,15 @@ func (n *InternalAudioNode) handleNodeConfig(cmd *pb.NodeConfigCommand) {
 	})
 }
 
+// AssetSilenceStartMs implementiert showcontrol.SilenceDetector.
+// Delegiert an das interne Audio-Engine wenn initialisiert.
+func (n *InternalAudioNode) AssetSilenceStartMs(assetID string) (int64, bool) {
+	if n.engine == nil {
+		return 0, false
+	}
+	return n.engine.AssetSilenceStartMs(assetID)
+}
+
 // handleTalkbackControl verarbeitet Talkback-Steuerungsbefehle (START/STOP/DUCK).
 // START/STOP delegiert an talkbackSink; DUCK faded alle laufenden Cue-Handles ab.
 func (n *InternalAudioNode) handleTalkbackControl(cmd *pb.AudioTalkbackControlCommand) {

@@ -36,15 +36,22 @@ type NodeDispatcher interface {
 	DispatchToTask(ctx context.Context, task pb.NodeTask, cmd *pb.NodeCommandRequest) error
 }
 
+// SilenceDetector liefert erkannte Stille-Offsets für Audio-Assets.
+// Implementiert von audioengine.Engine via AssetSilenceStartMs.
+type SilenceDetector interface {
+	AssetSilenceStartMs(assetID string) (int64, bool)
+}
+
 // Engine ist das Show-Control-Herzstück einer Session.
 // Sie verwaltet GO/STOP/PAUSE und koordiniert die Node-Dispatches.
 type Engine struct {
-	mu         sync.Mutex
-	store      *Store
-	dispatcher NodeDispatcher
-	warmer     AssetWarmer // optional; nil = kein RAM-Cache-Preloading
-	sessionID  string
-	cueListID  string
+	mu               sync.Mutex
+	store            *Store
+	dispatcher       NodeDispatcher
+	warmer           AssetWarmer      // optional; nil = kein RAM-Cache-Preloading
+	silenceDetector  SilenceDetector  // optional; nil = Auto-Skip deaktiviert
+	sessionID        string
+	cueListID        string
 
 	paused    bool
 	running   bool
@@ -97,6 +104,14 @@ func NewEngine(sessionID, cueListID string, store *Store, dispatcher NodeDispatc
 func (e *Engine) SetWarmer(w AssetWarmer) {
 	e.mu.Lock()
 	e.warmer = w
+	e.mu.Unlock()
+}
+
+// SetSilenceDetector verbindet den Stille-Detektor. Thread-safe.
+// nil deaktiviert Auto-Skip-Silence für alle Cues dieser Session.
+func (e *Engine) SetSilenceDetector(d SilenceDetector) {
+	e.mu.Lock()
+	e.silenceDetector = d
 	e.mu.Unlock()
 }
 
@@ -591,7 +606,19 @@ func (e *Engine) dispatchAudio(ctx context.Context, cue *pb.Cue) error {
 	// wäre sofort, aber für Mehrfach-Node-Sync brauchen alle denselben Anker.
 	e.mu.Lock()
 	startMs := e.cueStartedAt.UnixMilli()
+	sd := e.silenceDetector
 	e.mu.Unlock()
+
+	// Effektive Start-Zeit: vom Nutzer gesetztes StartTimeMs, oder — wenn
+	// Auto-Skip-Silence aktiv ist und kein manuelles Offset gesetzt wurde —
+	// der erkannte Stille-Offset aus dem PCM-Buffer.
+	effectiveStartMs := params.Audio.StartTimeMs
+	if effectiveStartMs == 0 && sd != nil && params.Audio.AssetId != "" {
+		if silenceMs, ok := sd.AssetSilenceStartMs(params.Audio.AssetId); ok {
+			effectiveStartMs = float64(silenceMs)
+			log.Printf("[engine] autoSkipSilence cueId=%s: startTimeMs=%.0fms", cue.CueId, effectiveStartMs)
+		}
+	}
 
 	return dispatch(&pb.NodeCommandRequest{
 		SessionId:    e.sessionID,
@@ -604,7 +631,7 @@ func (e *Engine) dispatchAudio(ctx context.Context, cue *pb.Cue) error {
 				FadeInMs:        params.Audio.FadeInMs,
 				FadeOutMs:       params.Audio.FadeOutMs,
 				Loop:            params.Audio.Loop,
-				StartTimeMs:     params.Audio.StartTimeMs,
+				StartTimeMs:     effectiveStartMs,
 				EndTimeMs:       params.Audio.EndTimeMs,
 			},
 		},

@@ -74,14 +74,15 @@ type BusRouterUpdater interface {
 // ShowControlHandler verwaltet CueLists und die ShowEngine pro Session.
 type ShowControlHandler struct {
 	pb.UnimplementedShowControlServiceServer
-	sessionMgr  *session.Manager
-	dispatcher  *node.Dispatcher
-	persistence *showcontrol.Persistence
-	mediaStore  *media.Store            // für WatchMediaSync (nil = kein Media-Store)
-	warmer      showcontrol.AssetWarmer // RAM-Cache-Preloader (nil = deaktiviert)
-	busRouter   BusRouterUpdater        // Bus-Routing (nil = deaktiviert)
-	talkback    TalkbackDucker          // Talkback-Ducking bei GO (nil = deaktiviert)
-	dedup       *commandDedup
+	sessionMgr      *session.Manager
+	dispatcher      *node.Dispatcher
+	persistence     *showcontrol.Persistence
+	mediaStore      *media.Store                  // für WatchMediaSync (nil = kein Media-Store)
+	warmer          showcontrol.AssetWarmer        // RAM-Cache-Preloader (nil = deaktiviert)
+	silenceDetector showcontrol.SilenceDetector    // Auto-Skip-Silence (nil = deaktiviert)
+	busRouter       BusRouterUpdater               // Bus-Routing (nil = deaktiviert)
+	talkback        TalkbackDucker                 // Talkback-Ducking bei GO (nil = deaktiviert)
+	dedup           *commandDedup
 
 	mu      sync.RWMutex
 	stores  map[string]*showcontrol.Store  // sessionID → Store
@@ -110,6 +111,18 @@ func (h *ShowControlHandler) SetWarmer(w showcontrol.AssetWarmer) {
 	}
 }
 
+// SetSilenceDetector verbindet den Stille-Detektor für alle Engines.
+// Sobald gesetzt, nutzt jede Engine das erkannte Stille-Offset sofern
+// kein manuelles StartTimeMs in der Cue gesetzt ist.
+func (h *ShowControlHandler) SetSilenceDetector(d showcontrol.SilenceDetector) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.silenceDetector = d
+	for _, e := range h.engines {
+		e.SetSilenceDetector(d)
+	}
+}
+
 // SetBusRouter verbindet den Bus-Router — wird bei PatchConfig-Änderungen informiert.
 func (h *ShowControlHandler) SetBusRouter(r BusRouterUpdater) {
 	h.mu.Lock()
@@ -135,6 +148,9 @@ func (h *ShowControlHandler) getOrCreateStore(sessionID string) *showcontrol.Sto
 	engine := showcontrol.NewEngine(sessionID, "main", store, h.dispatcher)
 	if h.warmer != nil {
 		engine.SetWarmer(h.warmer)
+	}
+	if h.silenceDetector != nil {
+		engine.SetSilenceDetector(h.silenceDetector)
 	}
 	h.engines[sessionID] = engine
 	h.persistence.Load(sessionID, store)

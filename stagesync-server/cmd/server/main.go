@@ -101,6 +101,9 @@ func main() {
 		log.Println("--audio-node: starting internal audio node (malgo/miniaudio)")
 		an := audionode.New(sessionMgr, dispatcher, mediaStore)
 		an.Start(ctx)
+		// Stille-Detektor: interne Audio-Engine hat das dekodierte PCM und kann
+		// den erkannten Stille-Offset für alle Show-Engines bereitstellen.
+		showControlHandler.SetSilenceDetector(an)
 	}
 
 	// ── mDNS Announcement ────────────────────────────────────────────────────
