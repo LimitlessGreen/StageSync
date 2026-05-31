@@ -369,7 +369,8 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
       ..cueListId = currentListId
       ..cue = cue;
     await StageSyncClient.instance.showControl.upsertCue(req);
-    await initialize();
+    // The server broadcasts CUE_LIST_CHANGED via WatchShowDefinition which
+    // _handleDefinitionEvent handles. No stream restart needed.
   }
 
   Future<void> deleteCue(String cueId) async {
@@ -381,7 +382,8 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
       ..cueListId = currentListId
       ..cueId = cueId;
     await StageSyncClient.instance.showControl.deleteCue(req);
-    await initialize();
+    // The server broadcasts CUE_LIST_CHANGED via WatchShowDefinition which
+    // _handleDefinitionEvent handles. No stream restart needed.
   }
 
   /// Patch-Konfiguration auf dem Server aktualisieren.
