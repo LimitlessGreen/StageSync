@@ -129,14 +129,17 @@ class _CueListRowState extends State<CueListRow> {
   }
 
   void _syncTimer() {
-    // Run timer whenever active (even when paused) so the bottom bar and
-    // indeterminate animation stay alive. Stop only when idle or done.
-    final running = widget.isActive && !(widget.playhead?.isDone ?? false);
-    if (running && _timer == null) {
+    // Keep timer running whenever the row needs live updates:
+    // - normal playback
+    // - pause-fade window (audio still audible, bar must keep advancing)
+    // - fade-in / fade-out phases within a running cue
+    // Stop only when fully idle, fully paused (post-fade), or done.
+    final needsTimer = widget.isActive && !(widget.playhead?.isDone ?? false);
+    if (needsTimer && _timer == null) {
       _timer = Timer.periodic(const Duration(milliseconds: 50), (_) {
         if (mounted) setState(() {});
       });
-    } else if (!running && _timer != null) {
+    } else if (!needsTimer && _timer != null) {
       _timer!.cancel();
       _timer = null;
     }
@@ -156,18 +159,75 @@ class _CueListRowState extends State<CueListRow> {
     super.dispose();
   }
 
+  // ── Fade-aware progress ──────────────────────────────────────────────────
+
+  /// Current server time, accounting for pause-fade window.
+  ///
+  /// When PAUSE is fired with [PauseBehavior.fadeOut], audio continues for
+  /// [AudioParams.pauseFadeMs] ms. Progress must advance during that window
+  /// so the bar doesn't freeze while audio is still audible.
+  int _effectiveNowMs() {
+    final ph = widget.playhead;
+    if (ph == null) return ClockSync.instance.serverNow();
+    if (ph.isDone) return ph.doneServerMs ?? ClockSync.instance.serverNow();
+    if (ph.isPaused) {
+      final pausedAt = ph.pausedAtServerMs;
+      if (pausedAt == null) return ClockSync.instance.serverNow();
+      // pausedAtServerMs is set by the Go engine to PAUSE-press-time + fade duration,
+      // so it represents the exact moment audio becomes fully silent.
+      // During the fade window (now < pausedAt) keep the bar advancing.
+      // After the fade, freeze at pausedAt (= end-of-fade position).
+      final now = ClockSync.instance.serverNow();
+      if (now < pausedAt) return now; // still fading → bar advances
+      return pausedAt; // fully paused → freeze at post-fade position
+    }
+    return ClockSync.instance.serverNow();
+  }
+
   double get _progressFraction {
     if (!widget.isActive) return 0.0;
-    final ph = widget.playhead;
-    final start = ph?.startedServerMs;
+    final start = widget.playhead?.startedServerMs;
     final duration = widget.cue.displayDurationMs;
-    if (start == null || duration == null || duration == 0) return 0.0;
-    final now = ph!.isPaused
-        ? (ph.pausedAtServerMs ?? ClockSync.instance.serverNow())
-        : ph.isDone
-            ? (ph.doneServerMs ?? ClockSync.instance.serverNow())
-            : ClockSync.instance.serverNow();
-    return ((now - start) / duration).clamp(0.0, 1.0);
+    if (start == null || duration == null || duration <= 0) return 0.0;
+    return ((_effectiveNowMs() - start) / duration).clamp(0.0, 1.0);
+  }
+
+  double get _elapsedMs {
+    final start = widget.playhead?.startedServerMs;
+    if (start == null) return 0.0;
+    return (_effectiveNowMs() - start).toDouble().clamp(0.0, double.infinity);
+  }
+
+  /// Which audio phase we are currently in — drives bar color and overlay.
+  _AudioPhase get _audioPhase {
+    if (!widget.isActive) return _AudioPhase.idle;
+    final ph = widget.playhead;
+    if (ph == null) return _AudioPhase.idle;
+
+    final elapsed = _elapsedMs;
+
+    // Pause-fade: PAUSE was fired but audio is still fading out.
+    // pausedAtServerMs = press-time + fadeMs (end-of-fade), so while now < pausedAt
+    // the fade is still ongoing.
+    if (ph.isPaused) {
+      final pausedAt = ph.pausedAtServerMs;
+      if (pausedAt != null && ClockSync.instance.serverNow() < pausedAt) {
+        return _AudioPhase.pauseFading;
+      }
+      return _AudioPhase.paused;
+    }
+
+    if (ph.isDone) return _AudioPhase.done;
+
+    // Within a running cue — check fade-in / fade-out windows.
+    if (widget.cue.params case AudioParams p) {
+      if (p.fadeInMs > 0 && elapsed < p.fadeInMs) return _AudioPhase.fadeIn;
+      final duration = widget.cue.displayDurationMs;
+      if (duration != null && p.fadeOutMs > 0) {
+        if (elapsed > duration - p.fadeOutMs) return _AudioPhase.fadeOut;
+      }
+    }
+    return _AudioPhase.playing;
   }
 
   Color get _stateColor => ScColors.forCueState(
@@ -191,21 +251,13 @@ class _CueListRowState extends State<CueListRow> {
     final fraction = _progressFraction;
     final indent = widget.depth * 20.0;
 
+    final audioPhase = _audioPhase;
+
     Widget row = SizedBox(
       height: height,
       child: Stack(
         children: [
-          // ── Background: progress sweep (QLab-style, nur bei bekannter Dauer) ──
-          if (widget.isActive && fraction > 0)
-            Positioned.fill(
-              child: FractionallySizedBox(
-                alignment: Alignment.centerLeft,
-                widthFactor: fraction,
-                child: Container(color: _typeColor.withValues(alpha: 0.12)),
-              ),
-            ),
-
-          // ── Row selection/active tint ──
+          // ── Background tint (base) ──────────────────────────────────────
           Container(
             color: widget.isSelected
                 ? ScColors.selected
@@ -214,30 +266,37 @@ class _CueListRowState extends State<CueListRow> {
                     : Colors.transparent,
           ),
 
-          // ── Left accent bar ──
+          // ── Progress sweep (QLab-style fill from left) ──────────────────
+          if (widget.isActive && fraction > 0)
+            Positioned.fill(
+              child: LayoutBuilder(
+                builder: (_, constraints) => _ProgressSweepPainter(
+                  fraction: fraction,
+                  typeColor: _typeColor,
+                  audioPhase: audioPhase,
+                  cue: widget.cue,
+                  width: constraints.maxWidth,
+                  height: constraints.maxHeight,
+                ),
+              ),
+            ),
+
+          // ── Left accent bar ─────────────────────────────────────────────
           if (widget.isActive || widget.hasError)
             Positioned(
               left: 0, top: 0, bottom: 0,
               child: Container(width: 3, color: _stateColor),
             ),
 
-          // ── Bottom progress line ──
-          // value: fraction wenn Dauer bekannt (0→1 Fill), null = indeterminate
-          // wenn Dauer unbekannt aber Cue aktiv (animierter Ladebalken).
+          // ── Bottom progress line ────────────────────────────────────────
           if (widget.isActive)
             Positioned(
               left: 0, right: 0, bottom: 0,
-              child: LinearProgressIndicator(
-                value: fraction > 0 ? fraction : null,
-                backgroundColor: _typeColor.withValues(alpha: 0.15),
-                valueColor: AlwaysStoppedAnimation(
-                  widget.isPaused
-                      ? ScColors.warn
-                      : widget.playhead?.isDone == true
-                          ? ScColors.textDim
-                          : _typeColor,
-                ),
-                minHeight: 2,
+              child: _CueProgressBar(
+                fraction: fraction,
+                audioPhase: audioPhase,
+                typeColor: _typeColor,
+                cue: widget.cue,
               ),
             ),
 
@@ -569,6 +628,7 @@ class _RemainingTime extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final start = playhead.startedServerMs!;
+    // pausedAtServerMs = end-of-fade position (press-time + fadeMs).
     final now = playhead.isPaused
         ? (playhead.pausedAtServerMs ?? ClockSync.instance.serverNow())
         : playhead.isDone
@@ -584,6 +644,290 @@ class _RemainingTime extends StatelessWidget {
       ),
     );
   }
+}
+
+// ── Audio phase enum ─────────────────────────────────────────────────────────
+
+/// Current audio sub-phase — drives visual feedback in progress bars.
+enum _AudioPhase {
+  idle,
+  fadeIn,       // audio is ramping up (start of cue)
+  playing,      // full-volume playback
+  fadeOut,      // audio is ramping down (end of cue)
+  pauseFading,  // PAUSE fired with fadeOut behavior — audio still audible
+  paused,       // fully paused, silent
+  done,
+}
+
+// ── Progress sweep painter ────────────────────────────────────────────────────
+
+/// Full-height background sweep with fade-in / fade-out gradient overlays.
+/// Replaces the simple `FractionallySizedBox` fill.
+class _ProgressSweepPainter extends StatelessWidget {
+  final double fraction;
+  final Color typeColor;
+  final _AudioPhase audioPhase;
+  final Cue cue;
+  final double width;
+  final double height;
+
+  const _ProgressSweepPainter({
+    required this.fraction,
+    required this.typeColor,
+    required this.audioPhase,
+    required this.cue,
+    required this.width,
+    required this.height,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: _SweepPaint(
+        fraction: fraction,
+        typeColor: typeColor,
+        audioPhase: audioPhase,
+        cue: cue,
+        totalWidth: width,
+        totalHeight: height,
+      ),
+    );
+  }
+}
+
+class _SweepPaint extends CustomPainter {
+  final double fraction;
+  final Color typeColor;
+  final _AudioPhase audioPhase;
+  final Cue cue;
+  final double totalWidth;
+  final double totalHeight;
+
+  const _SweepPaint({
+    required this.fraction,
+    required this.typeColor,
+    required this.audioPhase,
+    required this.cue,
+    required this.totalWidth,
+    required this.totalHeight,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final fillX = w * fraction;
+
+    // ── Base fill (played region) ───────────────────────────────────────
+    final fillColor = audioPhase == _AudioPhase.pauseFading
+        ? ScColors.warn.withValues(alpha: 0.14)
+        : typeColor.withValues(alpha: 0.11);
+
+    canvas.drawRect(Rect.fromLTWH(0, 0, fillX, h), Paint()..color = fillColor);
+
+    // ── Fade-In gradient (left edge of fill) ───────────────────────────
+    if (cue.params case AudioParams p when p.fadeInMs > 0) {
+      final duration = cue.displayDurationMs;
+      if (duration != null && duration > 0) {
+        final fadeInW = (p.fadeInMs / duration * w).clamp(0.0, fillX);
+        if (fadeInW > 2) {
+          canvas.drawRect(
+            Rect.fromLTWH(0, 0, fadeInW, h),
+            Paint()
+              ..shader = LinearGradient(
+                colors: [
+                  typeColor.withValues(alpha: 0.0),
+                  typeColor.withValues(alpha: 0.15),
+                ],
+              ).createShader(Rect.fromLTWH(0, 0, fadeInW, h)),
+          );
+        }
+      }
+    }
+
+    // ── Fade-Out gradient (right portion of fill near end) ─────────────
+    if (cue.params case AudioParams p when p.fadeOutMs > 0) {
+      final duration = cue.displayDurationMs;
+      if (duration != null && duration > 0) {
+        final fadeOutStartF = (duration - p.fadeOutMs) / duration;
+        final fadeOutStartX = (fadeOutStartF * w).clamp(0.0, w);
+        final fadeOutEndX = (fraction * w).clamp(fadeOutStartX, w);
+        final fadeOutW = fadeOutEndX - fadeOutStartX;
+        if (fadeOutW > 2) {
+          canvas.drawRect(
+            Rect.fromLTWH(fadeOutStartX, 0, fadeOutW, h),
+            Paint()
+              ..shader = LinearGradient(
+                colors: [
+                  ScColors.warn.withValues(alpha: 0.0),
+                  ScColors.warn.withValues(alpha: 0.18),
+                ],
+              ).createShader(Rect.fromLTWH(fadeOutStartX, 0, fadeOutW, h)),
+          );
+        }
+      }
+    }
+
+    // ── Pause-fade "draining" gradient (entire fill region, warm) ──────
+    if (audioPhase == _AudioPhase.pauseFading) {
+      // Overlay a warm amber wash that suggests volume is draining.
+      canvas.drawRect(
+        Rect.fromLTWH(0, 0, fillX, h),
+        Paint()
+          ..shader = LinearGradient(
+            begin: Alignment.centerLeft,
+            end: Alignment.centerRight,
+            colors: [
+              ScColors.warn.withValues(alpha: 0.0),
+              ScColors.warn.withValues(alpha: 0.10),
+            ],
+          ).createShader(Rect.fromLTWH(0, 0, fillX, h)),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_SweepPaint old) =>
+      old.fraction != fraction ||
+      old.audioPhase != audioPhase ||
+      old.typeColor != typeColor;
+}
+
+// ── Bottom progress bar ───────────────────────────────────────────────────────
+
+/// 3px progress line at the bottom of each row.
+///
+/// Shows:
+/// - A filled region (elapsed) with fade-in and fade-out color zones.
+/// - An amber warning overlay during pause-fade.
+/// - Indeterminate animation when duration is unknown.
+class _CueProgressBar extends StatelessWidget {
+  final double fraction;          // 0.0–1.0; 0 = indeterminate
+  final _AudioPhase audioPhase;
+  final Color typeColor;
+  final Cue cue;
+
+  const _CueProgressBar({
+    required this.fraction,
+    required this.audioPhase,
+    required this.typeColor,
+    required this.cue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (fraction <= 0) {
+      // Indeterminate — duration unknown or not yet started.
+      return LinearProgressIndicator(
+        backgroundColor: typeColor.withValues(alpha: 0.15),
+        valueColor: AlwaysStoppedAnimation(_barColor),
+        minHeight: 3,
+      );
+    }
+    return CustomPaint(
+      size: const Size(double.infinity, 3),
+      painter: _BarPaint(
+        fraction: fraction,
+        audioPhase: audioPhase,
+        typeColor: typeColor,
+        cue: cue,
+      ),
+    );
+  }
+
+  Color get _barColor => switch (audioPhase) {
+    _AudioPhase.pauseFading => ScColors.warn,
+    _AudioPhase.paused      => ScColors.warn,
+    _AudioPhase.done        => ScColors.textDim,
+    _AudioPhase.fadeIn      => typeColor.withValues(alpha: 0.6),
+    _                       => typeColor,
+  };
+}
+
+class _BarPaint extends CustomPainter {
+  final double fraction;
+  final _AudioPhase audioPhase;
+  final Color typeColor;
+  final Cue cue;
+
+  const _BarPaint({
+    required this.fraction,
+    required this.audioPhase,
+    required this.typeColor,
+    required this.cue,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final fillX = w * fraction;
+
+    // Track background
+    canvas.drawRect(
+      Rect.fromLTWH(0, 0, w, h),
+      Paint()..color = typeColor.withValues(alpha: 0.12),
+    );
+
+    if (fillX <= 0) return;
+
+    // Determine segments based on fade zones.
+    final duration = cue.displayDurationMs;
+    double fadeInEndX   = 0;
+    double fadeOutStartX = fillX;
+
+    if (cue.params case AudioParams p when duration != null && duration > 0) {
+      fadeInEndX    = (p.fadeInMs  / duration * w).clamp(0.0, fillX);
+      fadeOutStartX = ((duration - p.fadeOutMs) / duration * w).clamp(0.0, fillX);
+    }
+
+    // ── Fade-in segment (lighter) ───────────────────────────────────────
+    if (fadeInEndX > 0) {
+      canvas.drawRect(
+        Rect.fromLTWH(0, 0, fadeInEndX, h),
+        Paint()
+          ..shader = LinearGradient(
+            colors: [
+              typeColor.withValues(alpha: 0.3),
+              typeColor,
+            ],
+          ).createShader(Rect.fromLTWH(0, 0, fadeInEndX, h)),
+      );
+    }
+
+    // ── Main playback segment ───────────────────────────────────────────
+    final mainColor = audioPhase == _AudioPhase.pauseFading
+        ? ScColors.warn
+        : audioPhase == _AudioPhase.paused
+            ? ScColors.warn.withValues(alpha: 0.6)
+            : audioPhase == _AudioPhase.done
+                ? ScColors.textDim
+                : typeColor;
+
+    final mainStart = fadeInEndX;
+    final mainEnd   = fadeOutStartX.clamp(mainStart, fillX);
+    if (mainEnd > mainStart) {
+      canvas.drawRect(
+        Rect.fromLTWH(mainStart, 0, mainEnd - mainStart, h),
+        Paint()..color = mainColor,
+      );
+    }
+
+    // ── Fade-out segment (amber gradient) ───────────────────────────────
+    if (fadeOutStartX < fillX) {
+      canvas.drawRect(
+        Rect.fromLTWH(fadeOutStartX, 0, fillX - fadeOutStartX, h),
+        Paint()
+          ..shader = LinearGradient(
+            colors: [typeColor, ScColors.warn],
+          ).createShader(Rect.fromLTWH(fadeOutStartX, 0, fillX - fadeOutStartX, h)),
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_BarPaint old) =>
+      old.fraction != fraction || old.audioPhase != audioPhase;
 }
 
 // ── Note / Placeholder row ────────────────────────────────────────────────────

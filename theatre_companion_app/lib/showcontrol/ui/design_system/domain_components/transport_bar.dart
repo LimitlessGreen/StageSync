@@ -74,9 +74,16 @@ class _TransportBarState extends State<TransportBar> {
   String get _elapsedStr {
     final start = widget.playhead.startedServerMs;
     if (start == null) return '0:00';
+    // pausedAtServerMs = press-time + fade duration = actual audio-silence position.
+    // During the fade window (now < pausedAt) show live advancing time; afterwards freeze.
     final int nowMs = switch (widget.playhead.phase) {
       CueListPhase.running => ClockSync.instance.serverNow(),
-      CueListPhase.paused  => widget.playhead.pausedAtServerMs ?? ClockSync.instance.serverNow(),
+      CueListPhase.paused  => () {
+          final pausedAt = widget.playhead.pausedAtServerMs;
+          if (pausedAt == null) return ClockSync.instance.serverNow();
+          final now = ClockSync.instance.serverNow();
+          return now < pausedAt ? now : pausedAt;
+        }(),
       CueListPhase.done    => widget.playhead.doneServerMs ?? ClockSync.instance.serverNow(),
       _                    => -1,
     };
