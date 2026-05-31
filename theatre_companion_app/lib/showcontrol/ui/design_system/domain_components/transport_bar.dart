@@ -59,7 +59,7 @@ class _TransportBarState extends State<TransportBar> {
     _ticker?.cancel();
     _ticker = null;
     if (widget.playhead.isRunning) {
-      _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      _ticker = Timer.periodic(const Duration(milliseconds: 100), (_) {
         if (mounted) setState(() {});
       });
     }
