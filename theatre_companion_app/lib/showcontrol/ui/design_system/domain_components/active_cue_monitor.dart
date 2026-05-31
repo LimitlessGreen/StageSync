@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../domain/playhead.dart';
 import '../../../domain/show.dart';
-import '../../../session/clock_sync.dart';
 import '../sc_colors.dart';
 import '../sc_typography.dart';
 
@@ -39,12 +38,11 @@ class _ActiveCueMonitorState extends State<ActiveCueMonitor> {
   }
 
   void _syncTimer() {
-    final needsTick = widget.playhead.isRunning;
-    if (needsTick && _timer == null) {
+    if (widget.playhead.needsTick && _timer == null) {
       _timer = Timer.periodic(const Duration(milliseconds: 50), (_) {
         if (mounted) setState(() {});
       });
-    } else if (!needsTick && _timer != null) {
+    } else if (!widget.playhead.needsTick && _timer != null) {
       _timer!.cancel();
       _timer = null;
     }
@@ -213,12 +211,7 @@ class _ElapsedTimer extends StatelessWidget {
     final start = playhead.startedServerMs;
     if (start == null) return Text('0:00', style: ScText.timer);
 
-    final now = playhead.isPaused
-        ? (playhead.pausedAtServerMs ?? ClockSync.instance.serverNow())
-        : playhead.isDone
-            ? (playhead.doneServerMs ?? ClockSync.instance.serverNow())
-            : ClockSync.instance.serverNow();
-    final ms = (now - start).clamp(0, 99 * 60 * 1000);
+    final ms = (playhead.effectiveNowMs() - start).clamp(0, 99 * 60 * 1000);
 
     return Text(
       _format(ms),
@@ -245,12 +238,7 @@ class _ProgressBar extends StatelessWidget {
     final start = playhead.startedServerMs;
     final duration = cue.displayDurationMs;
     if (start == null || duration == null || duration == 0) return 0.0;
-    final now = playhead.isPaused
-        ? (playhead.pausedAtServerMs ?? ClockSync.instance.serverNow())
-        : playhead.isDone
-            ? (playhead.doneServerMs ?? ClockSync.instance.serverNow())
-            : ClockSync.instance.serverNow();
-    return ((now - start) / duration).clamp(0.0, 1.0);
+    return ((playhead.effectiveNowMs() - start) / duration).clamp(0.0, 1.0);
   }
 
   @override
@@ -295,12 +283,7 @@ class _ProgressBar extends StatelessWidget {
   String get _elapsedText {
     final start = playhead.startedServerMs;
     if (start == null) return '';
-    final now = playhead.isPaused
-        ? (playhead.pausedAtServerMs ?? ClockSync.instance.serverNow())
-        : playhead.isDone
-            ? (playhead.doneServerMs ?? ClockSync.instance.serverNow())
-            : ClockSync.instance.serverNow();
-    return _fmtMs((now - start).clamp(0, 99 * 60 * 1000).toDouble());
+    return _fmtMs((playhead.effectiveNowMs() - start).clamp(0, 99 * 60 * 1000).toDouble());
   }
 
   String get _totalText {

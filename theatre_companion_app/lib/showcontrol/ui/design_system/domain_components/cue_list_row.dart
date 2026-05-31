@@ -169,19 +169,7 @@ class _CueListRowState extends State<CueListRow> {
   int _effectiveNowMs() {
     final ph = widget.playhead;
     if (ph == null) return ClockSync.instance.serverNow();
-    if (ph.isDone) return ph.doneServerMs ?? ClockSync.instance.serverNow();
-    if (ph.isPaused) {
-      final pausedAt = ph.pausedAtServerMs;
-      if (pausedAt == null) return ClockSync.instance.serverNow();
-      // pausedAtServerMs is set by the Go engine to PAUSE-press-time + fade duration,
-      // so it represents the exact moment audio becomes fully silent.
-      // During the fade window (now < pausedAt) keep the bar advancing.
-      // After the fade, freeze at pausedAt (= end-of-fade position).
-      final now = ClockSync.instance.serverNow();
-      if (now < pausedAt) return now; // still fading → bar advances
-      return pausedAt; // fully paused → freeze at post-fade position
-    }
-    return ClockSync.instance.serverNow();
+    return ph.effectiveNowMs();
   }
 
   double get _progressFraction {
@@ -644,12 +632,7 @@ class _RemainingTime extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final start = playhead.startedServerMs!;
-    // pausedAtServerMs = end-of-fade position (press-time + fadeMs).
-    final now = playhead.isPaused
-        ? (playhead.pausedAtServerMs ?? ClockSync.instance.serverNow())
-        : playhead.isDone
-            ? (playhead.doneServerMs ?? ClockSync.instance.serverNow())
-            : ClockSync.instance.serverNow();
+    final now = playhead.effectiveNowMs();
     final elapsed = (now - start).clamp(0, 99 * 60 * 1000).toDouble();
     final remaining = (duration - elapsed).clamp(0.0, duration);
     return Text(

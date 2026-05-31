@@ -1,4 +1,5 @@
 import 'package:meta/meta.dart';
+import '../session/clock_sync.dart';
 
 enum CueListPhase {
   idle,    // kein aktiver Eintrag, Timer = 0:00
@@ -161,4 +162,29 @@ class PlayheadState {
         doneServerMs: doneServerMs,
         perCue: perCue ?? this.perCue,
       );
+}
+
+// ── Timing-Hilfsfunktion ──────────────────────────────────────────────────────
+
+extension PlayheadTiming on PlayheadState {
+  /// Effektive "jetzt"-Zeit in Unix-Millisekunden, Pause-Fade-Fenster berücksichtigt.
+  ///
+  /// - Running  → laufende Serveruhr
+  /// - Paused, Fade noch aktiv (now < pausedAtServerMs) → laufende Serveruhr
+  /// - Paused, Fade abgeschlossen (now ≥ pausedAtServerMs) → eingefroren bei pausedAtServerMs
+  /// - Done     → eingefroren bei doneServerMs
+  /// - pausedAtServerMs == null (Server-Event noch nicht angekommen) → laufende Serveruhr
+  int effectiveNowMs() {
+    if (isDone) return doneServerMs ?? ClockSync.instance.serverNow();
+    if (isPaused) {
+      final p = pausedAtServerMs;
+      if (p == null) return ClockSync.instance.serverNow();
+      final now = ClockSync.instance.serverNow();
+      return now < p ? now : p;
+    }
+    return ClockSync.instance.serverNow();
+  }
+
+  /// true solange der Widget-Ticker laufen muss.
+  bool get needsTick => isRunning || isPaused;
 }

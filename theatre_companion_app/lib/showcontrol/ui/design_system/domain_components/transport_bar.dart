@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../../domain/show.dart';
 import '../../../domain/playhead.dart';
-import '../../../session/clock_sync.dart';
 import '../sc_colors.dart';
 import '../sc_typography.dart';
 import '../sc_spacing.dart';
@@ -77,19 +76,9 @@ class _TransportBarState extends State<TransportBar> {
   String get _elapsedStr {
     final start = widget.playhead.startedServerMs;
     if (start == null) return '0:00';
-    // pausedAtServerMs = press-time + fade duration = actual audio-silence position.
-    // During the fade window (now < pausedAt) show live advancing time; afterwards freeze.
-    final int nowMs = switch (widget.playhead.phase) {
-      CueListPhase.running => ClockSync.instance.serverNow(),
-      CueListPhase.paused  => () {
-          final pausedAt = widget.playhead.pausedAtServerMs;
-          if (pausedAt == null) return ClockSync.instance.serverNow();
-          final now = ClockSync.instance.serverNow();
-          return now < pausedAt ? now : pausedAt;
-        }(),
-      CueListPhase.done    => widget.playhead.doneServerMs ?? ClockSync.instance.serverNow(),
-      _                    => -1,
-    };
+    final int nowMs = widget.playhead.phase == CueListPhase.idle
+        ? -1
+        : widget.playhead.effectiveNowMs();
     if (nowMs < 0) return '0:00';
     final ms = (nowMs - start).clamp(0, 99 * 60 * 1000);
     final s = ms ~/ 1000;

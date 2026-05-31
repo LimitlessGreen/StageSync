@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../providers/show_control_provider.dart';
 import '../../providers/show_control_domain_provider.dart';
 import '../../providers/session_provider.dart';
-import '../../session/clock_sync.dart';
 import '../../providers/audio_node_provider.dart';
 import '../../providers/ma_node_provider.dart';
 import '../../grpc/generated/stagesync/v1/common.pb.dart' show NodeTask;
@@ -515,14 +514,14 @@ class _TransportControlsState extends ConsumerState<_TransportControls> {
   @override
   void didUpdateWidget(_TransportControls oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.playhead.isRunning != widget.playhead.isRunning) {
+    if (oldWidget.playhead.needsTick != widget.playhead.needsTick) {
       _updateTimer();
     }
   }
 
   void _updateTimer() {
-    if (widget.playhead.isRunning) {
-      _ticker ??= Timer.periodic(const Duration(seconds: 1), (_) {
+    if (widget.playhead.needsTick) {
+      _ticker ??= Timer.periodic(const Duration(milliseconds: 100), (_) {
         if (mounted) setState(() {});
       });
     } else {
@@ -540,13 +539,7 @@ class _TransportControlsState extends ConsumerState<_TransportControls> {
   String _formatElapsed() {
     final started = widget.playhead.startedServerMs;
     if (started == null) return '0:00';
-    final int elapsedMs;
-    if (widget.playhead.isPaused) {
-      final paused = widget.playhead.pausedAtServerMs;
-      elapsedMs = paused != null ? paused - started : 0;
-    } else {
-      elapsedMs = ClockSync.instance.serverNow() - started;
-    }
+    final elapsedMs = widget.playhead.effectiveNowMs() - started;
     final totalSeconds = (elapsedMs / 1000).floor().clamp(0, double.maxFinite.toInt());
     final m = totalSeconds ~/ 60;
     final s = (totalSeconds % 60).toString().padLeft(2, '0');
