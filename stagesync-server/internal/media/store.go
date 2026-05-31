@@ -33,7 +33,7 @@ type FileInfo struct {
 	SHA256     string     `json:"sha256"`
 	ModifiedMs int64      `json:"modified_ms"`
 	MimeType   string     `json:"mime_type"`
-	Audio      *AudioInfo `json:"audio,omitempty"` // nil für Nicht-WAV oder Parse-Fehler
+	Audio      *AudioInfo `json:"audio,omitempty"` // nil für nicht unterstützte Formate oder Parse-Fehler
 }
 
 // mimeForExt gibt den MIME-Typ für eine Audio-Endung zurück.
@@ -169,9 +169,7 @@ func (s *Store) List() ([]FileInfo, error) {
 			ModifiedMs: fi.ModTime().UnixMilli(),
 			MimeType:   mimeForExt(strings.ToLower(filepath.Ext(e.Name()))),
 		}
-		if strings.ToLower(filepath.Ext(e.Name())) == ".wav" {
-			info.Audio = parseWAV(filepath.Join(s.dir, e.Name()))
-		}
+		info.Audio = parseAudio(filepath.Join(s.dir, e.Name()))
 		out = append(out, info)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
@@ -200,10 +198,24 @@ func (s *Store) Stat(name string) (FileInfo, error) {
 		ModifiedMs: fi.ModTime().UnixMilli(),
 		MimeType:   mimeForExt(strings.ToLower(filepath.Ext(SafeName(name)))),
 	}
-	if strings.ToLower(filepath.Ext(SafeName(name))) == ".wav" {
-		result.Audio = parseWAV(s.path(SafeName(name)))
-	}
+	result.Audio = parseAudio(s.path(SafeName(name)))
 	return result, nil
+}
+
+var (
+	parseWAVFn = parseWAV
+	parseMP3Fn = parseMP3
+)
+
+func parseAudio(path string) *AudioInfo {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".wav":
+		return parseWAVFn(path)
+	case ".mp3":
+		return parseMP3Fn(path)
+	default:
+		return nil
+	}
 }
 
 // hashLocked berechnet/cached den SHA-256 einer Datei. Aufrufer hält s.mu.
@@ -363,11 +375,11 @@ func parseWAV(path string) *AudioInfo {
 				return nil
 			}
 			// wFormatTag: 1=PCM, 3=IEEE float — beide haben Standard-Felder
-			channels   = int32(fmtData[2]) | int32(fmtData[3])<<8
+			channels = int32(fmtData[2]) | int32(fmtData[3])<<8
 			sampleRate = int32(fmtData[4]) | int32(fmtData[5])<<8 |
 				int32(fmtData[6])<<16 | int32(fmtData[7])<<24
-			bitDepth   = int32(fmtData[14]) | int32(fmtData[15])<<8
-			foundFmt   = true
+			bitDepth = int32(fmtData[14]) | int32(fmtData[15])<<8
+			foundFmt = true
 		case "data":
 			dataSize = size
 			if _, err := f.Seek(size, io.SeekCurrent); err != nil {
