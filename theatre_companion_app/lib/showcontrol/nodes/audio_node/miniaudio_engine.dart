@@ -118,7 +118,8 @@ class MiniaudioEngine implements AbstractAudioEngine {
   @override
   void setMasterVolume(double db) {
     _masterVolumeDb = db;
-    // TODO: expose miniaudio global volume via FFI
+    // TODO(native): expose ma_engine_set_volume() via FFI (ma_wrapper_set_master_volume).
+    // Until then, master volume changes have no effect on output.
   }
 
   @override
@@ -292,6 +293,10 @@ class MiniaudioEngine implements AbstractAudioEngine {
 
   @override
   Future<void> pause(String cueId, {double fadeOutMs = 0.0}) async {
+    // TODO(native): ma_wrapper_pause does not accept a fadeOutMs parameter yet.
+    // The native signature is Void Function(Pointer<Utf8>) — no fade duration.
+    // This causes an audible click on pause. Fix: extend the native wrapper to
+    // accept a fade_ms argument and apply ma_sound_set_fade_in_milliseconds().
     final ptr = cueId.toNativeUtf8();
     try {
       _pause(ptr);
@@ -302,6 +307,8 @@ class MiniaudioEngine implements AbstractAudioEngine {
 
   @override
   Future<void> resume(String cueId, {double fadeInMs = 0.0}) async {
+    // TODO(native): same as pause — fadeInMs is silently ignored.
+    // Extend ma_wrapper_resume to accept a fade_ms argument.
     final ptr = cueId.toNativeUtf8();
     try {
       _resume(ptr);
@@ -318,8 +325,10 @@ class MiniaudioEngine implements AbstractAudioEngine {
     bool stopWhenDone = false,
     bool pauseWhenDone = false,
   }) async {
-    // Miniaudio-Engine: Lautstärke sofort setzen (kein smooth fade auf FFI-Ebene).
-    // TODO: native fade implementieren wenn miniaudio FFI-Bindings erweitert werden.
+    // TODO(native): smooth volume ramp not implemented in native wrapper.
+    // Need ma_wrapper_fade_volume(cueId, targetLinear, durationMs) using
+    // ma_sound_set_fade_in_milliseconds() with a scheduled stop/pause callback.
+    // Current behaviour: volume change is instantaneous (no ramp).
     if (stopWhenDone) {
       await stop(cueId);
     } else if (pauseWhenDone) {
