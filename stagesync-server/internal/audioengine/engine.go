@@ -256,12 +256,21 @@ func (e *Engine) PreloadByAsset(cueID, assetID, path string) error {
 	return nil
 }
 
+// graceMs: wenn die Zeit zwischen dem autoritativen Startpunkt und dem Zeitpunkt
+// des PLAY-Befehls kleiner als dieser Schwellwert ist, wird kein Frame-Seek
+// durchgeführt. Verhindert, dass Preload-Latenzen (< 300ms) zum Überspringen
+// des Anfangs führen — relevant beim ersten Play einer Cue.
+const graceMs = int64(300)
+
 // Play starts (or schedules) playback of cueID.
-//   - startUnixMs == 0  → start immediately.
-//   - startUnixMs > 0   → start at that server time; if already past, start from the
-//     corresponding sample offset so the timeline stays correct (late-join sync).
+//   - startUnixMs == 0  → start immediately (no multi-node sync).
+//   - startUnixMs > 0   → start at that server time; if already past by more
+//     than graceMs, seek to the correct position so multi-node timelines stay
+//     in sync; within graceMs (LAN latency + typical preload), start from
+//     startTimeMs without seeking.
+//   - startTimeMs > 0   → trim start: begin playback at this in-file offset.
 func (e *Engine) Play(cueID string, startUnixMs int64, volumeDb float64,
-	fadeInMs, fadeOutMs float64, loop bool) error {
+	fadeInMs, fadeOutMs float64, loop bool, startTimeMs float64) error {
 
 	e.mu.Lock()
 	h, ok := e.handles[cueID]
@@ -281,17 +290,30 @@ func (e *Engine) Play(cueID string, startUnixMs int64, volumeDb float64,
 
 	totalFrames := int64(len(h.pcm)) / int64(h.channels)
 
+	// Base position: in-file trim start (startTimeMs).
+	baseFrames := msToSamples(startTimeMs, h.sampleRate)
+	if baseFrames >= totalFrames {
+		baseFrames = 0
+	}
+
 	if startUnixMs > 0 {
 		nowMs := time.Now().UnixMilli()
 		elapsedMs := nowMs - startUnixMs
 		if elapsedMs > 0 {
-			// Already past start time — jump to correct position.
-			offsetFrames := msToSamples(float64(elapsedMs), h.sampleRate)
+			if elapsedMs <= graceMs {
+				// Innerhalb des Grace-Fensters: Preload-Latenz nicht als Seek einrechnen.
+				// Verhindert den "spring in die Mitte" Effekt beim ersten Play.
+				h.pos = baseFrames
+				h.fadeInOffset = baseFrames
+				h.state = StatePlaying
+				log.Printf("[audioengine] play cueID=%s (grace %dms, from %.0fms)", cueID, elapsedMs, startTimeMs)
+				return nil
+			}
+			// Weit nach dem Startpunkt: Frame-genauen Seek für Multi-Node-Sync.
+			offsetFrames := baseFrames + msToSamples(float64(elapsedMs), h.sampleRate)
 			if offsetFrames >= totalFrames && !loop {
-				// Preload dauerte länger als die Audiodatei → von vorne spielen.
-				// Besser als still überspringen (z.B. kurze Signaltöne nach langem Preload).
-				log.Printf("[audioengine] cue %s: Preload-Verzögerung (%dms) > Länge, spiele von vorne", cueID, elapsedMs)
-				h.pos = 0
+				log.Printf("[audioengine] cue %s: elapsed %dms > Länge, spiele von startTimeMs=%.0f", cueID, elapsedMs, startTimeMs)
+				h.pos = baseFrames
 				h.state = StatePlaying
 				return nil
 			}
@@ -299,18 +321,22 @@ func (e *Engine) Play(cueID string, startUnixMs int64, volumeDb float64,
 				offsetFrames = offsetFrames % totalFrames
 			}
 			h.pos = offsetFrames
-			h.fadeInOffset = offsetFrames // fade-in starts at seek position
+			h.fadeInOffset = offsetFrames
 		} else {
-			// Future start — schedule it.
+			// Noch in der Zukunft — einplanen.
+			h.pos = baseFrames
 			h.scheduleAt = startUnixMs
 			h.state = StateScheduled
 			log.Printf("[audioengine] cue %s scheduled in %dms", cueID, -elapsedMs)
 			return nil
 		}
+	} else {
+		h.pos = baseFrames
+		h.fadeInOffset = baseFrames
 	}
 
 	h.state = StatePlaying
-	log.Printf("[audioengine] play cueID=%s vol=%.1fdB loop=%v", cueID, volumeDb, loop)
+	log.Printf("[audioengine] play cueID=%s vol=%.1fdB loop=%v startTimeMs=%.0f", cueID, volumeDb, loop, startTimeMs)
 	return nil
 }
 

@@ -327,6 +327,7 @@ func (n *InternalAudioNode) handlePlay(cmd *pb.AudioPlayCommand) {
 		cmd.GetFadeInMs(),
 		cmd.GetFadeOutMs(),
 		cmd.GetLoop(),
+		cmd.GetStartTimeMs(),
 	); err != nil {
 		log.Printf("[audionode] PLAY FEHLER cueId=%s: %v", cueID, err)
 	} else {
@@ -475,7 +476,7 @@ func (n *InternalAudioNode) handleTestSignal(cmd *pb.AudioTestSignalCommand) {
 		log.Printf("[audionode] test signal preload error: %v", err)
 		return
 	}
-	if err := n.engine.Play(cueID, 0, 0, 100, 100, false); err != nil {
+	if err := n.engine.Play(cueID, 0, 0, 100, 100, false, 0); err != nil {
 		log.Printf("[audionode] test signal play error: %v", err)
 		return
 	}
