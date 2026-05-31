@@ -41,6 +41,14 @@ final class AudioParams extends CueParams {
   final ResumeBehavior resumeBehavior;
   final double resumeFadeMs;    // Fade-Dauer bei resumeBehavior.fadeIn
 
+  /// Stille am Anfang der Aufnahme automatisch überspringen.
+  ///
+  /// Wenn true und [startTimeMs] == 0: der Server erkennt beim Preload den
+  /// ersten nicht-stillen Frame und setzt ihn als effektive Startzeit. Der
+  /// Operator sieht den erkannten Offset in der Cue-Anzeige.
+  /// Wenn [startTimeMs] > 0: manueller Offset hat Vorrang vor der Erkennung.
+  final bool autoSkipSilence;
+
   const AudioParams({
     required this.assetId,
     this.volumeDb = 0.0,
@@ -54,6 +62,7 @@ final class AudioParams extends CueParams {
     this.pauseFadeMs = 1000.0,
     this.resumeBehavior = ResumeBehavior.continuePlaying,
     this.resumeFadeMs = 500.0,
+    this.autoSkipSilence = false,
   });
 
   AudioParams copyWith({
@@ -69,6 +78,7 @@ final class AudioParams extends CueParams {
     double? pauseFadeMs,
     ResumeBehavior? resumeBehavior,
     double? resumeFadeMs,
+    bool? autoSkipSilence,
   }) =>
       AudioParams(
         assetId: assetId ?? this.assetId,
@@ -83,6 +93,7 @@ final class AudioParams extends CueParams {
         pauseFadeMs: pauseFadeMs ?? this.pauseFadeMs,
         resumeBehavior: resumeBehavior ?? this.resumeBehavior,
         resumeFadeMs: resumeFadeMs ?? this.resumeFadeMs,
+        autoSkipSilence: autoSkipSilence ?? this.autoSkipSilence,
       );
 
   double? get effectiveDurationMs {

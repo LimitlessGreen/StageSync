@@ -307,6 +307,11 @@ class _AudioSection extends ConsumerWidget {
 
   const _AudioSection({required this.params, required this.onChanged});
 
+  // Aktiv wenn startTimeMs == 0: Server erkennt Stille automatisch beim Preload.
+  // Deaktiviert (startTimeMs = 0.001ms ≈ 0) wenn der Nutzer die Funktion ausschaltet
+  // oder einen manuellen Offset setzt.
+  bool get _autoSkipActive => params.startTimeMs == 0 && params.assetId.isNotEmpty;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final asset = ref.watch(assetWithReadinessProvider(params.assetId));
@@ -349,11 +354,109 @@ class _AudioSection extends ConsumerWidget {
         suffix: 'ms', decimalPlaces: 0,
         onChanged: (v) => onChanged(params.copyWith(fadeOutMs: v)),
       ),
+      const SizedBox(height: 6),
+
+      // ── Stille überspringen ──────────────────────────────────────────────
+      if (params.assetId.isNotEmpty) ...[
+        _SilenceSkipRow(
+          active: _autoSkipActive,
+          startTimeMs: params.startTimeMs,
+          onToggle: (enabled) {
+            if (enabled) {
+              // Aktivieren: startTimeMs = 0 → Server erkennt automatisch
+              onChanged(params.copyWith(startTimeMs: 0));
+            } else {
+              // Deaktivieren: 0.001ms als Sentinel (= kein Auto-Skip, Ton startet von vorne)
+              onChanged(params.copyWith(startTimeMs: 0.001));
+            }
+          },
+          onStartTimeMsChanged: (ms) => onChanged(params.copyWith(startTimeMs: ms)),
+        ),
+      ],
+
       if (params.loop) ...[
         const SizedBox(height: 4),
         _InfoRow(icon: Icons.loop, label: 'Loop', value: 'AN', valueColor: ScColors.active),
       ],
     ]);
+  }
+}
+
+// ── Silence-Skip-Row ──────────────────────────────────────────────────────────
+
+class _SilenceSkipRow extends StatelessWidget {
+  final bool active;
+  final double startTimeMs;
+  final ValueChanged<bool> onToggle;
+  final ValueChanged<double> onStartTimeMsChanged;
+
+  const _SilenceSkipRow({
+    required this.active,
+    required this.startTimeMs,
+    required this.onToggle,
+    required this.onStartTimeMsChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            SizedBox(
+              width: ScSpacing.inspectorLabelWidth,
+              child: Row(
+                children: [
+                  const Icon(Icons.skip_next, size: 14, color: ScColors.textSecondary),
+                  const SizedBox(width: 4),
+                  Text('Stille skip', style: ScText.label),
+                ],
+              ),
+            ),
+            Switch(
+              value: active,
+              onChanged: onToggle,
+              activeThumbColor: ScColors.active,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            const SizedBox(width: 8),
+            if (active)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: ScColors.active.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'AUTO',
+                  style: ScText.statusSmall.copyWith(color: ScColors.active, fontSize: 9),
+                ),
+              )
+            else if (startTimeMs > 0.001)
+              Text(
+                _fmtMs(startTimeMs),
+                style: ScText.numberSmall.copyWith(color: ScColors.textSecondary),
+              ),
+          ],
+        ),
+        if (!active && startTimeMs > 0.001) ...[
+          const SizedBox(height: 4),
+          ScDragField(
+            label: 'Startzeit',
+            value: startTimeMs,
+            min: 0, max: 600000, step: 10,
+            suffix: 'ms', decimalPlaces: 0,
+            onChanged: onStartTimeMsChanged,
+          ),
+        ],
+      ],
+    );
+  }
+
+  static String _fmtMs(double ms) {
+    if (ms < 1000) return '${ms.toInt()}ms';
+    return '${(ms / 1000).toStringAsFixed(1)}s';
   }
 }
 

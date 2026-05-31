@@ -50,24 +50,30 @@ class ShowControlRepository {
 
   static CueParams _paramsFromProto(pb.Cue proto) {
     return switch (proto.whichParams()) {
-      pb.Cue_Params.audio => AudioParams(
-          assetId: proto.audio.assetId.isNotEmpty
+      pb.Cue_Params.audio => () {
+          final assetId = proto.audio.assetId.isNotEmpty
               ? proto.audio.assetId
-              : p.basename(proto.audio.filePath),
-          volumeDb: proto.audio.volumeDb,
-          fadeInMs: proto.audio.fadeInMs,
-          fadeOutMs: proto.audio.fadeOutMs,
-          loop: proto.audio.loop,
-          startTimeMs: proto.audio.startTimeMs,
-          endTimeMs: proto.audio.endTimeMs,
-          declaredDurationMs: proto.audio.declaredDurationMs > 0
-              ? proto.audio.declaredDurationMs
-              : null,
-          pauseBehavior: _pauseBehavior(proto.audio.pauseBehavior),
-          pauseFadeMs: proto.audio.pauseFadeMs,
-          resumeBehavior: _resumeBehavior(proto.audio.resumeBehavior),
-          resumeFadeMs: proto.audio.resumeFadeMs,
-        ),
+              : p.basename(proto.audio.filePath);
+          final startMs = proto.audio.startTimeMs;
+          return AudioParams(
+            assetId: assetId,
+            volumeDb: proto.audio.volumeDb,
+            fadeInMs: proto.audio.fadeInMs,
+            fadeOutMs: proto.audio.fadeOutMs,
+            loop: proto.audio.loop,
+            startTimeMs: startMs,
+            endTimeMs: proto.audio.endTimeMs,
+            declaredDurationMs: proto.audio.declaredDurationMs > 0
+                ? proto.audio.declaredDurationMs
+                : null,
+            pauseBehavior: _pauseBehavior(proto.audio.pauseBehavior),
+            pauseFadeMs: proto.audio.pauseFadeMs,
+            resumeBehavior: _resumeBehavior(proto.audio.resumeBehavior),
+            resumeFadeMs: proto.audio.resumeFadeMs,
+            // startTimeMs == 0 → server auto-detects silence start (if SilenceDetector active).
+            autoSkipSilence: startMs == 0 && assetId.isNotEmpty,
+          );
+        }(),
       pb.Cue_Params.wait => WaitParams(
           durationMs: proto.wait.durationMs,
         ),
