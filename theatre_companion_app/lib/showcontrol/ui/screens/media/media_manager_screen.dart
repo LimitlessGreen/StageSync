@@ -87,18 +87,15 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
             type: _BannerType.error,
             onDismiss: () => ref.read(mediaProvider.notifier).clearError(),
           ),
-        if (showQueue)
-          _UploadQueuePanel(
-            queue: queue,
-            onClear: () => ref.read(mediaProvider.notifier).clearUploadQueue(),
-          ),
-        if (showQueue) const Divider(height: 1, color: ScColors.divider),
         Expanded(
-          child: state.isLoading && assets.isEmpty
-              ? const Center(child: CircularProgressIndicator(color: ScColors.active))
-              : assets.isEmpty
-                  ? _EmptyState(onUpload: _pickAndUpload)
-                  : _AssetTable(
+          child: Stack(
+            children: [
+              // ── Content (nimmt gesamten Platz) ─────────────────────────
+              state.isLoading && assets.isEmpty
+                  ? const Center(child: CircularProgressIndicator(color: ScColors.active))
+                  : assets.isEmpty
+                      ? _EmptyState(onUpload: _pickAndUpload)
+                      : _AssetTable(
                       assets: assets,
                       isAudioConnected: () {
                         final isLocalAudioConnected =
@@ -128,6 +125,20 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
                         ref.read(audioNodeProvider.notifier).auditionStop();
                       },
                     ),
+              // ── Upload-Queue: floating unten rechts ────────────────────
+              if (showQueue)
+                Positioned(
+                  right: 12,
+                  bottom: 12,
+                  width: 340,
+                  child: _UploadQueuePanel(
+                    queue: queue,
+                    onClear: () =>
+                        ref.read(mediaProvider.notifier).clearUploadQueue(),
+                  ),
+                ),
+            ],
+          ),
         ),
       ],
     );
@@ -209,9 +220,14 @@ class _UploadQueuePanel extends StatelessWidget {
     final hasDone = queue.any((u) =>
         u.status == UploadStatus.done || u.status == UploadStatus.error);
 
-    return Container(
-      color: ScColors.surface,
-      constraints: const BoxConstraints(maxHeight: 160),
+    return Material(
+      elevation: 8,
+      borderRadius: BorderRadius.circular(8),
+      color: ScColors.surface2,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Container(
+      constraints: const BoxConstraints(maxHeight: 200),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -252,6 +268,8 @@ class _UploadQueuePanel extends StatelessWidget {
             ),
           ),
         ],
+      ),
+        ),
       ),
     );
   }
