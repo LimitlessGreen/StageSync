@@ -53,6 +53,17 @@ class _CueDetailSheetState extends ConsumerState<_CueDetailSheet> {
   }
 
   @override
+  void didUpdateWidget(_CueDetailSheet old) {
+    super.didUpdateWidget(old);
+    // Wenn der Server eine Änderung zurückschickt (z.B. von einem anderen Gerät)
+    // und lokal gerade keine ungespeicherten Änderungen laufen: Draft aktualisieren.
+    // Laufender Debounce = lokale Änderung in Bearbeitung → nicht überschreiben.
+    if (old.cue != widget.cue && _debounce == null && !_saving) {
+      setState(() => _draft = widget.cue);
+    }
+  }
+
+  @override
   void dispose() {
     _debounce?.cancel();
     super.dispose();

@@ -565,9 +565,10 @@ class _TimingColumn extends StatelessWidget {
     final preWait = cue.timing.preWaitMs;
     final postWait = cue.timing.postWaitMs;
 
-    // Auto-Skip-Silence aktiv wenn startTimeMs == 0 und eine assetId gesetzt ist
-    final autoSkip = cue.params case AudioParams ap
-        when ap.assetId.isNotEmpty && ap.startTimeMs == 0;
+    final autoSkip = switch (cue.params) {
+      AudioParams ap when ap.assetId.isNotEmpty && ap.startTimeMs == 0 => true,
+      _ => false,
+    };
 
     return SizedBox(
       width: ScSpacing.cueDurationWidth + 10,

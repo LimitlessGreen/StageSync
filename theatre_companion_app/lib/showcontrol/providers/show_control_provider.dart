@@ -204,10 +204,11 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
       ..token = _token
       ..commandId = _uuid.v4();
     await StageSyncClient.instance.showControl.pause(req);
-    state = state.copyWith(
-      isPaused: true,
-      pausedAtServerMs: ClockSync.instance.serverNow(),
-    );
+    // Kein optimistisches pausedAtServerMs setzen — der Wert vom Server enthält
+    // press-time + fadeMs und ist die korrekte Einfrierposition für den Balken.
+    // Ohne den Wert läuft der Balken bis zum Server-Event weiter (< 100ms Lücke),
+    // statt sofort einzufrieren und den Fade-Out zu verpassen.
+    state = state.copyWith(isPaused: true);
   }
 
   Future<void> resume() async {
