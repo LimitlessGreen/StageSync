@@ -38,6 +38,7 @@ message AudioDeviceInfo {
   int32  index      = 1;
   string name       = 2;
   bool   is_default = 3;
+  string backend    = 4; // z.B. "jack", "alsa", "pulseaudio", "wasapi"
 }
 
 message AudioCapabilities {
@@ -47,6 +48,10 @@ message AudioCapabilities {
   string                   media_server_url  = 4;
   repeated AudioDeviceInfo available_devices = 5;
   int32                    selected_device   = 6; // Index des gewählten Geräts
+  string                   active_backend    = 7; // aktuell aktives Backend des Nodes
+  repeated string          backend_priority  = 8; // gewünschte Fallback-Reihenfolge
+  uint32                   sample_rate       = 9; // aktuelle Runtime-Samplerate (0 = unbekannt)
+  uint32                   channels          = 10; // aktuelle Runtime-Kanalzahl (0 = unbekannt)
 }
 
 message MediaFileInfo {
@@ -172,6 +177,18 @@ message NodeConfigCommand {
   // Master sendet dies; Server aktualisiert NodeInfo in der Session-Registry
   // und broadcastet ein TYPE_CAPS_UPDATED NodeEvent.
   repeated NodeTask tasks = 4;
+
+  // Audio-Backend setzen (z.B. "jack"/"jack2", "alsa", "pulseaudio").
+  // Leer = keine Änderung.
+  string audio_backend = 5;
+
+  // Backend-Fallback-Reihenfolge setzen (erste Position = Präferenz).
+  // Beispiel Linux DAW-Setup: ["jack", "alsa", "pulseaudio"].
+  repeated string audio_backend_priority = 6;
+
+  // Laufzeit-Audioformat setzen (0 = keine Änderung).
+  uint32 sample_rate = 7;
+  uint32 channels    = 8;
 }
 
 // SendNodeCommandRequest: Master/Client sendet Command an einen Node

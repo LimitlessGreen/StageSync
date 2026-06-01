@@ -27,11 +27,13 @@ class AudioDeviceInfo extends $pb.GeneratedMessage {
     $core.int? index,
     $core.String? name,
     $core.bool? isDefault,
+    $core.String? backend,
   }) {
     final result = create();
     if (index != null) result.index = index;
     if (name != null) result.name = name;
     if (isDefault != null) result.isDefault = isDefault;
+    if (backend != null) result.backend = backend;
     return result;
   }
 
@@ -51,6 +53,7 @@ class AudioDeviceInfo extends $pb.GeneratedMessage {
     ..aI(1, _omitFieldNames ? '' : 'index')
     ..aOS(2, _omitFieldNames ? '' : 'name')
     ..aOB(3, _omitFieldNames ? '' : 'isDefault')
+    ..aOS(4, _omitFieldNames ? '' : 'backend')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -98,6 +101,15 @@ class AudioDeviceInfo extends $pb.GeneratedMessage {
   $core.bool hasIsDefault() => $_has(2);
   @$pb.TagNumber(3)
   void clearIsDefault() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get backend => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set backend($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasBackend() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearBackend() => $_clearField(4);
 }
 
 class AudioCapabilities extends $pb.GeneratedMessage {
@@ -108,6 +120,10 @@ class AudioCapabilities extends $pb.GeneratedMessage {
     $core.String? mediaServerUrl,
     $core.Iterable<AudioDeviceInfo>? availableDevices,
     $core.int? selectedDevice,
+    $core.String? activeBackend,
+    $core.Iterable<$core.String>? backendPriority,
+    $core.int? sampleRate,
+    $core.int? channels,
   }) {
     final result = create();
     if (outputDevices != null) result.outputDevices.addAll(outputDevices);
@@ -118,6 +134,10 @@ class AudioCapabilities extends $pb.GeneratedMessage {
     if (availableDevices != null)
       result.availableDevices.addAll(availableDevices);
     if (selectedDevice != null) result.selectedDevice = selectedDevice;
+    if (activeBackend != null) result.activeBackend = activeBackend;
+    if (backendPriority != null) result.backendPriority.addAll(backendPriority);
+    if (sampleRate != null) result.sampleRate = sampleRate;
+    if (channels != null) result.channels = channels;
     return result;
   }
 
@@ -141,6 +161,10 @@ class AudioCapabilities extends $pb.GeneratedMessage {
     ..pPM<AudioDeviceInfo>(5, _omitFieldNames ? '' : 'availableDevices',
         subBuilder: AudioDeviceInfo.create)
     ..aI(6, _omitFieldNames ? '' : 'selectedDevice')
+    ..aOS(7, _omitFieldNames ? '' : 'activeBackend')
+    ..pPS(8, _omitFieldNames ? '' : 'backendPriority')
+    ..aI(9, _omitFieldNames ? '' : 'sampleRate', fieldType: $pb.PbFieldType.OU3)
+    ..aI(10, _omitFieldNames ? '' : 'channels', fieldType: $pb.PbFieldType.OU3)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -197,6 +221,36 @@ class AudioCapabilities extends $pb.GeneratedMessage {
   $core.bool hasSelectedDevice() => $_has(5);
   @$pb.TagNumber(6)
   void clearSelectedDevice() => $_clearField(6);
+
+  @$pb.TagNumber(7)
+  $core.String get activeBackend => $_getSZ(6);
+  @$pb.TagNumber(7)
+  set activeBackend($core.String value) => $_setString(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasActiveBackend() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearActiveBackend() => $_clearField(7);
+
+  @$pb.TagNumber(8)
+  $pb.PbList<$core.String> get backendPriority => $_getList(7);
+
+  @$pb.TagNumber(9)
+  $core.int get sampleRate => $_getIZ(8);
+  @$pb.TagNumber(9)
+  set sampleRate($core.int value) => $_setUnsignedInt32(8, value);
+  @$pb.TagNumber(9)
+  $core.bool hasSampleRate() => $_has(8);
+  @$pb.TagNumber(9)
+  void clearSampleRate() => $_clearField(9);
+
+  @$pb.TagNumber(10)
+  $core.int get channels => $_getIZ(9);
+  @$pb.TagNumber(10)
+  set channels($core.int value) => $_setUnsignedInt32(9, value);
+  @$pb.TagNumber(10)
+  $core.bool hasChannels() => $_has(9);
+  @$pb.TagNumber(10)
+  void clearChannels() => $_clearField(10);
 }
 
 class MediaFileInfo extends $pb.GeneratedMessage {
@@ -1509,6 +1563,10 @@ class NodeConfigCommand extends $pb.GeneratedMessage {
     $core.String? audioDeviceName,
     $core.String? networkInterfaceAddress,
     $core.Iterable<$2.NodeTask>? tasks,
+    $core.String? audioBackend,
+    $core.Iterable<$core.String>? audioBackendPriority,
+    $core.int? sampleRate,
+    $core.int? channels,
   }) {
     final result = create();
     if (audioDeviceIndex != null) result.audioDeviceIndex = audioDeviceIndex;
@@ -1516,6 +1574,11 @@ class NodeConfigCommand extends $pb.GeneratedMessage {
     if (networkInterfaceAddress != null)
       result.networkInterfaceAddress = networkInterfaceAddress;
     if (tasks != null) result.tasks.addAll(tasks);
+    if (audioBackend != null) result.audioBackend = audioBackend;
+    if (audioBackendPriority != null)
+      result.audioBackendPriority.addAll(audioBackendPriority);
+    if (sampleRate != null) result.sampleRate = sampleRate;
+    if (channels != null) result.channels = channels;
     return result;
   }
 
@@ -1539,6 +1602,10 @@ class NodeConfigCommand extends $pb.GeneratedMessage {
         valueOf: $2.NodeTask.valueOf,
         enumValues: $2.NodeTask.values,
         defaultEnumValue: $2.NodeTask.NODE_TASK_UNSPECIFIED)
+    ..aOS(5, _omitFieldNames ? '' : 'audioBackend')
+    ..pPS(6, _omitFieldNames ? '' : 'audioBackendPriority')
+    ..aI(7, _omitFieldNames ? '' : 'sampleRate', fieldType: $pb.PbFieldType.OU3)
+    ..aI(8, _omitFieldNames ? '' : 'channels', fieldType: $pb.PbFieldType.OU3)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1595,6 +1662,41 @@ class NodeConfigCommand extends $pb.GeneratedMessage {
   /// und broadcastet ein TYPE_CAPS_UPDATED NodeEvent.
   @$pb.TagNumber(4)
   $pb.PbList<$2.NodeTask> get tasks => $_getList(3);
+
+  /// Audio-Backend setzen (z.B. "jack"/"jack2", "alsa", "pulseaudio").
+  /// Leer = keine Änderung.
+  @$pb.TagNumber(5)
+  $core.String get audioBackend => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set audioBackend($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasAudioBackend() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearAudioBackend() => $_clearField(5);
+
+  /// Backend-Fallback-Reihenfolge setzen (erste Position = Präferenz).
+  /// Beispiel Linux DAW-Setup: ["jack", "alsa", "pulseaudio"].
+  @$pb.TagNumber(6)
+  $pb.PbList<$core.String> get audioBackendPriority => $_getList(5);
+
+  /// Laufzeit-Audioformat setzen (0 = keine Änderung).
+  @$pb.TagNumber(7)
+  $core.int get sampleRate => $_getIZ(6);
+  @$pb.TagNumber(7)
+  set sampleRate($core.int value) => $_setUnsignedInt32(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasSampleRate() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearSampleRate() => $_clearField(7);
+
+  @$pb.TagNumber(8)
+  $core.int get channels => $_getIZ(7);
+  @$pb.TagNumber(8)
+  set channels($core.int value) => $_setUnsignedInt32(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasChannels() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearChannels() => $_clearField(8);
 }
 
 /// SendNodeCommandRequest: Master/Client sendet Command an einen Node

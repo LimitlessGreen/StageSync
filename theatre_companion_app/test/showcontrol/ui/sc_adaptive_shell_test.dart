@@ -2,13 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:theatre_companion_app/showcontrol/providers/audio_node_provider.dart';
 import 'package:theatre_companion_app/showcontrol/providers/session_provider.dart';
+import 'package:theatre_companion_app/showcontrol/session/session_service.dart';
 import 'package:theatre_companion_app/showcontrol/ui/shell/mobile_shell.dart';
 import 'package:theatre_companion_app/showcontrol/ui/shell/sc_adaptive_shell.dart';
 import 'package:theatre_companion_app/showcontrol/ui/shell/sc_shortcuts.dart';
 
-class _TestSessionNotifier extends StateNotifier<SessionState> {
-  _TestSessionNotifier() : super(const SessionState());
+/// Test-only SessionNotifier — no stored credentials → auto-reconnect exits
+/// immediately, no gRPC calls.
+class _TestSessionNotifier extends SessionNotifier {
+  _TestSessionNotifier() : super(SessionService());
 }
 
 // ── Unit tests: shortcut map ───────────────────────────────────────────────────
@@ -172,10 +177,12 @@ void main() {
 
   group('ScAdaptiveShell — responsive routing', () {
     testWidgets('uses MobileShell on mobile widths', (tester) async {
+      SharedPreferences.setMockInitialValues({});
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
             sessionProvider.overrideWith((ref) => _TestSessionNotifier()),
+            audioNodeProvider.overrideWith((ref) => AudioNodeNotifier.forTest()),
           ],
           child: const MaterialApp(
             home: MediaQuery(

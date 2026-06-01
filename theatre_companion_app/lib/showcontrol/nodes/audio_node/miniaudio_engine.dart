@@ -11,53 +11,54 @@ import 'audio_device.dart';
 
 // ── Native function typedefs ──────────────────────────────────────────────────
 
-typedef _InitNative   = Int32 Function(Int32, Uint32, Uint32);
-typedef _InitDart     = int   Function(int, int, int);
+typedef _InitNative = Int32 Function(Int32, Uint32, Uint32);
+typedef _InitDart = int Function(int, int, int);
 
 typedef _DeinitNative = Void Function();
-typedef _DeinitDart   = void Function();
+typedef _DeinitDart = void Function();
 
 typedef _ListDevNative = Pointer<Utf8> Function();
-typedef _ListDevDart   = Pointer<Utf8> Function();
+typedef _ListDevDart = Pointer<Utf8> Function();
 
-typedef _SetDevNative  = Int32 Function(Int32);
-typedef _SetDevDart    = int   Function(int);
+typedef _SetDevNative = Int32 Function(Int32);
+typedef _SetDevDart = int Function(int);
 
 typedef _PreloadNative = Int32 Function(Pointer<Utf8>, Pointer<Utf8>);
-typedef _PreloadDart   = int   Function(Pointer<Utf8>, Pointer<Utf8>);
+typedef _PreloadDart = int Function(Pointer<Utf8>, Pointer<Utf8>);
 
-typedef _UnloadNative  = Void Function(Pointer<Utf8>);
-typedef _UnloadDart    = void Function(Pointer<Utf8>);
+typedef _UnloadNative = Void Function(Pointer<Utf8>);
+typedef _UnloadDart = void Function(Pointer<Utf8>);
 
 typedef _PlayNative = Int32 Function(
     Pointer<Utf8>, Int64, Float, Float, Float, Int32);
 typedef _PlayDart = int Function(
     Pointer<Utf8>, int, double, double, double, int);
 
-typedef _StopNative   = Void Function(Pointer<Utf8>, Float);
-typedef _StopDart     = void  Function(Pointer<Utf8>, double);
+typedef _StopNative = Void Function(Pointer<Utf8>, Float);
+typedef _StopDart = void Function(Pointer<Utf8>, double);
 
-typedef _PauseNative  = Void Function(Pointer<Utf8>);
-typedef _PauseDart    = void  Function(Pointer<Utf8>);
+typedef _PauseNative = Void Function(Pointer<Utf8>);
+typedef _PauseDart = void Function(Pointer<Utf8>);
 
-typedef _ResumNative  = Void Function(Pointer<Utf8>);
-typedef _ResumDart    = void  Function(Pointer<Utf8>);
+typedef _ResumNative = Void Function(Pointer<Utf8>);
+typedef _ResumDart = void Function(Pointer<Utf8>);
 
 typedef _StopAllNative = Void Function();
-typedef _StopAllDart   = void Function();
+typedef _StopAllDart = void Function();
 
 typedef _FreeStrNative = Void Function(Pointer<Utf8>);
-typedef _FreeStrDart   = void Function(Pointer<Utf8>);
+typedef _FreeStrDart = void Function(Pointer<Utf8>);
 
 // ── Library loader ────────────────────────────────────────────────────────────
 
 DynamicLibrary _loadLib() {
   if (Platform.isWindows) return DynamicLibrary.open('miniaudio_wrapper.dll');
   if (Platform.isAndroid) return DynamicLibrary.open('libminiaudio_wrapper.so');
-  if (Platform.isLinux)   return DynamicLibrary.open('libminiaudio_wrapper.so');
-  if (Platform.isMacOS)   return DynamicLibrary.process();
-  if (Platform.isIOS)     return DynamicLibrary.process();
-  throw UnsupportedError('miniaudio_wrapper: unsupported platform ${Platform.operatingSystem}');
+  if (Platform.isLinux) return DynamicLibrary.open('libminiaudio_wrapper.so');
+  if (Platform.isMacOS) return DynamicLibrary.process();
+  if (Platform.isIOS) return DynamicLibrary.process();
+  throw UnsupportedError(
+      'miniaudio_wrapper: unsupported platform ${Platform.operatingSystem}');
 }
 
 // ── MiniaudioEngine ───────────────────────────────────────────────────────────
@@ -75,18 +76,18 @@ DynamicLibrary _loadLib() {
 class MiniaudioEngine implements AbstractAudioEngine {
   late final DynamicLibrary _lib;
 
-  late final _InitDart     _init;
-  late final _DeinitDart   _deinit;
-  late final _ListDevDart  _listDev;
-  late final _SetDevDart   _setDev;
-  late final _PreloadDart  _preload;
-  late final _UnloadDart   _unload;
-  late final _PlayDart     _play;
-  late final _StopDart     _stop;
-  late final _PauseDart    _pause;
-  late final _ResumDart    _resume;
-  late final _StopAllDart  _stopAll;
-  late final _FreeStrDart  _freeStr;
+  late final _InitDart _init;
+  late final _DeinitDart _deinit;
+  late final _ListDevDart _listDev;
+  late final _SetDevDart _setDev;
+  late final _PreloadDart _preload;
+  late final _UnloadDart _unload;
+  late final _PlayDart _play;
+  late final _StopDart _stop;
+  late final _PauseDart _pause;
+  late final _ResumDart _resume;
+  late final _StopAllDart _stopAll;
+  late final _FreeStrDart _freeStr;
 
   bool _initialized = false;
   AudioDevice? _selectedDevice;
@@ -94,18 +95,26 @@ class MiniaudioEngine implements AbstractAudioEngine {
 
   MiniaudioEngine() {
     _lib = _loadLib();
-    _init    = _lib.lookupFunction<_InitNative,    _InitDart>   ('ma_wrapper_init');
-    _deinit  = _lib.lookupFunction<_DeinitNative,  _DeinitDart> ('ma_wrapper_deinit');
-    _listDev = _lib.lookupFunction<_ListDevNative, _ListDevDart>('ma_wrapper_list_devices');
-    _setDev  = _lib.lookupFunction<_SetDevNative,  _SetDevDart> ('ma_wrapper_set_device');
-    _preload = _lib.lookupFunction<_PreloadNative, _PreloadDart>('ma_wrapper_preload');
-    _unload  = _lib.lookupFunction<_UnloadNative,  _UnloadDart> ('ma_wrapper_unload');
-    _play    = _lib.lookupFunction<_PlayNative,    _PlayDart>   ('ma_wrapper_play');
-    _stop    = _lib.lookupFunction<_StopNative,    _StopDart>   ('ma_wrapper_stop');
-    _pause   = _lib.lookupFunction<_PauseNative,   _PauseDart>  ('ma_wrapper_pause');
-    _resume  = _lib.lookupFunction<_ResumNative,   _ResumDart>  ('ma_wrapper_resume');
-    _stopAll = _lib.lookupFunction<_StopAllNative, _StopAllDart>('ma_wrapper_stop_all');
-    _freeStr = _lib.lookupFunction<_FreeStrNative, _FreeStrDart>('ma_wrapper_free_string');
+    _init = _lib.lookupFunction<_InitNative, _InitDart>('ma_wrapper_init');
+    _deinit =
+        _lib.lookupFunction<_DeinitNative, _DeinitDart>('ma_wrapper_deinit');
+    _listDev = _lib.lookupFunction<_ListDevNative, _ListDevDart>(
+        'ma_wrapper_list_devices');
+    _setDev = _lib
+        .lookupFunction<_SetDevNative, _SetDevDart>('ma_wrapper_set_device');
+    _preload =
+        _lib.lookupFunction<_PreloadNative, _PreloadDart>('ma_wrapper_preload');
+    _unload =
+        _lib.lookupFunction<_UnloadNative, _UnloadDart>('ma_wrapper_unload');
+    _play = _lib.lookupFunction<_PlayNative, _PlayDart>('ma_wrapper_play');
+    _stop = _lib.lookupFunction<_StopNative, _StopDart>('ma_wrapper_stop');
+    _pause = _lib.lookupFunction<_PauseNative, _PauseDart>('ma_wrapper_pause');
+    _resume =
+        _lib.lookupFunction<_ResumNative, _ResumDart>('ma_wrapper_resume');
+    _stopAll = _lib
+        .lookupFunction<_StopAllNative, _StopAllDart>('ma_wrapper_stop_all');
+    _freeStr = _lib
+        .lookupFunction<_FreeStrNative, _FreeStrDart>('ma_wrapper_free_string');
   }
 
   // ── AbstractAudioEngine ────────────────────────────────────────────────────
@@ -136,17 +145,20 @@ class MiniaudioEngine implements AbstractAudioEngine {
     final idx = device?.index ?? -1;
     final result = _init(idx, 48000, 2);
     if (result != 0) {
-      debugPrint('[MiniaudioEngine] init failed (code=$result), trying default');
+      debugPrint(
+          '[MiniaudioEngine] init failed (code=$result), trying default');
       final fallback = _init(-1, 48000, 2);
       if (fallback != 0) {
-        throw Exception('MiniaudioEngine: failed to initialise (code=$fallback)');
+        throw Exception(
+            'MiniaudioEngine: failed to initialise (code=$fallback)');
       }
       _selectedDevice = null;
     } else {
       _selectedDevice = device;
     }
     _initialized = true;
-    debugPrint('[MiniaudioEngine] init OK device=${_selectedDevice?.name ?? "default"}');
+    debugPrint(
+        '[MiniaudioEngine] init OK device=${_selectedDevice?.name ?? "default"}');
   }
 
   @override
@@ -164,12 +176,14 @@ class MiniaudioEngine implements AbstractAudioEngine {
     try {
       final json = ptr.toDartString();
       final list = (jsonDecode(json) as List).cast<Map<String, dynamic>>();
-      return list.map((e) => AudioDevice(
-        id:      e['name'] as String,
-        name:    e['name'] as String,
-        backend: _parseBackend(e['backend'] as String? ?? ''),
-        index:   e['index'] as int,
-      )).toList();
+      return list
+          .map((e) => AudioDevice(
+                id: e['name'] as String,
+                name: e['name'] as String,
+                backend: _parseBackend(e['backend'] as String? ?? ''),
+                index: e['index'] as int,
+              ))
+          .toList();
     } catch (e) {
       debugPrint('[MiniaudioEngine] listDevices parse error: $e');
       return [];
@@ -197,7 +211,7 @@ class MiniaudioEngine implements AbstractAudioEngine {
   @override
   Future<void> preload(String cueId, String filePath) async {
     if (!_initialized) await init();
-    final cuePtr  = cueId.toNativeUtf8();
+    final cuePtr = cueId.toNativeUtf8();
     final pathPtr = filePath.toNativeUtf8();
     try {
       final r = _preload(cuePtr, pathPtr);
@@ -215,12 +229,12 @@ class MiniaudioEngine implements AbstractAudioEngine {
     required String cueId,
     required String filePath,
     required int startUnixMillis,
-    double volumeDb   = 0.0,
-    double fadeInMs   = 0.0,
-    double fadeOutMs  = 0.0,
-    bool   loop       = false,
+    double volumeDb = 0.0,
+    double fadeInMs = 0.0,
+    double fadeOutMs = 0.0,
+    bool loop = false,
     double startTimeMs = 0.0,
-    double endTimeMs  = 0.0,
+    double endTimeMs = 0.0,
   }) async {
     if (!_initialized) await init();
 
@@ -350,21 +364,11 @@ class MiniaudioEngine implements AbstractAudioEngine {
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
-  static AudioBackend _parseBackend(String name) => switch (name) {
-    'wasapi'      => AudioBackend.wasapi,
-    'asio'        => AudioBackend.asio,
-    'directsound' => AudioBackend.directSound,
-    'coreaudio'   => AudioBackend.coreAudio,
-    'alsa'        => AudioBackend.alsa,
-    'pulseaudio'  => AudioBackend.pulseAudio,
-    'jack'        => AudioBackend.jack,
-    'aaudio'      => AudioBackend.aaudio,
-    'opensl'      => AudioBackend.openSLES,
-    _             => AudioBackend.unknown,
-  };
+  static AudioBackend _parseBackend(String name) =>
+      audioBackendFromWireName(name);
 
   static Future<String> _writeTempWav(String cueId, List<int> bytes) async {
-    final dir  = Directory.systemTemp;
+    final dir = Directory.systemTemp;
     final path = '${dir.path}/ma_tmp_$cueId.wav';
     await File(path).writeAsBytes(bytes);
     return path;

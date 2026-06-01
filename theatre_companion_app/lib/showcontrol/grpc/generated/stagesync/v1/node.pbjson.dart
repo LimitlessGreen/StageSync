@@ -22,13 +22,15 @@ const AudioDeviceInfo$json = {
     {'1': 'index', '3': 1, '4': 1, '5': 5, '10': 'index'},
     {'1': 'name', '3': 2, '4': 1, '5': 9, '10': 'name'},
     {'1': 'is_default', '3': 3, '4': 1, '5': 8, '10': 'isDefault'},
+    {'1': 'backend', '3': 4, '4': 1, '5': 9, '10': 'backend'},
   ],
 };
 
 /// Descriptor for `AudioDeviceInfo`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List audioDeviceInfoDescriptor = $convert.base64Decode(
     'Cg9BdWRpb0RldmljZUluZm8SFAoFaW5kZXgYASABKAVSBWluZGV4EhIKBG5hbWUYAiABKAlSBG'
-    '5hbWUSHQoKaXNfZGVmYXVsdBgDIAEoCFIJaXNEZWZhdWx0');
+    '5hbWUSHQoKaXNfZGVmYXVsdBgDIAEoCFIJaXNEZWZhdWx0EhgKB2JhY2tlbmQYBCABKAlSB2Jh'
+    'Y2tlbmQ=');
 
 @$core.Deprecated('Use audioCapabilitiesDescriptor instead')
 const AudioCapabilities$json = {
@@ -53,6 +55,10 @@ const AudioCapabilities$json = {
       '10': 'availableDevices'
     },
     {'1': 'selected_device', '3': 6, '4': 1, '5': 5, '10': 'selectedDevice'},
+    {'1': 'active_backend', '3': 7, '4': 1, '5': 9, '10': 'activeBackend'},
+    {'1': 'backend_priority', '3': 8, '4': 3, '5': 9, '10': 'backendPriority'},
+    {'1': 'sample_rate', '3': 9, '4': 1, '5': 13, '10': 'sampleRate'},
+    {'1': 'channels', '3': 10, '4': 1, '5': 13, '10': 'channels'},
   ],
 };
 
@@ -63,7 +69,10 @@ final $typed_data.Uint8List audioCapabilitiesDescriptor = $convert.base64Decode(
     'c2ltdWx0YW5lb3VzGAMgASgFUg9tYXhTaW11bHRhbmVvdXMSKAoQbWVkaWFfc2VydmVyX3VybB'
     'gEIAEoCVIObWVkaWFTZXJ2ZXJVcmwSSgoRYXZhaWxhYmxlX2RldmljZXMYBSADKAsyHS5zdGFn'
     'ZXN5bmMudjEuQXVkaW9EZXZpY2VJbmZvUhBhdmFpbGFibGVEZXZpY2VzEicKD3NlbGVjdGVkX2'
-    'RldmljZRgGIAEoBVIOc2VsZWN0ZWREZXZpY2U=');
+    'RldmljZRgGIAEoBVIOc2VsZWN0ZWREZXZpY2USJQoOYWN0aXZlX2JhY2tlbmQYByABKAlSDWFj'
+    'dGl2ZUJhY2tlbmQSKQoQYmFja2VuZF9wcmlvcml0eRgIIAMoCVIPYmFja2VuZFByaW9yaXR5Eh'
+    '8KC3NhbXBsZV9yYXRlGAkgASgNUgpzYW1wbGVSYXRlEhoKCGNoYW5uZWxzGAogASgNUghjaGFu'
+    'bmVscw==');
 
 @$core.Deprecated('Use mediaFileInfoDescriptor instead')
 const MediaFileInfo$json = {
@@ -527,6 +536,16 @@ const NodeConfigCommand$json = {
       '6': '.stagesync.v1.NodeTask',
       '10': 'tasks'
     },
+    {'1': 'audio_backend', '3': 5, '4': 1, '5': 9, '10': 'audioBackend'},
+    {
+      '1': 'audio_backend_priority',
+      '3': 6,
+      '4': 3,
+      '5': 9,
+      '10': 'audioBackendPriority'
+    },
+    {'1': 'sample_rate', '3': 7, '4': 1, '5': 13, '10': 'sampleRate'},
+    {'1': 'channels', '3': 8, '4': 1, '5': 13, '10': 'channels'},
   ],
 };
 
@@ -535,7 +554,10 @@ final $typed_data.Uint8List nodeConfigCommandDescriptor = $convert.base64Decode(
     'ChFOb2RlQ29uZmlnQ29tbWFuZBIsChJhdWRpb19kZXZpY2VfaW5kZXgYASABKAVSEGF1ZGlvRG'
     'V2aWNlSW5kZXgSKgoRYXVkaW9fZGV2aWNlX25hbWUYAiABKAlSD2F1ZGlvRGV2aWNlTmFtZRI6'
     'ChluZXR3b3JrX2ludGVyZmFjZV9hZGRyZXNzGAMgASgJUhduZXR3b3JrSW50ZXJmYWNlQWRkcm'
-    'VzcxIsCgV0YXNrcxgEIAMoDjIWLnN0YWdlc3luYy52MS5Ob2RlVGFza1IFdGFza3M=');
+    'VzcxIsCgV0YXNrcxgEIAMoDjIWLnN0YWdlc3luYy52MS5Ob2RlVGFza1IFdGFza3MSIwoNYXVk'
+    'aW9fYmFja2VuZBgFIAEoCVIMYXVkaW9CYWNrZW5kEjQKFmF1ZGlvX2JhY2tlbmRfcHJpb3JpdH'
+    'kYBiADKAlSFGF1ZGlvQmFja2VuZFByaW9yaXR5Eh8KC3NhbXBsZV9yYXRlGAcgASgNUgpzYW1w'
+    'bGVSYXRlEhoKCGNoYW5uZWxzGAggASgNUghjaGFubmVscw==');
 
 @$core.Deprecated('Use sendNodeCommandRequestDescriptor instead')
 const SendNodeCommandRequest$json = {

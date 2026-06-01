@@ -30,6 +30,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <stdio.h>
+#include <ctype.h>
 #ifdef _WIN32
   #include <windows.h>  /* for GetSystemTimeAsFileTime */
 #else
@@ -66,6 +68,7 @@ typedef struct {
 
 static Handle   g_handles[MAX_HANDLES];
 static ma_mutex g_mutex;
+static int      g_mutex_ready = 0;
 
 static Handle* find_handle(const char* cue_id) {
     for (int i = 0; i < MAX_HANDLES; i++) {
@@ -114,124 +117,301 @@ static void free_handle(Handle* h) {
 // ── Engine ────────────────────────────────────────────────────────────────────
 
 static ma_engine  g_engine;
+static ma_context g_context;
 static int        g_engine_ready = 0;
+static int        g_context_ready = 0;
 static int32_t    g_current_device_index = -1;
+static ma_backend g_current_backend = ma_backend_null;
+
+#define MAX_DEVICE_CATALOG 256
+typedef struct {
+    int32_t    index;
+    ma_backend backend;
+    ma_device_id device_id;
+    char       name[256];
+    int        is_default;
+} DeviceEntry;
+
+static DeviceEntry g_devices[MAX_DEVICE_CATALOG];
+static int32_t     g_device_count = 0;
+
+static const char* backend_to_name(ma_backend backend) {
+    switch (backend) {
+        case ma_backend_wasapi:     return "wasapi";
+        case ma_backend_dsound:     return "directsound";
+        case ma_backend_winmm:      return "winmm";
+        case ma_backend_coreaudio:  return "coreaudio";
+        case ma_backend_sndio:      return "sndio";
+        case ma_backend_alsa:       return "alsa";
+        case ma_backend_pulseaudio: return "pulseaudio";
+        case ma_backend_jack:       return "jack";
+        case ma_backend_aaudio:     return "aaudio";
+        case ma_backend_opensl:     return "opensl";
+        case ma_backend_null:       return "default";
+        default:                    return "unknown";
+    }
+}
+
+static ma_backend backend_from_name(const char* name) {
+    if (!name) return ma_backend_null;
+    if (strcmp(name, "jack") == 0 || strcmp(name, "jack2") == 0) return ma_backend_jack;
+    if (strcmp(name, "pulseaudio") == 0 || strcmp(name, "pulse") == 0) return ma_backend_pulseaudio;
+    if (strcmp(name, "alsa") == 0) return ma_backend_alsa;
+    if (strcmp(name, "coreaudio") == 0) return ma_backend_coreaudio;
+    if (strcmp(name, "wasapi") == 0) return ma_backend_wasapi;
+    // Vendored miniaudio in this repo has no ASIO backend symbol.
+    // Treat "asio" as preferred low-latency intent and fall back to WASAPI.
+    if (strcmp(name, "asio") == 0) return ma_backend_wasapi;
+    if (strcmp(name, "directsound") == 0 || strcmp(name, "dsound") == 0) return ma_backend_dsound;
+    if (strcmp(name, "aaudio") == 0) return ma_backend_aaudio;
+    if (strcmp(name, "opensl") == 0 || strcmp(name, "opensles") == 0) return ma_backend_opensl;
+    return ma_backend_null;
+}
+
+static int contains_backend(const ma_backend* list, int count, ma_backend backend) {
+    for (int i = 0; i < count; i++) {
+        if (list[i] == backend) return 1;
+    }
+    return 0;
+}
+
+static int default_backend_order(ma_backend* out, int max_count) {
+    int c = 0;
+    if (max_count <= 0) return 0;
+#if defined(__linux__)
+    if (c < max_count) out[c++] = ma_backend_jack;
+    if (c < max_count) out[c++] = ma_backend_pulseaudio;
+    if (c < max_count) out[c++] = ma_backend_alsa;
+#elif defined(__APPLE__)
+    if (c < max_count) out[c++] = ma_backend_jack;
+    if (c < max_count) out[c++] = ma_backend_coreaudio;
+#elif defined(_WIN32)
+    if (c < max_count) out[c++] = ma_backend_wasapi;
+    if (c < max_count) out[c++] = ma_backend_dsound;
+    if (c < max_count) out[c++] = ma_backend_winmm;
+#elif defined(__ANDROID__)
+    if (c < max_count) out[c++] = ma_backend_aaudio;
+    if (c < max_count) out[c++] = ma_backend_opensl;
+#endif
+    return c;
+}
+
+static int parse_backend_order(ma_backend* out, int max_count) {
+    const char* env = getenv("STAGESYNC_AUDIO_BACKENDS");
+    int count = 0;
+
+    if (env && env[0] != '\0') {
+        char tmp[256];
+        strncpy(tmp, env, sizeof(tmp) - 1);
+        tmp[sizeof(tmp) - 1] = '\0';
+
+        char* token = strtok(tmp, ",; ");
+        while (token && count < max_count) {
+            for (int i = 0; token[i] != '\0'; i++) {
+                token[i] = (char)tolower((unsigned char)token[i]);
+            }
+            ma_backend b = backend_from_name(token);
+            if (b != ma_backend_null && !contains_backend(out, count, b)) {
+                out[count++] = b;
+            }
+            token = strtok(NULL, ",; ");
+        }
+    }
+
+    if (count == 0) {
+        count = default_backend_order(out, max_count);
+    }
+
+    return count;
+}
+
+static DeviceEntry* find_device_entry(int32_t public_index) {
+    for (int32_t i = 0; i < g_device_count; i++) {
+        if (g_devices[i].index == public_index) return &g_devices[i];
+    }
+    return NULL;
+}
+
+static void refresh_device_catalog(void) {
+    g_device_count = 0;
+    memset(g_devices, 0, sizeof(g_devices));
+
+    ma_backend order[8];
+    int backend_count = parse_backend_order(order, (int)(sizeof(order) / sizeof(order[0])));
+
+    for (int b = 0; b < backend_count; b++) {
+        ma_backend backend = order[b];
+        ma_context ctx;
+        if (ma_context_init(&backend, 1, NULL, &ctx) != MA_SUCCESS) {
+            continue;
+        }
+
+        ma_device_info* pPlayback = NULL;
+        ma_uint32 playbackCount = 0;
+        if (ma_context_get_devices(&ctx, &pPlayback, &playbackCount, NULL, NULL) == MA_SUCCESS) {
+            for (ma_uint32 i = 0; i < playbackCount && g_device_count < MAX_DEVICE_CATALOG; i++) {
+                DeviceEntry* e = &g_devices[g_device_count];
+                e->index = g_device_count;
+                e->backend = backend;
+                e->device_id = pPlayback[i].id;
+                strncpy(e->name, pPlayback[i].name, sizeof(e->name) - 1);
+                e->name[sizeof(e->name) - 1] = '\0';
+                e->is_default = pPlayback[i].isDefault ? 1 : 0;
+                g_device_count++;
+            }
+        }
+
+        ma_context_uninit(&ctx);
+    }
+
+    if (g_device_count == 0) {
+        ma_context ctx;
+        if (ma_context_init(NULL, 0, NULL, &ctx) == MA_SUCCESS) {
+            ma_device_info* pPlayback = NULL;
+            ma_uint32 playbackCount = 0;
+            if (ma_context_get_devices(&ctx, &pPlayback, &playbackCount, NULL, NULL) == MA_SUCCESS) {
+                for (ma_uint32 i = 0; i < playbackCount && g_device_count < MAX_DEVICE_CATALOG; i++) {
+                    DeviceEntry* e = &g_devices[g_device_count];
+                    e->index = g_device_count;
+                    e->backend = ctx.backend;
+                    e->device_id = pPlayback[i].id;
+                    strncpy(e->name, pPlayback[i].name, sizeof(e->name) - 1);
+                    e->name[sizeof(e->name) - 1] = '\0';
+                    e->is_default = pPlayback[i].isDefault ? 1 : 0;
+                    g_device_count++;
+                }
+            }
+            ma_context_uninit(&ctx);
+        }
+    }
+}
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 
 int32_t ma_wrapper_init(int32_t device_index, uint32_t sample_rate, uint32_t channels) {
-    if (g_engine_ready) {
-        ma_engine_uninit(&g_engine);
-        g_engine_ready = 0;
+    if (g_engine_ready || g_context_ready || g_mutex_ready) {
+        ma_wrapper_deinit();
     }
 
     ma_mutex_init(&g_mutex);
+    g_mutex_ready = 1;
     memset(g_handles, 0, sizeof(g_handles));
 
     ma_engine_config cfg = ma_engine_config_init();
     cfg.sampleRate = sample_rate > 0 ? sample_rate : 48000;
     cfg.channels   = channels   > 0 ? channels   : 2;
 
-    /* Select device by index if specified.
-       We enumerate via a temporary context, copy the device ID, then use it
-       in the engine config. The temporary context is released before init. */
     ma_device_id selected_device_id;
+    int has_selected_device = 0;
+
     if (device_index >= 0) {
-        ma_context tmp_ctx;
-        if (ma_context_init(NULL, 0, NULL, &tmp_ctx) == MA_SUCCESS) {
-            ma_device_info* pDeviceInfos = NULL;
-            ma_uint32 deviceCount = 0;
-            if (ma_context_get_devices(&tmp_ctx, &pDeviceInfos, &deviceCount,
-                                       NULL, NULL) == MA_SUCCESS) {
-                if ((ma_uint32)device_index < deviceCount) {
-                    selected_device_id = pDeviceInfos[device_index].id;
-                    cfg.pPlaybackDeviceID = &selected_device_id;
-                }
+        refresh_device_catalog();
+        DeviceEntry* entry = find_device_entry(device_index);
+        if (entry) {
+            ma_backend backend = entry->backend;
+            if (ma_context_init(&backend, 1, NULL, &g_context) == MA_SUCCESS) {
+                g_context_ready = 1;
+                g_current_backend = backend;
+                selected_device_id = entry->device_id;
+                cfg.pPlaybackDeviceID = &selected_device_id;
+                cfg.pContext = &g_context;
+                has_selected_device = 1;
             }
-            ma_context_uninit(&tmp_ctx);
+        }
+    }
+
+    if (!g_context_ready) {
+        ma_backend order[8];
+        int backend_count = parse_backend_order(order, (int)(sizeof(order) / sizeof(order[0])));
+        ma_result ctx_result = MA_ERROR;
+        if (backend_count > 0) {
+            ctx_result = ma_context_init(order, (ma_uint32)backend_count, NULL, &g_context);
+        }
+        if (ctx_result != MA_SUCCESS) {
+            ctx_result = ma_context_init(NULL, 0, NULL, &g_context);
+        }
+        if (ctx_result == MA_SUCCESS) {
+            g_context_ready = 1;
+            g_current_backend = g_context.backend;
+            cfg.pContext = &g_context;
         }
     }
 
     ma_result result = ma_engine_init(&cfg, &g_engine);
-    if (result != MA_SUCCESS) return (int32_t)result;
+    if (result != MA_SUCCESS) {
+        if (g_context_ready) {
+            ma_context_uninit(&g_context);
+            g_context_ready = 0;
+        }
+        if (g_mutex_ready) {
+            ma_mutex_uninit(&g_mutex);
+            g_mutex_ready = 0;
+        }
+        return (int32_t)result;
+    }
 
     g_engine_ready = 1;
-    g_current_device_index = device_index;
+    g_current_device_index = has_selected_device ? device_index : -1;
     return 0;
 }
 
 void ma_wrapper_deinit(void) {
-    if (!g_engine_ready) return;
-
-    ma_mutex_lock(&g_mutex);
-    for (int i = 0; i < MAX_HANDLES; i++) {
-        if (g_handles[i].active) free_handle(&g_handles[i]);
+    if (g_mutex_ready) {
+        ma_mutex_lock(&g_mutex);
+        for (int i = 0; i < MAX_HANDLES; i++) {
+            if (g_handles[i].active) free_handle(&g_handles[i]);
+        }
+        ma_mutex_unlock(&g_mutex);
     }
-    ma_mutex_unlock(&g_mutex);
 
-    ma_engine_uninit(&g_engine);
-    ma_mutex_uninit(&g_mutex);
+    if (g_engine_ready) {
+        ma_engine_uninit(&g_engine);
+    }
+    if (g_context_ready) {
+        ma_context_uninit(&g_context);
+    }
+    if (g_mutex_ready) {
+        ma_mutex_uninit(&g_mutex);
+    }
+
     g_engine_ready = 0;
+    g_context_ready = 0;
+    g_mutex_ready = 0;
+    g_current_device_index = -1;
+    g_current_backend = ma_backend_null;
 }
 
 // ── Device management ─────────────────────────────────────────────────────────
 
 char* ma_wrapper_list_devices(void) {
-    ma_context ctx;
-    if (ma_context_init(NULL, 0, NULL, &ctx) != MA_SUCCESS) {
-        char* empty = (char*)malloc(3);
-        strcpy(empty, "[]");
-        return empty;
-    }
+    refresh_device_catalog();
 
-    ma_device_info* pDeviceInfos;
-    ma_uint32 deviceCount = 0;
-    ma_context_get_devices(&ctx, &pDeviceInfos, &deviceCount, NULL, NULL);
-
-    // Each entry: ~200 bytes worst case for name + JSON overhead.
-    size_t buf_size = 2 + (size_t)deviceCount * 256 + 4;
+    // Each entry: ~320 bytes worst case for name + JSON overhead.
+    size_t buf_size = 2 + (size_t)g_device_count * 320 + 4;
     char* buf = (char*)malloc(buf_size);
     if (!buf) {
-        ma_context_uninit(&ctx);
         return NULL;
-    }
-
-    // Determine active backend name.
-    const char* backend_name = "unknown";
-    switch (ctx.backend) {
-        case ma_backend_wasapi:     backend_name = "wasapi"; break;
-        case ma_backend_dsound:     backend_name = "directsound"; break;
-        case ma_backend_winmm:      backend_name = "winmm"; break;
-        case ma_backend_coreaudio:  backend_name = "coreaudio"; break;
-        case ma_backend_sndio:      backend_name = "sndio"; break;
-        case ma_backend_alsa:       backend_name = "alsa"; break;
-        case ma_backend_pulseaudio: backend_name = "pulseaudio"; break;
-        case ma_backend_jack:       backend_name = "jack"; break;
-        case ma_backend_aaudio:     backend_name = "aaudio"; break;
-        case ma_backend_opensl:     backend_name = "opensl"; break;
-        default: break;
     }
 
     int pos = 0;
     buf[pos++] = '[';
-    for (ma_uint32 i = 0; i < deviceCount; i++) {
+    for (int32_t i = 0; i < g_device_count; i++) {
         if (i > 0) buf[pos++] = ',';
         // Escape double quotes in device name.
         char escaped[256] = {0};
         int ei = 0;
-        const char* n = pDeviceInfos[i].name;
+        const char* n = g_devices[i].name;
         for (int ni = 0; n[ni] && ei < 250; ni++) {
             if (n[ni] == '"' || n[ni] == '\\') escaped[ei++] = '\\';
             escaped[ei++] = n[ni];
         }
+        const char* backend_name = backend_to_name(g_devices[i].backend);
         pos += snprintf(buf + pos, buf_size - (size_t)pos,
-            "{\"index\":%u,\"name\":\"%s\",\"backend\":\"%s\"}",
-            i, escaped, backend_name);
+            "{\"index\":%d,\"name\":\"%s\",\"backend\":\"%s\",\"isDefault\":%s}",
+            g_devices[i].index, escaped, backend_name, g_devices[i].is_default ? "true" : "false");
     }
     buf[pos++] = ']';
     buf[pos]   = '\0';
-
-    ma_context_uninit(&ctx);
     return buf;
 }
 
@@ -248,7 +428,7 @@ int32_t ma_wrapper_set_device(int32_t device_index) {
 // ── Playback ──────────────────────────────────────────────────────────────────
 
 int32_t ma_wrapper_preload(const char* cue_id, const char* file_path) {
-    if (!g_engine_ready || !cue_id || !file_path) return -1;
+    if (!g_engine_ready || !g_mutex_ready || !cue_id || !file_path) return -1;
 
     ma_mutex_lock(&g_mutex);
     Handle* h = alloc_handle(cue_id);
@@ -268,7 +448,7 @@ int32_t ma_wrapper_preload(const char* cue_id, const char* file_path) {
 }
 
 void ma_wrapper_unload(const char* cue_id) {
-    if (!cue_id) return;
+    if (!g_mutex_ready || !cue_id) return;
     ma_mutex_lock(&g_mutex);
     Handle* h = find_handle(cue_id);
     if (h) free_handle(h);
@@ -283,7 +463,7 @@ int32_t ma_wrapper_play(
     float       fade_out_ms,
     int32_t     loop)
 {
-    if (!g_engine_ready || !cue_id) return -1;
+    if (!g_engine_ready || !g_mutex_ready || !cue_id) return -1;
 
     ma_mutex_lock(&g_mutex);
     Handle* h = find_handle(cue_id);
@@ -326,7 +506,7 @@ int32_t ma_wrapper_play(
 }
 
 void ma_wrapper_stop(const char* cue_id, float fade_out_ms) {
-    if (!cue_id) return;
+    if (!g_mutex_ready || !cue_id) return;
     ma_mutex_lock(&g_mutex);
     Handle* h = find_handle(cue_id);
     if (h && h->initialised) {
@@ -348,7 +528,7 @@ void ma_wrapper_stop(const char* cue_id, float fade_out_ms) {
 }
 
 void ma_wrapper_pause(const char* cue_id) {
-    if (!cue_id) return;
+    if (!g_mutex_ready || !cue_id) return;
     ma_mutex_lock(&g_mutex);
     Handle* h = find_handle(cue_id);
     if (h && h->initialised) ma_sound_stop(&h->sound);
@@ -356,7 +536,7 @@ void ma_wrapper_pause(const char* cue_id) {
 }
 
 void ma_wrapper_resume(const char* cue_id) {
-    if (!cue_id) return;
+    if (!g_mutex_ready || !cue_id) return;
     ma_mutex_lock(&g_mutex);
     Handle* h = find_handle(cue_id);
     if (h && h->initialised) ma_sound_start(&h->sound);
@@ -364,7 +544,7 @@ void ma_wrapper_resume(const char* cue_id) {
 }
 
 void ma_wrapper_stop_all(void) {
-    if (!g_engine_ready) return;
+    if (!g_engine_ready || !g_mutex_ready) return;
     ma_mutex_lock(&g_mutex);
     for (int i = 0; i < MAX_HANDLES; i++) {
         if (g_handles[i].active && g_handles[i].initialised) {

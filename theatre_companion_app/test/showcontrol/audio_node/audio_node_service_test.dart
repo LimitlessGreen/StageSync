@@ -53,10 +53,21 @@ class FakeAudioEngine extends Fake implements AbstractAudioEngine {
 
   @override
   Future<List<AudioDevice>> listDevices() async => [
-        const AudioDevice(id: 'Lautsprecher (Realtek)', name: 'Lautsprecher (Realtek)',
-            backend: AudioBackend.wasapi, index: 0),
-        const AudioDevice(id: 'HDMI-Ausgang', name: 'HDMI-Ausgang',
-            backend: AudioBackend.wasapi, index: 1),
+        const AudioDevice(
+            id: 'JACK-System',
+            name: 'JACK-System',
+            backend: AudioBackend.jack,
+            index: 2),
+        const AudioDevice(
+            id: 'Lautsprecher (Realtek)',
+            name: 'Lautsprecher (Realtek)',
+            backend: AudioBackend.wasapi,
+            index: 0),
+        const AudioDevice(
+            id: 'HDMI-Ausgang',
+            name: 'HDMI-Ausgang',
+            backend: AudioBackend.wasapi,
+            index: 1),
       ];
 
   @override
@@ -88,7 +99,8 @@ class FakeAudioEngine extends Fake implements AbstractAudioEngine {
   }) async {}
 
   @override
-  Future<void> playWavBytes(String cueId, List<int> wavBytes, {double volumeDb = 0.0}) async {
+  Future<void> playWavBytes(String cueId, List<int> wavBytes,
+      {double volumeDb = 0.0}) async {
     playWavCalls.add((cueId: cueId, wavBytes: wavBytes));
   }
 
@@ -154,8 +166,11 @@ void main() {
   group('AudioNodeService.switchDevice()', () {
     test('leitet Aufruf an Engine weiter', () async {
       final (service, engine, _) = _makeService();
-      const device = AudioDevice(id: 'HDMI-Ausgang', name: 'HDMI-Ausgang',
-          backend: AudioBackend.wasapi, index: 1);
+      const device = AudioDevice(
+          id: 'HDMI-Ausgang',
+          name: 'HDMI-Ausgang',
+          backend: AudioBackend.wasapi,
+          index: 1);
 
       await service.switchDevice(device);
 
@@ -163,10 +178,14 @@ void main() {
       expect(engine.switchDeviceCalls.first.index, 1);
     });
 
-    test('Status.selectedDevice entspricht dem tatsächlichen Engine-Gerät', () async {
+    test('Status.selectedDevice entspricht dem tatsächlichen Engine-Gerät',
+        () async {
       final (service, engine, _) = _makeService();
-      const device = AudioDevice(id: 'HDMI-Ausgang', name: 'HDMI-Ausgang',
-          backend: AudioBackend.wasapi, index: 1);
+      const device = AudioDevice(
+          id: 'HDMI-Ausgang',
+          name: 'HDMI-Ausgang',
+          backend: AudioBackend.wasapi,
+          index: 1);
 
       await service.switchDevice(device);
 
@@ -174,15 +193,35 @@ void main() {
       expect(service.status.selectedDevice?.name, engine.selectedDevice?.name);
     });
 
-    test('Status.availableDevices wird nach Gerätewechsel aktualisiert', () async {
+    test('Status.availableDevices wird nach Gerätewechsel aktualisiert',
+        () async {
       final (service, _, _) = _makeService();
-      const device = AudioDevice(id: 'Lautsprecher (Realtek)', name: 'Lautsprecher (Realtek)',
-          backend: AudioBackend.wasapi, index: 0);
+      const device = AudioDevice(
+          id: 'Lautsprecher (Realtek)',
+          name: 'Lautsprecher (Realtek)',
+          backend: AudioBackend.wasapi,
+          index: 0);
 
       await service.switchDevice(device);
 
-      // listDevices() des FakeEngine liefert 2 Geräte
-      expect(service.status.availableDevices, hasLength(2));
+      // listDevices() des FakeEngine liefert 3 Geräte
+      expect(service.status.availableDevices, hasLength(3));
+    });
+
+    test(
+        'NodeConfig mit audioDeviceIndex matched korrekt auf AudioDevice.index',
+        () async {
+      final (service, engine, _) = _makeService();
+
+      final cmd = NodeCommandRequest()
+        ..nodeConfig = (NodeConfigCommand()..audioDeviceIndex = 1);
+
+      service.handleCommandForTest(cmd);
+      await Future.delayed(Duration.zero);
+
+      expect(engine.switchDeviceCalls, hasLength(1));
+      expect(engine.switchDeviceCalls.first.index, 1);
+      expect(engine.switchDeviceCalls.first.name, 'HDMI-Ausgang');
     });
   });
 
@@ -202,7 +241,6 @@ void main() {
       final (service, engine, _) = _makeService();
 
       await engine.init(); // Manuell vorab initialisieren
-      final initCount = 1; // Basis
 
       await service.ensureEngineInitialized(); // Soll kein init() auslösen
 
@@ -283,10 +321,13 @@ void main() {
   // ── Priority-Dispatch: Stop wartet nicht auf Preload ──────────────────────
 
   group('Command-Priorität: Stop bypassed Preload-Queue', () {
-    test('Stop-Command wird SOFORT ausgeführt, nicht nach blockierendem Preload', () async {
+    test(
+        'Stop-Command wird SOFORT ausgeführt, nicht nach blockierendem Preload',
+        () async {
       // Preload-Completer, der NUR manuell vervollständigt wird
       final preloadCompleter = Completer<void>();
-      final (service, engine, _) = _makeService(preloadCompleter: preloadCompleter);
+      final (service, engine, _) =
+          _makeService(preloadCompleter: preloadCompleter);
 
       // Preload-Command via Queue senden (blockiert bis preloadCompleter.complete())
       // Wir simulieren hier über handleCommandForTest ohne echte gRPC-Verbindung.
@@ -371,8 +412,11 @@ void main() {
       final statusEvents = <AudioNodeStatus>[];
       final sub = service.statusStream.listen(statusEvents.add);
 
-      const device = AudioDevice(id: 'Lautsprecher (Realtek)', name: 'Lautsprecher (Realtek)',
-          backend: AudioBackend.wasapi, index: 0);
+      const device = AudioDevice(
+          id: 'Lautsprecher (Realtek)',
+          name: 'Lautsprecher (Realtek)',
+          backend: AudioBackend.wasapi,
+          index: 0);
       await service.switchDevice(device);
 
       // StreamController.broadcast() liefert Events asynchron (Microtask).
@@ -396,6 +440,18 @@ void main() {
       expect(engine.playWavCalls.first.cueId, 'cue');
     });
   });
+
+  group('AudioBackend Wire-Mapping', () {
+    test('normalisiert Alias-Namen korrekt', () {
+      expect(audioBackendFromWireName('jack2'), AudioBackend.jack);
+      expect(audioBackendFromWireName('pulse'), AudioBackend.pulseAudio);
+      expect(audioBackendFromWireName('dsound'), AudioBackend.directSound);
+    });
+
+    test('serialisiert Enum-Werte fuer Proto korrekt', () {
+      expect(audioBackendToWireName(AudioBackend.jack), 'jack');
+      expect(audioBackendToWireName(AudioBackend.asio), 'asio');
+      expect(audioBackendToWireName(AudioBackend.pulseAudio), 'pulseaudio');
+    });
+  });
 }
-
-

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 
 	pb "stagesync-server/gen/go/stagesync/v1"
 
+	"stagesync-server/internal/audioengine"
 	"stagesync-server/internal/audionode"
 	"stagesync-server/internal/busengine"
 	"stagesync-server/internal/discovery"
@@ -33,9 +35,34 @@ var (
 	serviceName     = flag.String("name", "StageSync", "mDNS service name")
 	enableAudioNode = flag.Bool("audio-node", false,
 		"Start an internal audio node (malgo/miniaudio).")
+	audioBackend = flag.String("audio-backend", "",
+		"Preferred audio backend (e.g. jack, alsa, pulseaudio, wasapi, asio).")
+	audioBackendPriority = flag.String("audio-backend-priority", "",
+		"Comma-separated backend priority list, e.g. jack,alsa,pulseaudio.")
+	audioDevice = flag.Int("audio-device", -1,
+		"Output device index (-1 = system default).")
+	audioSampleRate = flag.Uint("audio-sample-rate", 48000,
+		"Output sample rate in Hz.")
+	audioChannels = flag.Uint("audio-channels", 2,
+		"Output channel count.")
 	ramCacheMB = flag.Int64("ram-cache-mb", 2048,
 		"RAM-Budget für den Audio-Cache in MiB (0 = 2 GiB Default).")
 )
+
+func parseBackendPriorityFlag(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
 
 func main() {
 	flag.Parse()
@@ -99,7 +126,17 @@ func main() {
 	// ── Optional internal audio node ─────────────────────────────────────────
 	if *enableAudioNode {
 		log.Println("--audio-node: starting internal audio node (malgo/miniaudio)")
-		an := audionode.New(sessionMgr, dispatcher, mediaStore)
+		backendPriority := parseBackendPriorityFlag(*audioBackendPriority)
+		if *audioBackend != "" {
+			backendPriority = append([]string{*audioBackend}, backendPriority...)
+		}
+		audioOpts := audioengine.Options{
+			SampleRate:      uint32(*audioSampleRate),
+			Channels:        uint32(*audioChannels),
+			DeviceIndex:     *audioDevice,
+			BackendPriority: backendPriority,
+		}
+		an := audionode.New(sessionMgr, dispatcher, mediaStore, audioOpts)
 		an.Start(ctx)
 		// Stille-Detektor: interne Audio-Engine hat das dekodierte PCM und kann
 		// den erkannten Stille-Offset für alle Show-Engines bereitstellen.

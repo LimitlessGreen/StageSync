@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../grpc/stage_sync_client.dart';
 import '../grpc/generated/stagesync/v1/node.pb.dart';
 import '../grpc/generated/stagesync/v1/common.pb.dart' show NodeTask;
+import '../nodes/audio_node/audio_device.dart';
 import 'session_provider.dart';
 
 const _uuid = Uuid();
@@ -55,33 +56,82 @@ class NodeManagementNotifier extends StateNotifier<NodeManagementState> {
     required String targetNodeId,
     required int deviceIndex,
     required String deviceName,
-  }) => _sendConfig(
+  }) =>
+      _sendConfig(
         targetNodeId: targetNodeId,
         config: NodeConfigCommand()
           ..audioDeviceIndex = deviceIndex
           ..audioDeviceName = deviceName,
-        actionLabel: 'Gerät "$deviceName" auf ${_shortId(targetNodeId)} gesetzt',
+        actionLabel:
+            'Gerät "$deviceName" auf ${_shortId(targetNodeId)} gesetzt',
       );
 
   /// Setzt das Netzwerk-Interface auf einem remote Node.
   Future<void> setNetworkInterface({
     required String targetNodeId,
     required String interfaceAddress,
-  }) => _sendConfig(
+  }) =>
+      _sendConfig(
         targetNodeId: targetNodeId,
         config: NodeConfigCommand()..networkInterfaceAddress = interfaceAddress,
-        actionLabel: 'Interface $interfaceAddress auf ${_shortId(targetNodeId)} gesetzt',
+        actionLabel:
+            'Interface $interfaceAddress auf ${_shortId(targetNodeId)} gesetzt',
       );
 
   /// Setzt die Tasks (Rollen) eines Nodes. Server aktualisiert Session-State und broadcastet ein NodeEvent.
   Future<void> setNodeTasks({
     required String targetNodeId,
     required List<NodeTask> tasks,
-  }) => _sendConfig(
+  }) =>
+      _sendConfig(
         targetNodeId: targetNodeId,
         config: NodeConfigCommand()..tasks.addAll(tasks),
         actionLabel: 'Rollen auf ${_shortId(targetNodeId)} gesetzt',
       );
+
+  /// Setzt bevorzugte Audio-Backends auf einem remote Node.
+  Future<void> setAudioBackendPriority({
+    required String targetNodeId,
+    AudioBackend? preferredBackend,
+    List<AudioBackend> backendPriority = const [],
+  }) {
+    final priorityWire = backendPriority
+        .where((b) => b != AudioBackend.unknown)
+        .map(audioBackendToWireName)
+        .toList();
+    final preferredWire =
+        preferredBackend != null && preferredBackend != AudioBackend.unknown
+            ? audioBackendToWireName(preferredBackend)
+            : '';
+
+    return _sendConfig(
+      targetNodeId: targetNodeId,
+      config: NodeConfigCommand()
+        ..audioBackend = preferredWire
+        ..audioBackendPriority.addAll(priorityWire),
+      actionLabel: 'Audio-Backend auf ${_shortId(targetNodeId)} konfiguriert',
+    );
+  }
+
+  /// Setzt Sample-Rate und Kanalzahl auf einem remote Node.
+  Future<void> setAudioFormat({
+    required String targetNodeId,
+    int? sampleRate,
+    int? channels,
+  }) {
+    final cfg = NodeConfigCommand();
+    if (sampleRate != null && sampleRate > 0) {
+      cfg.sampleRate = sampleRate;
+    }
+    if (channels != null && channels > 0) {
+      cfg.channels = channels;
+    }
+    return _sendConfig(
+      targetNodeId: targetNodeId,
+      config: cfg,
+      actionLabel: 'Audio-Format auf ${_shortId(targetNodeId)} gesetzt',
+    );
+  }
 
   /// Setzt das Gerät auf System-Default zurück.
   Future<void> resetToDefault({required String targetNodeId}) => _sendConfig(
@@ -176,6 +226,5 @@ class NodeManagementNotifier extends StateNotifier<NodeManagementState> {
     }
   }
 
-  static String _shortId(String id) =>
-      id.length > 8 ? id.substring(0, 8) : id;
+  static String _shortId(String id) => id.length > 8 ? id.substring(0, 8) : id;
 }

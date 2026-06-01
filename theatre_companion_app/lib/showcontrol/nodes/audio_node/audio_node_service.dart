@@ -30,6 +30,7 @@ class AudioNodeStatus {
   final AudioDevice? selectedDevice;
   final List<NetworkInterfaceInfo> availableInterfaces;
   final NetworkInterfaceInfo? selectedInterface;
+
   /// Master output volume in dB (0 = unity, ≤ −60 = mute).
   final double masterVolumeDb;
 
@@ -82,11 +83,30 @@ class AudioNodeService {
 
   AudioNodeStatus _status = const AudioNodeStatus();
 
+  static const List<AudioBackend> _linuxBackendPriority = [
+    AudioBackend.jack,
+    AudioBackend.alsa,
+    AudioBackend.pulseAudio,
+    AudioBackend.unknown,
+  ];
+  static const List<AudioBackend> _windowsBackendPriority = [
+    AudioBackend.asio,
+    AudioBackend.wasapi,
+    AudioBackend.directSound,
+    AudioBackend.unknown,
+  ];
+  static const List<AudioBackend> _appleBackendPriority = [
+    AudioBackend.jack,
+    AudioBackend.coreAudio,
+    AudioBackend.unknown,
+  ];
+
   // Letzten empfangenen Commands für Diagnose
   final List<String> _cmdLog = [];
   List<String> get cmdLog => List.unmodifiable(_cmdLog);
   void _logCmd(String msg) {
-    _cmdLog.insert(0, '[${DateTime.now().toIso8601String().substring(11, 23)}] $msg');
+    _cmdLog.insert(
+        0, '[${DateTime.now().toIso8601String().substring(11, 23)}] $msg');
     if (_cmdLog.length > 10) _cmdLog.removeLast();
   }
 
@@ -117,16 +137,25 @@ class AudioNodeService {
     if (!session.isInSession) return;
 
     try {
+      var devices = <AudioDevice>[];
+
       // Engine nur initialisieren wenn nötig (deinit vermeiden auf Windows)
       if (!_engine.isInitialized) {
-        await _engine.init(device: _status.selectedDevice);
+        devices = _sortDevices(await _engine.listDevices());
+        final startupDevice =
+            _status.selectedDevice ?? _pickPreferredDevice(devices);
+        await _engine.init(device: startupDevice);
       }
 
       // Verfügbare Geräte und Netzwerk-Interfaces lesen
-      final devices = await _engine.listDevices();
+      if (devices.isEmpty) {
+        devices = _sortDevices(await _engine.listDevices());
+      }
       final interfaces = await MediaServer.listInterfaces();
       final selectedIface = _status.selectedInterface ??
           (interfaces.isNotEmpty ? interfaces.first : null);
+      final selectedDevice =
+          _engine.selectedDevice ?? _pickPreferredDevice(devices);
 
       if (selectedIface == null) {
         throw Exception('Kein Netzwerk-Interface verfügbar');
@@ -140,18 +169,23 @@ class AudioNodeService {
         return AudioDeviceInfo()
           ..index = e.value.index >= 0 ? e.value.index : e.key
           ..name = e.value.name
-          ..isDefault = e.key == 0;
+          ..isDefault = e.value.isSystemDefault
+          ..backend = audioBackendToWireName(e.value.backend);
       }).toList();
 
       final caps = NodeCapabilities()
         ..audio = (AudioCapabilities()
           ..maxSimultaneous = 8
-          ..supportedFormats.addAll(['wav', 'mp3', 'flac', 'aac', 'ogg', 'm4a', 'aiff'])
+          ..supportedFormats
+              .addAll(['wav', 'mp3', 'flac', 'aac', 'ogg', 'm4a', 'aiff'])
           ..mediaServerUrl = _mediaServer.serverUrl ?? ''
           ..availableDevices.addAll(audioDevices)
-          ..selectedDevice = _status.selectedDevice?.index ?? 0)
+          ..selectedDevice = selectedDevice?.index ?? 0
+          ..activeBackend = audioBackendToWireName(
+              selectedDevice?.backend ?? AudioBackend.unknown)
+          ..backendPriority.addAll(_backendPriorityWireNames()))
         ..auditionSupported = true
-        ..auditionDevice = _status.selectedDevice?.name ?? '';
+        ..auditionDevice = selectedDevice?.name ?? '';
 
       final registerReq = RegisterNodeRequest()
         ..sessionId = session.session!.sessionId
@@ -162,7 +196,8 @@ class AudioNodeService {
           ..nodeType = NodeType.NODE_TYPE_AUDIO
           ..tasks.addAll(session.myNode!.tasks)
           ..online = true
-          ..mediaServerUrl = _mediaServer.serverUrl ?? '')  // URL direkt in NodeInfo
+          ..mediaServerUrl =
+              _mediaServer.serverUrl ?? '') // URL direkt in NodeInfo
         ..capabilities = caps;
 
       await client.node.registerNode(registerReq);
@@ -199,7 +234,7 @@ class AudioNodeService {
       _updateStatus(AudioNodeStatus(
         state: AudioNodeState.connected,
         availableDevices: devices,
-        selectedDevice: _engine.selectedDevice,
+        selectedDevice: selectedDevice,
         availableInterfaces: interfaces,
         selectedInterface: selectedIface,
       ));
@@ -241,7 +276,7 @@ class AudioNodeService {
       // actual == null → Fallback auf Default, zeige trotzdem Wunsch-Gerät
       // damit der User sieht was er gewählt hat (auch wenn es Default ist)
       selectedDevice: actual,
-      availableDevices: await _engine.listDevices(),
+      availableDevices: _sortDevices(await _engine.listDevices()),
     ));
   }
 
@@ -251,12 +286,18 @@ class AudioNodeService {
   /// Schneller Warm-Up für Audio-Ingenieur-Screen.
   Future<void> ensureEngineInitialized() async {
     if (!_engine.isInitialized) {
-      await _engine.init(device: _status.selectedDevice);
+      final devices = _sortDevices(await _engine.listDevices());
+      final startupDevice =
+          _status.selectedDevice ?? _pickPreferredDevice(devices);
+      await _engine.init(device: startupDevice);
+      _updateStatus(_status.copyWith(
+        selectedDevice: _engine.selectedDevice ?? startupDevice,
+      ));
     }
     // Geräteliste im Status befüllen, damit die UI Geräte zeigen kann
     // – auch wenn der Node noch nicht als Audio-Node verbunden ist.
     if (_status.availableDevices.isEmpty) {
-      final devices = await _engine.listDevices();
+      final devices = _sortDevices(await _engine.listDevices());
       if (devices.isNotEmpty) {
         _updateStatus(_status.copyWith(
           availableDevices: devices,
@@ -291,7 +332,8 @@ class AudioNodeService {
     await _mediaSync?.stop();
     _mediaSync = null;
     await _mediaServer.stop();
-    await _engine.disposeAll(); // Quellen freigeben, aber SoLoud-Instanz behalten
+    await _engine
+        .disposeAll(); // Quellen freigeben, aber SoLoud-Instanz behalten
     _updateStatus(AudioNodeStatus(
       state: AudioNodeState.idle,
       availableDevices: _status.availableDevices,
@@ -343,7 +385,9 @@ class AudioNodeService {
     // Normale Commands: sequenziell in Queue – Race-Schutz für Preload→Play.
     _pendingCommand = _pendingCommand
         .then((_) => _handleCommandAsync(cmd))
-        .catchError((Object e) { _logCmd('CMD FEHLER: $e'); });
+        .catchError((Object e) {
+      _logCmd('CMD FEHLER: $e');
+    });
   }
 
   Future<void> _handleCommandAsync(NodeCommandRequest cmd) async {
@@ -379,31 +423,60 @@ class AudioNodeService {
 
   /// Verarbeitet einen Remote-Konfigurationsbefehl vom Master.
   Future<void> _handleNodeConfig(NodeConfigCommand cmd) async {
-    _logCmd('NODE-CONFIG: device=${cmd.audioDeviceIndex} iface=${cmd.networkInterfaceAddress}');
+    _logCmd(
+        'NODE-CONFIG: device=${cmd.audioDeviceIndex} backend=${cmd.audioBackend} iface=${cmd.networkInterfaceAddress}');
+
+    final requestedBackends = <AudioBackend>[];
+    if (cmd.audioBackend.isNotEmpty) {
+      requestedBackends.add(audioBackendFromWireName(cmd.audioBackend));
+    }
+    requestedBackends.addAll(
+      cmd.audioBackendPriority.map(audioBackendFromWireName),
+    );
+    final backendOrder = requestedBackends
+        .where((b) => b != AudioBackend.unknown)
+        .toSet()
+        .toList();
 
     // Audio-Gerät remote setzen
     if (cmd.hasAudioDeviceIndex() && cmd.audioDeviceIndex >= 0) {
       final devices = await _engine.listDevices();
-      final match = devices.where((d) => d.id == cmd.audioDeviceIndex).firstOrNull
-          ?? (cmd.audioDeviceName.isNotEmpty
+      final match = devices
+              .where((d) => d.index == cmd.audioDeviceIndex)
+              .firstOrNull ??
+          (cmd.audioDeviceName.isNotEmpty
               ? devices.where((d) => d.name == cmd.audioDeviceName).firstOrNull
               : null);
       if (match != null) {
         await switchDevice(match);
         _logCmd('NODE-CONFIG: Gerät gesetzt → ${match.name}');
       } else {
-        _logCmd('NODE-CONFIG WARNUNG: Gerät index=${cmd.audioDeviceIndex} nicht gefunden');
+        _logCmd(
+            'NODE-CONFIG WARNUNG: Gerät index=${cmd.audioDeviceIndex} nicht gefunden');
       }
     } else if (cmd.hasAudioDeviceIndex() && cmd.audioDeviceIndex == -1) {
       // -1 = auf System-Default zurücksetzen
       await resetToDefaultDevice();
       _logCmd('NODE-CONFIG: auf System-Default zurückgesetzt');
+    } else if (backendOrder.isNotEmpty) {
+      final devices = await _engine.listDevices();
+      final match = _pickPreferredDeviceForBackends(devices, backendOrder);
+      if (match != null) {
+        await switchDevice(match);
+        _logCmd(
+            'NODE-CONFIG: Backend gesetzt -> ${match.backend.name} (${match.name})');
+      } else {
+        _logCmd(
+            'NODE-CONFIG WARNUNG: kein Gerät für Backend-Reihenfolge ${backendOrder.map((b) => b.name).join(', ')}');
+      }
     }
 
     // Netzwerk-Interface remote setzen
     if (cmd.networkInterfaceAddress.isNotEmpty) {
       final ifaces = await MediaServer.listInterfaces();
-      final match = ifaces.where((i) => i.address == cmd.networkInterfaceAddress).firstOrNull;
+      final match = ifaces
+          .where((i) => i.address == cmd.networkInterfaceAddress)
+          .firstOrNull;
       if (match != null) {
         await switchInterface(match);
         _logCmd('NODE-CONFIG: Interface gesetzt → ${match.address}');
@@ -417,23 +490,29 @@ class AudioNodeService {
   /// Sendet aktualisierte Capabilities nach einer Konfigurationsänderung an den Server.
   Future<void> _reportCapabilities() async {
     final session = _ref.read(sessionProvider);
-    if (!session.isInSession || _status.state != AudioNodeState.connected) return;
+    if (!session.isInSession || _status.state != AudioNodeState.connected)
+      return;
     try {
       final devices = await _engine.listDevices();
       final audioDevices = devices.asMap().entries.map((e) {
         return AudioDeviceInfo()
           ..index = e.value.index >= 0 ? e.value.index : e.key
           ..name = e.value.name
-          ..isDefault = e.key == 0;
+          ..isDefault = e.value.isSystemDefault
+          ..backend = audioBackendToWireName(e.value.backend);
       }).toList();
 
       final caps = NodeCapabilities()
         ..audio = (AudioCapabilities()
           ..maxSimultaneous = 8
-          ..supportedFormats.addAll(['wav', 'mp3', 'flac', 'aac', 'ogg', 'm4a', 'aiff'])
+          ..supportedFormats
+              .addAll(['wav', 'mp3', 'flac', 'aac', 'ogg', 'm4a', 'aiff'])
           ..mediaServerUrl = _mediaServer.serverUrl ?? ''
           ..availableDevices.addAll(audioDevices)
-          ..selectedDevice = _status.selectedDevice?.index ?? 0)
+          ..selectedDevice = _status.selectedDevice?.index ?? 0
+          ..activeBackend = audioBackendToWireName(
+              _status.selectedDevice?.backend ?? AudioBackend.unknown)
+          ..backendPriority.addAll(_backendPriorityWireNames()))
         ..auditionSupported = true
         ..auditionDevice = _status.selectedDevice?.name ?? '';
 
@@ -456,16 +535,17 @@ class AudioNodeService {
       // Legacy: server sent einen expliziten Dateinamen.
       _logCmd('PRELOAD: filePath="${cmd.filePath}" cueId=${cmd.cueId}');
       path = await _resolveMediaPath(cmd.filePath);
-
     } else if (cmd.assetId.isNotEmpty) {
       // Modern: SHA-256 asset_id — erst Manifest-Lookup (filename → local path),
       // bei Miss direkt via assetId streamen (verhindert den SHA-256-als-Name-Bug).
       final filename = _mediaSync?.filenameForSha256(cmd.assetId);
       if (filename != null) {
-        _logCmd('PRELOAD: assetId=${cmd.assetId.substring(0, 8)}… → "$filename"');
+        _logCmd(
+            'PRELOAD: assetId=${cmd.assetId.substring(0, 8)}… → "$filename"');
         path = await _resolveMediaPath(filename);
       } else {
-        _logCmd('PRELOAD: assetId=${cmd.assetId.substring(0, 8)}… nicht im Manifest → Stream per assetId');
+        _logCmd(
+            'PRELOAD: assetId=${cmd.assetId.substring(0, 8)}… nicht im Manifest → Stream per assetId');
         path = await _resolveMediaPathByAssetId(cmd.assetId);
       }
     }
@@ -625,6 +705,56 @@ class AudioNodeService {
   List<String> _resolveCueTargets(String cueId) =>
       cueId.isEmpty ? _engine.activeCueIds : [cueId];
 
+  AudioDevice? _pickPreferredDevice(List<AudioDevice> devices) {
+    if (devices.isEmpty) return null;
+    final priority = _backendPriorityForCurrentPlatform();
+    for (final backend in priority) {
+      final match = devices.where((d) => d.backend == backend).firstOrNull;
+      if (match != null) return match;
+    }
+    return devices.first;
+  }
+
+  List<AudioDevice> _sortDevices(List<AudioDevice> devices) {
+    final priority = _backendPriorityForCurrentPlatform();
+    int rank(AudioBackend backend) {
+      final idx = priority.indexOf(backend);
+      return idx >= 0 ? idx : priority.length;
+    }
+
+    final sorted = [...devices]..sort((a, b) {
+        final rankCmp = rank(a.backend).compareTo(rank(b.backend));
+        if (rankCmp != 0) return rankCmp;
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      });
+    return sorted;
+  }
+
+  List<AudioBackend> _backendPriorityForCurrentPlatform() {
+    if (Platform.isLinux) return _linuxBackendPriority;
+    if (Platform.isWindows) return _windowsBackendPriority;
+    if (Platform.isMacOS || Platform.isIOS) return _appleBackendPriority;
+    return const [AudioBackend.unknown];
+  }
+
+  List<String> _backendPriorityWireNames() =>
+      _backendPriorityForCurrentPlatform()
+          .where((b) => b != AudioBackend.unknown)
+          .map(audioBackendToWireName)
+          .toList();
+
+  AudioDevice? _pickPreferredDeviceForBackends(
+    List<AudioDevice> devices,
+    List<AudioBackend> backendOrder,
+  ) {
+    if (devices.isEmpty) return null;
+    for (final backend in backendOrder) {
+      final match = devices.where((d) => d.backend == backend).firstOrNull;
+      if (match != null) return match;
+    }
+    return null;
+  }
+
   /// Ermöglicht das Testen des Command-Dispatching ohne laufende gRPC-Verbindung.
   /// Ruft intern [_handleCommandRaw] auf — gleiche Prioritätslogik wie im Betrieb.
   @visibleForTesting
@@ -701,7 +831,8 @@ class AudioNodeService {
       // aber einige Plattformen mögen sie; Extension aus Manifest falls bekannt)
       final knownName = _mediaSync?.filenameForSha256(assetId);
       final ext = knownName != null ? p.extension(knownName) : '';
-      final tmp = '${Directory.systemTemp.path}/audition_${assetId.substring(0, 8)}$ext';
+      final tmp =
+          '${Directory.systemTemp.path}/audition_${assetId.substring(0, 8)}$ext';
       await File(tmp).writeAsBytes(bytes, flush: true);
 
       await _engine.preload(handleId, tmp);
@@ -712,7 +843,8 @@ class AudioNodeService {
         volumeDb: volumeDb,
         startTimeMs: startMs,
       );
-      _logCmd('AUDITION START: ${assetId.substring(0, 8)}… (${bytes.length} B, ext=$ext)');
+      _logCmd(
+          'AUDITION START: ${assetId.substring(0, 8)}… (${bytes.length} B, ext=$ext)');
     } catch (e) {
       _logCmd('AUDITION FEHLER: $e');
     }
@@ -720,9 +852,8 @@ class AudioNodeService {
 
   /// Stoppt alle laufenden Audition-Previews (Prefix 'audition_').
   Future<void> auditionStop() async {
-    final toStop = _engine.activeCueIds
-        .where((id) => id.startsWith('audition_'))
-        .toList();
+    final toStop =
+        _engine.activeCueIds.where((id) => id.startsWith('audition_')).toList();
     for (final id in toStop) {
       await _engine.stop(id, fadeOutMs: 100);
     }

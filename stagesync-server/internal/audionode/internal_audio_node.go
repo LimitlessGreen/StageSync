@@ -9,8 +9,9 @@
 // or WASAPI-exclusive interface — no separate Flutter audio client needed.
 //
 // Remote device management:
-//   The master can send NodeConfigCommand.audio_device_index to switch the
-//   output device live without restarting the server.
+//
+//	The master can send NodeConfigCommand.audio_device_index to switch the
+//	output device live without restarting the server.
 package audionode
 
 import (
@@ -43,6 +44,7 @@ type InternalAudioNode struct {
 
 	currentDeviceIdx  int32
 	currentDeviceName string
+	startupOptions    audioengine.Options
 
 	// preloadsMu schützt die Map laufender asynchroner Preloads.
 	// cueID → done-Channel: geschlossen wenn Preload abgeschlossen (ok oder fehler).
@@ -58,20 +60,32 @@ type InternalAudioNode struct {
 
 // New creates an InternalAudioNode. Call Start to activate it.
 // mediaStore may be nil during testing; Preload will then fail gracefully.
-func New(mgr *session.Manager, disp *node.Dispatcher, ms *media.Store) *InternalAudioNode {
+func New(mgr *session.Manager, disp *node.Dispatcher, ms *media.Store, opts audioengine.Options) *InternalAudioNode {
+	normalized := normalizeNodeOptions(opts)
 	return &InternalAudioNode{
 		sessionMgr:       mgr,
 		dispatcher:       disp,
 		mediaStore:       ms,
-		currentDeviceIdx: -1,
+		currentDeviceIdx: int32(normalized.DeviceIndex),
+		startupOptions:   normalized,
 		preloads:         make(map[string]chan struct{}),
 	}
+}
+
+func normalizeNodeOptions(opts audioengine.Options) audioengine.Options {
+	if opts.SampleRate == 0 {
+		opts.SampleRate = 48000
+	}
+	if opts.Channels == 0 {
+		opts.Channels = 2
+	}
+	return opts
 }
 
 // Start initialises the audio engine and begins the command loop.
 // Runs in the background until ctx is cancelled.
 func (n *InternalAudioNode) Start(ctx context.Context) {
-	eng, err := audioengine.New()
+	eng, err := audioengine.NewWithOptions(n.startupOptions)
 	if err != nil {
 		log.Printf("[audionode] failed to create audio engine: %v", err)
 		return
@@ -87,9 +101,13 @@ func (n *InternalAudioNode) Start(ctx context.Context) {
 
 	// Log available devices for operator reference.
 	if devs, err := eng.EnumerateDevices(); err == nil {
-		log.Printf("[audionode] verfügbare Ausgabegeräte (%d):", len(devs))
+		log.Printf("[audionode] verfügbare Ausgabegeräte (%d, backend=%s):", len(devs), eng.ActiveBackend())
 		for _, d := range devs {
-			log.Printf("[audionode]   [%d] %s", d.Index, d.Name)
+			defaultTag := ""
+			if d.IsDefault {
+				defaultTag = " (default)"
+			}
+			log.Printf("[audionode]   [%d] %s [%s]%s", d.Index, d.Name, d.Backend, defaultTag)
 		}
 	} else {
 		log.Printf("[audionode] Gerätliste nicht abrufbar: %v", err)
@@ -395,8 +413,10 @@ func (n *InternalAudioNode) reportCapabilities(sessID, nodeID string, info *pb.N
 		devices := make([]*pb.AudioDeviceInfo, len(devs))
 		for i, d := range devs {
 			devices[i] = &pb.AudioDeviceInfo{
-				Index: int32(d.Index),
-				Name:  d.Name,
+				Index:     int32(d.Index),
+				Name:      d.Name,
+				IsDefault: d.IsDefault,
+				Backend:   d.Backend,
 			}
 		}
 		// selectedIdx is 0 for the system default (-1) so Flutter always gets a
@@ -408,6 +428,10 @@ func (n *InternalAudioNode) reportCapabilities(sessID, nodeID string, info *pb.N
 		caps.Audio = &pb.AudioCapabilities{
 			AvailableDevices: devices,
 			SelectedDevice:   selectedIdx,
+			ActiveBackend:    n.engine.ActiveBackend(),
+			BackendPriority:  n.engine.BackendPriority(),
+			SampleRate:       n.engine.SampleRate(),
+			Channels:         n.engine.Channels(),
 		}
 	}
 	caps.AuditionDevice = n.currentDeviceName
@@ -487,25 +511,58 @@ func (n *InternalAudioNode) handleTestSignal(cmd *pb.AudioTestSignalCommand) {
 // handleNodeConfig handles remote device configuration sent by the master.
 // audio_device_index = -1 → system default.
 func (n *InternalAudioNode) handleNodeConfig(cmd *pb.NodeConfigCommand) {
-	idx := int(cmd.GetAudioDeviceIndex())
-	name := cmd.GetAudioDeviceName()
-	if name == "" {
-		name = "(index)"
+	var (
+		devicePtr *int
+		idx       int
+	)
+	if cmd.GetAudioDeviceName() != "" || cmd.GetAudioDeviceIndex() != 0 {
+		idx = int(cmd.GetAudioDeviceIndex())
+		devicePtr = &idx
 	}
-	log.Printf("[audionode] NodeConfig: set audio device index=%d name=%q", idx, name)
 
-	if err := n.engine.SetDevice(idx); err != nil {
-		log.Printf("[audionode] SetDevice(%d) failed: %v", idx, err)
+	runtimeCfg := audioengine.RuntimeConfig{
+		Backend:         cmd.GetAudioBackend(),
+		BackendPriority: cmd.GetAudioBackendPriority(),
+		SampleRate:      cmd.GetSampleRate(),
+		Channels:        cmd.GetChannels(),
+		DeviceIndex:     devicePtr,
+	}
+
+	log.Printf(
+		"[audionode] NodeConfig: backend=%q priority=%v device=%v rate=%d ch=%d",
+		runtimeCfg.Backend,
+		runtimeCfg.BackendPriority,
+		runtimeCfg.DeviceIndex,
+		runtimeCfg.SampleRate,
+		runtimeCfg.Channels,
+	)
+
+	if err := n.engine.Reconfigure(runtimeCfg); err != nil {
+		log.Printf("[audionode] reconfigure failed: %v", err)
 		return
 	}
-	log.Printf("[audionode] audio device changed to index=%d", idx)
+	log.Printf(
+		"[audionode] audio updated: backend=%s device=%d rate=%d ch=%d",
+		n.engine.ActiveBackend(),
+		n.engine.DeviceIndex(),
+		n.engine.SampleRate(),
+		n.engine.Channels(),
+	)
 
 	// Track the newly active device so reportCapabilities can advertise it.
-	n.currentDeviceIdx = int32(idx)
+	n.currentDeviceIdx = int32(n.engine.DeviceIndex())
 	if cmd.GetAudioDeviceName() != "" {
 		n.currentDeviceName = cmd.GetAudioDeviceName()
 	} else {
 		n.currentDeviceName = ""
+		if devs, err := n.engine.EnumerateDevices(); err == nil {
+			for _, d := range devs {
+				if d.Index == n.engine.DeviceIndex() {
+					n.currentDeviceName = d.Name
+					break
+				}
+			}
+		}
 	}
 
 	// Push updated capabilities immediately so Flutter clients learn about

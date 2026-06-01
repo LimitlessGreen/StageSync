@@ -23,9 +23,11 @@ import (
 
 // DeviceInfo describes an available output device.
 type DeviceInfo struct {
-	Index int
-	ID    malgo.DeviceID
-	Name  string
+	Index     int
+	ID        malgo.DeviceID
+	Name      string
+	Backend   string
+	IsDefault bool
 }
 
 // Engine manages a single audio output device and mixes concurrent handles.
@@ -51,6 +53,9 @@ type Engine struct {
 	channels   uint32
 	deviceIdx  int // -1 = system default
 
+	backendPriority []string
+	activeBackend   string
+
 	// mixBuf: wiederverwendeter Ausgabepuffer für mix(). Wird bei Bedarf vergrößert,
 	// nie verkleinert — verhindert GC-Allokation im heißen Audio-Callback-Pfad.
 	mixBuf []float32
@@ -58,11 +63,15 @@ type Engine struct {
 
 // New allocates the malgo context. Call Close when done.
 func New() (*Engine, error) {
-	ctx, err := malgo.InitContext(nil, malgo.ContextConfig{}, func(msg string) {
-		log.Printf("[audioengine] malgo: %s", msg)
-	})
+	return NewWithOptions(Options{})
+}
+
+// NewWithOptions allocates the malgo context with runtime audio options.
+func NewWithOptions(opts Options) (*Engine, error) {
+	normalized := normalizeOptions(opts)
+	ctx, activeBackend, backendPriority, err := initContextForPriority(normalized.BackendPriority)
 	if err != nil {
-		return nil, fmt.Errorf("malgo context init: %w", err)
+		return nil, err
 	}
 	e := &Engine{
 		ctx:              ctx,
@@ -70,11 +79,48 @@ func New() (*Engine, error) {
 		streamingHandles: make(map[string]*StreamingHandle),
 		assetPCM:         make(map[string][]float32),
 		assetSilenceMs:   make(map[string]int64),
-		sampleRate:       48000,
-		channels:         2,
-		deviceIdx:        -1,
+		sampleRate:       normalized.SampleRate,
+		channels:         normalized.Channels,
+		deviceIdx:        normalized.DeviceIndex,
+		backendPriority:  backendPriority,
+		activeBackend:    activeBackend,
 	}
 	return e, nil
+}
+
+func initContextForPriority(priority []string) (*malgo.AllocatedContext, string, []string, error) {
+	initWithLogger := func(backends []malgo.Backend) (*malgo.AllocatedContext, error) {
+		return malgo.InitContext(backends, malgo.ContextConfig{}, func(msg string) {
+			log.Printf("[audioengine] malgo: %s", msg)
+		})
+	}
+
+	normalized, backends, err := parseBackendPriority(priority)
+	if err != nil {
+		return nil, "", nil, fmt.Errorf("malgo backend config: %w", err)
+	}
+
+	if len(backends) == 0 {
+		ctx, initErr := initWithLogger(nil)
+		if initErr != nil {
+			return nil, "", nil, fmt.Errorf("malgo context init: %w", initErr)
+		}
+		return ctx, "", normalized, nil
+	}
+
+	for i, backend := range backends {
+		ctx, initErr := initWithLogger([]malgo.Backend{backend})
+		if initErr == nil {
+			active := ""
+			if i < len(normalized) {
+				active = normalized[i]
+			}
+			return ctx, active, normalized, nil
+		}
+		log.Printf("[audioengine] backend %q unavailable: %v", normalized[i], initErr)
+	}
+
+	return nil, "", nil, fmt.Errorf("malgo context init: no configured backend available (%v)", normalized)
 }
 
 // Close stops playback and releases resources.
@@ -86,7 +132,11 @@ func (e *Engine) Close() {
 		e.device.Uninit()
 		e.device = nil
 	}
-	_ = e.ctx.Uninit()
+	if e.ctx != nil {
+		_ = e.ctx.Uninit()
+		e.ctx.Free()
+		e.ctx = nil
+	}
 }
 
 // EnumerateDevices returns all available output devices.
@@ -97,9 +147,124 @@ func (e *Engine) EnumerateDevices() ([]DeviceInfo, error) {
 	}
 	out := make([]DeviceInfo, len(infos))
 	for i, d := range infos {
-		out[i] = DeviceInfo{Index: i, ID: d.ID, Name: d.Name()}
+		out[i] = DeviceInfo{
+			Index:     i,
+			ID:        d.ID,
+			Name:      d.Name(),
+			Backend:   e.activeBackend,
+			IsDefault: d.IsDefault != 0,
+		}
 	}
 	return out, nil
+}
+
+// ActiveBackend returns the currently active playback backend (e.g. jack/alsa/wasapi).
+func (e *Engine) ActiveBackend() string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.activeBackend
+}
+
+// BackendPriority returns the configured backend order.
+func (e *Engine) BackendPriority() []string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return append([]string(nil), e.backendPriority...)
+}
+
+// DeviceIndex returns the currently configured output device index (-1 = system default).
+func (e *Engine) DeviceIndex() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.deviceIdx
+}
+
+// SampleRate returns the engine output sample rate.
+func (e *Engine) SampleRate() uint32 {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.sampleRate
+}
+
+// Channels returns the engine output channel count.
+func (e *Engine) Channels() uint32 {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.channels
+}
+
+// Reconfigure updates runtime settings (backend, priority, samplerate, channels, device).
+func (e *Engine) Reconfigure(cfg RuntimeConfig) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	nextPriority := append([]string(nil), e.backendPriority...)
+	if cfg.BackendPriority != nil {
+		nextPriority = dedupeBackendPriority(cfg.BackendPriority)
+	}
+	if cfg.Backend != "" {
+		nextPriority = prependPreferredBackend(cfg.Backend, nextPriority)
+	}
+
+	nextSampleRate := e.sampleRate
+	if cfg.SampleRate > 0 {
+		nextSampleRate = cfg.SampleRate
+	}
+	nextChannels := e.channels
+	if cfg.Channels > 0 {
+		nextChannels = cfg.Channels
+	}
+	nextDevice := e.deviceIdx
+	if cfg.DeviceIndex != nil {
+		nextDevice = *cfg.DeviceIndex
+	}
+
+	requiresContextReload := !stringSlicesEqual(nextPriority, e.backendPriority)
+	if requiresContextReload {
+		if err := e.reinitContextLocked(nextPriority); err != nil {
+			return err
+		}
+	}
+
+	e.sampleRate = nextSampleRate
+	e.channels = nextChannels
+	return e.initDeviceLocked(nextDevice)
+}
+
+func (e *Engine) reinitContextLocked(priority []string) error {
+	newCtx, activeBackend, normalized, err := initContextForPriority(priority)
+	if err != nil {
+		return err
+	}
+	oldDevice := e.device
+	e.device = nil
+	oldCtx := e.ctx
+	e.ctx = newCtx
+	e.activeBackend = activeBackend
+	e.backendPriority = normalized
+
+	if oldDevice != nil {
+		_ = oldDevice.Stop()
+		oldDevice.Uninit()
+	}
+
+	if oldCtx != nil {
+		_ = oldCtx.Uninit()
+		oldCtx.Free()
+	}
+	return nil
+}
+
+func stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // SetDevice reinitialises the output device. index -1 = system default.
@@ -153,7 +318,7 @@ func (e *Engine) initDeviceLocked(index int) error {
 	}
 	e.device = dev
 	e.deviceIdx = index
-	log.Printf("[audioengine] device initialised (index=%d, rate=%d, ch=%d)", index, e.sampleRate, e.channels)
+	log.Printf("[audioengine] device initialised (backend=%s, index=%d, rate=%d, ch=%d)", e.activeBackend, index, e.sampleRate, e.channels)
 	return nil
 }
 
@@ -295,7 +460,7 @@ func (e *Engine) Play(cueID string, startUnixMs int64, volumeDb float64,
 	h.volume = dbToLinear(volumeDb)
 	h.loop = loop
 	h.fadeInSamples = msToSamples(fadeInMs, h.sampleRate)
-	h.fadeInOffset  = 0 // will be adjusted below for late-join seeks
+	h.fadeInOffset = 0 // will be adjusted below for late-join seeks
 	h.fadeOutSamples = msToSamples(fadeOutMs, h.sampleRate)
 
 	totalFrames := int64(len(h.pcm)) / int64(h.channels)
@@ -437,12 +602,12 @@ func (e *Engine) FadeVolume(cueID string, targetVolumeDb, durationMs float64, st
 		h.volume = targetLinear
 		return nil
 	}
-	h.volumeFadeStart   = h.volume
-	h.volumeFadeTarget  = targetLinear
+	h.volumeFadeStart = h.volume
+	h.volumeFadeTarget = targetLinear
 	h.volumeFadeSamples = totalSamples
-	h.volumeFadePos     = 0
-	h.volumeFadeStop    = stopWhenDone
-	h.volumeFadePause   = pauseWhenDone
+	h.volumeFadePos = 0
+	h.volumeFadeStop = stopWhenDone
+	h.volumeFadePause = pauseWhenDone
 	log.Printf("[audioengine] fadeVolume cueID=%s → %.1fdB over %.0fms", cueID, targetVolumeDb, durationMs)
 	return nil
 }
@@ -475,12 +640,12 @@ func (e *Engine) DuckAll(duckVolumeDb float64, durationMs float64) {
 			original := h.volume
 			totalSamples := msToSamples(durationMs, h.sampleRate)
 			if totalSamples > 0 {
-				h.volumeFadeStart   = original
-				h.volumeFadeTarget  = duckLinear
+				h.volumeFadeStart = original
+				h.volumeFadeTarget = duckLinear
 				h.volumeFadeSamples = totalSamples
-				h.volumeFadePos     = 0
-				h.volumeFadeStop    = false
-				h.volumeFadePause   = false
+				h.volumeFadePos = 0
+				h.volumeFadeStop = false
+				h.volumeFadePause = false
 				// Nach dem Duck-Fade zurückblenden (zweites Fade wird nach erstem gestartet)
 				// Vereinfachte Implementierung: direkt auf original zurücksetzen nach durationMs
 				// via einer Goroutine (außerhalb des Callbacks).
@@ -504,10 +669,10 @@ func (e *Engine) DuckAll(duckVolumeDb float64, durationMs float64) {
 			h.mu.Lock()
 			if h.state == StatePlaying && h.volume <= duckLinear*1.1 {
 				// Nur zurückfaden wenn noch auf Duck-Level
-				h.volumeFadeStart   = h.volume
-				h.volumeFadeTarget  = 1.0 // Unity zurück
+				h.volumeFadeStart = h.volume
+				h.volumeFadeTarget = 1.0                             // Unity zurück
 				h.volumeFadeSamples = msToSamples(500, h.sampleRate) // 500ms Ramp-Back
-				h.volumeFadePos     = 0
+				h.volumeFadePos = 0
 			}
 			h.mu.Unlock()
 		}

@@ -55,11 +55,11 @@ class MediaSync {
     () async {
       try {
         _manifestSub = _grpc.watchManifest().listen(
-          _onManifestEvent,
-          onError: (_) => _scheduleReconnect(),
-          onDone: _scheduleReconnect,
-          cancelOnError: true,
-        );
+              _onManifestEvent,
+              onError: (_) => _scheduleReconnect(),
+              onDone: _scheduleReconnect,
+              cancelOnError: true,
+            );
       } catch (_) {
         _scheduleReconnect();
       }
@@ -74,7 +74,8 @@ class MediaSync {
       case ManifestEventType.added:
       case ManifestEventType.updated:
         for (final f in event.assets) {
-          if (_manifest[f.name] != f.sha256 || !File(_pathFor(f.name)).existsSync()) {
+          if (_manifest[f.name] != f.sha256 ||
+              !File(_pathFor(f.name)).existsSync()) {
             _download(f.name, expectedSha: f.sha256);
           }
         }
@@ -111,9 +112,10 @@ class MediaSync {
     final remoteNames = <String>{};
     for (final f in remote) {
       remoteNames.add(f.name);
-      // Manifest-Eintrag sofort setzen (filenameForSha256 funktioniert direkt)
-      _manifest[f.name] = f.sha256;
-      if (_isLocalCurrent(f.name, f.sha256)) continue;
+      if (_isLocalCurrent(f.name, f.sha256)) {
+        _manifest[f.name] = f.sha256;
+        continue;
+      }
       await _download(f.name, expectedSha: f.sha256);
     }
     await _pruneMissing(remoteNames);
@@ -147,7 +149,9 @@ class MediaSync {
   Future<String?> _download(String name, {String? expectedSha}) {
     final existing = _inflight[name];
     if (existing != null) return existing;
-    final fut = _doDownload(name, expectedSha).whenComplete(() => _inflight.remove(name));
+    final fut = _doDownload(name, expectedSha).whenComplete(() {
+      _inflight.remove(name);
+    });
     _inflight[name] = fut;
     return fut;
   }
@@ -163,7 +167,7 @@ class MediaSync {
     try {
       final bytes = await _grpc.streamFile(name: name);
       final tmpFile = File(tmp);
-      await tmpFile.writeAsBytes(bytes, flush: true);
+      await tmpFile.writeAsBytes(bytes);
       await tmpFile.rename(dst);
       _manifest[name] = expectedSha ?? '';
       debugPrint('[MediaSync] geladen: $name (${bytes.length} B)');
@@ -248,7 +252,9 @@ class MediaSync {
     // Deduplizieren: gleicher assetId läuft nur einmal
     final existing = _inflight[assetId];
     if (existing != null) return existing;
-    final fut = _doDownloadByAssetId(assetId).whenComplete(() => _inflight.remove(assetId));
+    final fut = _doDownloadByAssetId(assetId).whenComplete(() {
+      _inflight.remove(assetId);
+    });
     _inflight[assetId] = fut;
     return fut;
   }
@@ -256,18 +262,22 @@ class MediaSync {
   /// Lädt eine Datei direkt per assetId (SHA-256) herunter.
   /// Speichert als `assetId`-Dateiname (miniaudio erkennt Format aus Magic-Bytes).
   Future<String?> _doDownloadByAssetId(String assetId) async {
-    final dst = _pathFor(assetId); // ohne Extension — miniaudio detektiert Format
+    final dst =
+        _pathFor(assetId); // ohne Extension — miniaudio detektiert Format
     final tmp = '$dst.part';
     final localExists = File(dst).existsSync();
     try {
-      final bytes = await _grpc.streamFile(assetId: assetId); // korrekt: assetId nicht name
+      final bytes = await _grpc.streamFile(
+          assetId: assetId); // korrekt: assetId nicht name
       await File(tmp).writeAsBytes(bytes, flush: true);
       await File(tmp).rename(dst);
       _manifest[assetId] = assetId;
-      debugPrint('[MediaSync] geladen per assetId: ${assetId.substring(0, 8)}… (${bytes.length} B)');
+      debugPrint(
+          '[MediaSync] geladen per assetId: ${assetId.substring(0, 8)}… (${bytes.length} B)');
       return dst;
     } catch (e) {
-      debugPrint('[MediaSync] Download-Fehler assetId=${assetId.substring(0, 8)}…: $e');
+      debugPrint(
+          '[MediaSync] Download-Fehler assetId=${assetId.substring(0, 8)}…: $e');
       try {
         if (File(tmp).existsSync()) await File(tmp).delete();
       } catch (_) {/* ignorieren */}
@@ -291,7 +301,15 @@ class MediaSync {
 // ── Hilfsmethoden ────────────────────────────────────────────────────────────
 
 class ServerMediaClientNames {
-  static const _exts = {'.wav', '.mp3', '.flac', '.aac', '.ogg', '.m4a', '.aiff'};
+  static const _exts = {
+    '.wav',
+    '.mp3',
+    '.flac',
+    '.aac',
+    '.ogg',
+    '.m4a',
+    '.aiff'
+  };
   static bool isAudio(String name) =>
       _exts.contains(p.extension(name).toLowerCase());
 }
@@ -303,6 +321,10 @@ class ServerMediaClientNames {
 @visibleForTesting
 class FakeMediaGrpcClient extends MediaGrpcClient {
   final Map<String, Uint8List> _files;
+
+  /// Zugriff auf die internen Dateien (z.B. für Tracking-Subklassen).
+  Map<String, Uint8List> get files => _files;
+
   bool failNext = false;
 
   FakeMediaGrpcClient(this._files);
@@ -325,7 +347,11 @@ class FakeMediaGrpcClient extends MediaGrpcClient {
   }
 
   @override
-  Future<Uint8List> streamFile({String? assetId, String? name, int offset = 0, void Function(int, int)? onProgress}) async {
+  Future<Uint8List> streamFile(
+      {String? assetId,
+      String? name,
+      int offset = 0,
+      void Function(int, int)? onProgress}) async {
     if (failNext) {
       failNext = false;
       throw Exception('Simulierter Netzwerkfehler');

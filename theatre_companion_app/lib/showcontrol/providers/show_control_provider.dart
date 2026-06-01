@@ -80,7 +80,8 @@ class ShowControlState {
   }) =>
       ShowControlState(
         cueList: cueList ?? this.cueList,
-        activeCue: identical(activeCue, _unset) ? this.activeCue : activeCue as Cue?,
+        activeCue:
+            identical(activeCue, _unset) ? this.activeCue : activeCue as Cue?,
         nextCue: identical(nextCue, _unset) ? this.nextCue : nextCue as Cue?,
         isLoading: isLoading ?? this.isLoading,
         isPaused: isPaused ?? this.isPaused,
@@ -232,10 +233,8 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
     if (list == null) return;
 
     final byId = {for (final c in list.cues) c.cueId: c};
-    final reordered = orderedIds
-        .map((id) => byId[id])
-        .whereType<Cue>()
-        .toList();
+    final reordered =
+        orderedIds.map((id) => byId[id]).whereType<Cue>().toList();
 
     // Renumber sequentially so the list order always matches the numbers.
     for (var i = 0; i < reordered.length; i++) {
@@ -249,7 +248,9 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
     await updateCueList(updated);
   }
 
-  Future<void> addCue({domain_params.CueParams params = const domain_params.AudioParams(assetId: '')}) async {
+  Future<void> addCue(
+      {domain_params.CueParams params =
+          const domain_params.AudioParams(assetId: '')}) async {
     if (!_session.isInSession) return;
     final domainCue = domain.Cue(
       id: _uuid.v4(),
@@ -283,8 +284,11 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
         ? (cues.indexWhere((c) => c.cueId == afterId) + 1).clamp(0, cues.length)
         : cues.length;
 
-    final prevNum = insertIdx > 0 ? double.tryParse(cues[insertIdx - 1].number) : null;
-    final nextNum = insertIdx < cues.length ? double.tryParse(cues[insertIdx].number) : null;
+    final prevNum =
+        insertIdx > 0 ? double.tryParse(cues[insertIdx - 1].number) : null;
+    final nextNum = insertIdx < cues.length
+        ? double.tryParse(cues[insertIdx].number)
+        : null;
     final newNum = _midNumber(prevNum, nextNum, insertIdx);
 
     final newCue = domain.Cue(
@@ -354,7 +358,9 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
   String _midNumber(double? prev, double? next, int idx) {
     if (prev != null && next != null) {
       final mid = (prev + next) / 2;
-      return mid == mid.truncateToDouble() ? mid.toInt().toString() : mid.toStringAsFixed(1);
+      return mid == mid.truncateToDouble()
+          ? mid.toInt().toString()
+          : mid.toStringAsFixed(1);
     }
     if (prev != null) return (prev + 1).toInt().toString();
     if (next != null && next > 1) return (next - 1).toInt().toString();
@@ -444,7 +450,8 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
     }
     if (event.hasPatchConfig()) {
       newState = newState.copyWith(
-        patchConfig: repo.ShowControlRepository.patchConfigFromProto(event.patchConfig),
+        patchConfig:
+            repo.ShowControlRepository.patchConfigFromProto(event.patchConfig),
       );
     }
     if (newState != state) state = newState;
@@ -491,13 +498,16 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
             : _eventServerMs(event);
         state = state.copyWith(
           isPaused: false,
-          activeCue: event.hasAffectedCue() ? event.affectedCue : state.activeCue,
+          activeCue:
+              event.hasAffectedCue() ? event.affectedCue : state.activeCue,
           activeCueStartedServerMs: startMs,
           pausedAtServerMs: null,
           cueDoneServerMs: null, // neuer GO/Resume → done-Zustand löschen
           runningCueIds: event.runningCueIds.isNotEmpty
               ? event.runningCueIds.toSet()
-              : (event.hasAffectedCue() ? {event.affectedCue.cueId} : state.runningCueIds),
+              : (event.hasAffectedCue()
+                  ? {event.affectedCue.cueId}
+                  : state.runningCueIds),
         );
       case ShowExecutionEvent_ExecutionEventType.CUE_PAUSED:
         state = state.copyWith(
@@ -573,6 +583,11 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
     // Capabilities aus dem Event oder vorherigem Eintrag übernehmen.
     AuditionCapability audition = AuditionCapability.none;
     List<AudioDevice> availableDevices = existing?.availableDevices ?? const [];
+    int? selectedDeviceIndex = existing?.selectedDeviceIndex;
+    AudioBackend? activeBackend = existing?.activeBackend;
+    List<AudioBackend> backendPriority = existing?.backendPriority ?? const [];
+    int? sampleRate = existing?.sampleRate;
+    int? channels = existing?.channels;
 
     if (event.hasCapabilities()) {
       final caps = event.capabilities;
@@ -589,9 +604,23 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
             .map((d) => AudioDevice(
                   id: d.name, // proto has no opaque id — use name as stable key
                   name: d.name,
+                  backend: audioBackendFromWireName(d.backend),
                   index: d.index,
                 ))
             .toList();
+      }
+      if (caps.hasAudio()) {
+        final audio = caps.audio;
+        selectedDeviceIndex = audio.selectedDevice;
+        activeBackend = audio.activeBackend.isEmpty
+            ? null
+            : audioBackendFromWireName(audio.activeBackend);
+        backendPriority = audio.backendPriority
+            .map(audioBackendFromWireName)
+            .where((b) => b != AudioBackend.unknown)
+            .toList();
+        sampleRate = audio.sampleRate == 0 ? null : audio.sampleRate;
+        channels = audio.channels == 0 ? null : audio.channels;
       }
     }
 
@@ -603,6 +632,11 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
       clockDeltaMs: existing?.clockDeltaMs,
       audition: audition,
       availableDevices: availableDevices,
+      selectedDeviceIndex: selectedDeviceIndex,
+      activeBackend: activeBackend,
+      backendPriority: backendPriority,
+      sampleRate: sampleRate,
+      channels: channels,
     );
 
     state = state.copyWith(nodeStatuses: _nodeMap.values.toList());

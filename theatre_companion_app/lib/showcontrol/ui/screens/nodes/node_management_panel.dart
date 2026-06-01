@@ -28,12 +28,13 @@ class _NodeManagementPanelState extends ConsumerState<NodeManagementPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final session           = ref.watch(sessionProvider);
-    final nodes             = ref.watch(nodeStatusListProvider);
-    final isMasterOrEditor  = session.myNode?.tasks.any(
-          (t) => t.value == 1 || t.value == 3) ?? false;
+    final session = ref.watch(sessionProvider);
+    final nodes = ref.watch(nodeStatusListProvider);
+    final isMasterOrEditor =
+        session.myNode?.tasks.any((t) => t.value == 1 || t.value == 3) ?? false;
 
-    final selected = nodes.where((n) => n.nodeId == _selectedNodeId).firstOrNull;
+    final selected =
+        nodes.where((n) => n.nodeId == _selectedNodeId).firstOrNull;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -75,7 +76,9 @@ class _NodeManagementPanelState extends ConsumerState<NodeManagementPanel> {
                 child: selected == null
                     ? Center(
                         child: Text(
-                          nodes.isEmpty ? 'Keine Nodes verbunden' : 'Node auswählen',
+                          nodes.isEmpty
+                              ? 'Keine Nodes verbunden'
+                              : 'Node auswählen',
                           style: ScText.label.copyWith(color: ScColors.textDim),
                         ),
                       )
@@ -104,7 +107,8 @@ class _NodeCountDot extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 6, height: 6,
+          width: 6,
+          height: 6,
           decoration: BoxDecoration(
             color: count > 0 ? ScColors.active : ScColors.past,
             shape: BoxShape.circle,
@@ -178,7 +182,8 @@ class _NodeRow extends StatefulWidget {
   final bool isSelected;
   final VoidCallback onTap;
 
-  const _NodeRow({required this.node, required this.isSelected, required this.onTap});
+  const _NodeRow(
+      {required this.node, required this.isSelected, required this.onTap});
 
   @override
   State<_NodeRow> createState() => _NodeRowState();
@@ -192,18 +197,20 @@ class _NodeRowState extends State<_NodeRow> {
     final n = widget.node;
     final bg = widget.isSelected
         ? ScColors.active.withValues(alpha: 0.08)
-        : _hovered ? ScColors.hover : Colors.transparent;
+        : _hovered
+            ? ScColors.hover
+            : Colors.transparent;
 
     final healthColor = switch (n.health) {
-      NodeHealthPhase.online       => ScColors.active,
-      NodeHealthPhase.degraded     => ScColors.warn,
+      NodeHealthPhase.online => ScColors.active,
+      NodeHealthPhase.degraded => ScColors.warn,
       NodeHealthPhase.reconnecting => ScColors.warn,
-      NodeHealthPhase.offline      => ScColors.error,
+      NodeHealthPhase.offline => ScColors.error,
     };
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
-      onExit:  (_) => setState(() => _hovered = false),
+      onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
         onTap: widget.onTap,
         child: Container(
@@ -217,16 +224,19 @@ class _NodeRowState extends State<_NodeRow> {
                 width: 12,
                 child: widget.isSelected
                     ? Container(
-                        width: 4, height: 4,
+                        width: 4,
+                        height: 4,
                         decoration: const BoxDecoration(
-                          color: ScColors.active, shape: BoxShape.circle),
+                            color: ScColors.active, shape: BoxShape.circle),
                       )
                     : null,
               ),
               // Health dot
               Container(
-                width: 7, height: 7,
-                decoration: BoxDecoration(color: healthColor, shape: BoxShape.circle),
+                width: 7,
+                height: 7,
+                decoration:
+                    BoxDecoration(color: healthColor, shape: BoxShape.circle),
               ),
               const SizedBox(width: 8),
               // Name + tasks
@@ -248,7 +258,8 @@ class _NodeRowState extends State<_NodeRow> {
                     const SizedBox(height: 2),
                     Wrap(
                       spacing: 3,
-                      children: n.tasks.map((t) => _TaskBadge(task: t)).toList(),
+                      children:
+                          n.tasks.map((t) => _TaskBadge(task: t)).toList(),
                     ),
                   ],
                 ),
@@ -269,10 +280,10 @@ class _TaskBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = switch (task) {
       'master' => ScColors.active,
-      'audio'  => const Color(0xFF4FC3F7),
+      'audio' => const Color(0xFF4FC3F7),
       'editor' => ScColors.warn,
       'ma_osc' => const Color(0xFFCE93D8),
-      _        => ScColors.textDim,
+      _ => ScColors.textDim,
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
@@ -302,41 +313,132 @@ class _NodeDetailColumn extends ConsumerStatefulWidget {
 
 class _NodeDetailColumnState extends ConsumerState<_NodeDetailColumn> {
   int? _selectedDeviceIdx;
+  late final TextEditingController _sampleRateCtrl;
+  late final TextEditingController _channelsCtrl;
+  Set<AudioBackend> _selectedBackends = <AudioBackend>{};
+  AudioBackend? _preferredBackend;
+
+  @override
+  void initState() {
+    super.initState();
+    _sampleRateCtrl = TextEditingController();
+    _channelsCtrl = TextEditingController();
+    _syncAudioConfigFromNode();
+  }
+
+  @override
+  void dispose() {
+    _sampleRateCtrl.dispose();
+    _channelsCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   void didUpdateWidget(_NodeDetailColumn old) {
     super.didUpdateWidget(old);
     if (old.node.nodeId != widget.node.nodeId) {
       _selectedDeviceIdx = null;
+      _syncAudioConfigFromNode();
+      return;
+    }
+    if (old.node.backendPriority != widget.node.backendPriority ||
+        old.node.activeBackend != widget.node.activeBackend ||
+        old.node.sampleRate != widget.node.sampleRate ||
+        old.node.channels != widget.node.channels ||
+        old.node.availableDevices != widget.node.availableDevices) {
+      _syncAudioConfigFromNode();
     }
   }
 
   // Returns the effective selection: user-picked index OR the currently active device.
-  int? _effectiveIdx(List<AudioDevice> devices, AudioDevice? activeDevice, bool isLocal) {
+  int? _effectiveIdx(
+      List<AudioDevice> devices, AudioDevice? activeDevice, bool isLocal) {
     if (_selectedDeviceIdx != null) return _selectedDeviceIdx;
     if (isLocal) {
       if (activeDevice == null) return null;
       final i = devices.indexWhere((d) => d.name == activeDevice.name);
       return i >= 0 ? i : null;
     }
-    // Remote node: pre-select via audition device name reported in capabilities.
-    final remoteName = widget.node.audition.deviceName;
-    if (remoteName == null || remoteName.isEmpty) return null;
-    final i = devices.indexWhere((d) => d.name == remoteName);
+    final selectedIndex = widget.node.selectedDeviceIndex;
+    if (selectedIndex == null) return null;
+    final i = devices.indexWhere((d) => d.index == selectedIndex);
     return i >= 0 ? i : null;
+  }
+
+  void _syncAudioConfigFromNode() {
+    final ordered =
+        _effectiveBackendOrder(_backendChoices(widget.node.availableDevices));
+    _selectedBackends = ordered.toSet();
+    _preferredBackend = ordered.isNotEmpty ? ordered.first : null;
+    _sampleRateCtrl.text = widget.node.sampleRate?.toString() ?? '';
+    _channelsCtrl.text = widget.node.channels?.toString() ?? '';
+  }
+
+  List<AudioBackend> _backendChoices(List<AudioDevice> devices) {
+    final ordered = <AudioBackend>[];
+    void add(AudioBackend? backend) {
+      if (backend == null ||
+          backend == AudioBackend.unknown ||
+          ordered.contains(backend)) {
+        return;
+      }
+      ordered.add(backend);
+    }
+
+    for (final backend in widget.node.backendPriority) {
+      add(backend);
+    }
+    add(widget.node.activeBackend);
+    for (final device in devices) {
+      add(device.backend);
+    }
+    return ordered;
+  }
+
+  List<AudioBackend> _effectiveBackendOrder(List<AudioBackend> available) {
+    final ordered = <AudioBackend>[];
+    void add(AudioBackend? backend) {
+      if (backend == null ||
+          backend == AudioBackend.unknown ||
+          ordered.contains(backend)) {
+        return;
+      }
+      ordered.add(backend);
+    }
+
+    add(_preferredBackend);
+    for (final backend in widget.node.backendPriority) {
+      add(backend);
+    }
+    add(widget.node.activeBackend);
+    for (final backend in _selectedBackends) {
+      add(backend);
+    }
+    for (final backend in available) {
+      add(backend);
+    }
+    return ordered.where(_selectedBackends.contains).toList();
   }
 
   @override
   Widget build(BuildContext context) {
-    final session      = ref.watch(sessionProvider);
-    final audioStatus  = ref.watch(audioNodeProvider);
-    final mgmtState    = ref.watch(nodeManagementProvider);
-    final node         = widget.node;
-    final isLocalNode  = node.nodeId == session.myNode?.nodeId;
-    final devices      = isLocalNode ? audioStatus.availableDevices : node.availableDevices;
-    final isLocalAudioOk = isLocalNode && audioStatus.state == AudioNodeState.connected;
-    final canInteract  = isLocalNode ? isLocalAudioOk : devices.isNotEmpty;
-    final effectiveIdx = _effectiveIdx(devices, audioStatus.selectedDevice, isLocalNode);
+    final session = ref.watch(sessionProvider);
+    final audioStatus = ref.watch(audioNodeProvider);
+    final mgmtState = ref.watch(nodeManagementProvider);
+    final node = widget.node;
+    final isLocalNode = node.nodeId == session.myNode?.nodeId;
+    final devices =
+        isLocalNode ? audioStatus.availableDevices : node.availableDevices;
+    final isLocalAudioOk =
+        isLocalNode && audioStatus.state == AudioNodeState.connected;
+    final canInteract = isLocalNode ? isLocalAudioOk : devices.isNotEmpty;
+    final currentDevice = isLocalNode
+        ? (audioStatus.selectedDevice ?? node.selectedAudioDevice)
+        : node.selectedAudioDevice;
+    final effectiveIdx = _effectiveIdx(devices, currentDevice, isLocalNode);
+    final backendChoices = _backendChoices(devices);
+    final backendOrder = _effectiveBackendOrder(backendChoices);
+    final activeBackend = node.activeBackend ?? currentDevice?.backend;
 
     return SingleChildScrollView(
       child: Column(
@@ -364,7 +466,8 @@ class _NodeDetailColumnState extends ConsumerState<_NodeDetailColumn> {
             _SectionHeader('ROLLEN'),
             _TaskEditor(
               node: node,
-              onSave: (tasks) => ref.read(nodeManagementProvider.notifier)
+              onSave: (tasks) => ref
+                  .read(nodeManagementProvider.notifier)
                   .setNodeTasks(targetNodeId: node.nodeId, tasks: tasks),
             ),
           ] else ...[
@@ -390,7 +493,9 @@ class _NodeDetailColumnState extends ConsumerState<_NodeDetailColumn> {
                     horizontal: ScSpacing.panelPad, vertical: 6),
                 child: Text(
                   isLocalNode
-                      ? (isLocalAudioOk ? 'Keine Geräte gefunden' : 'Audio-Node inaktiv')
+                      ? (isLocalAudioOk
+                          ? 'Keine Geräte gefunden'
+                          : 'Audio-Node inaktiv')
                       : 'Keine Gerätliste',
                   style: ScText.label.copyWith(color: ScColors.textDim),
                 ),
@@ -399,8 +504,8 @@ class _NodeDetailColumnState extends ConsumerState<_NodeDetailColumn> {
               ...devices.asMap().entries.map((e) => _DeviceSelectRow(
                     device: e.value,
                     isSelected: effectiveIdx == e.key,
-                    isCurrent: isLocalNode &&
-                        audioStatus.selectedDevice?.name == e.value.name,
+                    isCurrent:
+                        isLocalNode && currentDevice?.name == e.value.name,
                     onTap: () => setState(() => _selectedDeviceIdx = e.key),
                   )),
             // Device action buttons
@@ -417,10 +522,13 @@ class _NodeDetailColumnState extends ConsumerState<_NodeDetailColumn> {
                     onPressed: (effectiveIdx != null && canInteract)
                         ? () {
                             if (isLocalNode) {
-                              ref.read(audioNodeProvider.notifier)
+                              ref
+                                  .read(audioNodeProvider.notifier)
                                   .selectDevice(devices[effectiveIdx]);
                             }
-                            ref.read(nodeManagementProvider.notifier).setAudioDevice(
+                            ref
+                                .read(nodeManagementProvider.notifier)
+                                .setAudioDevice(
                                   targetNodeId: node.nodeId,
                                   deviceIndex: devices[effectiveIdx].index,
                                   deviceName: devices[effectiveIdx].name,
@@ -437,10 +545,12 @@ class _NodeDetailColumnState extends ConsumerState<_NodeDetailColumn> {
                     onPressed: canInteract
                         ? () {
                             if (isLocalNode) {
-                              ref.read(audioNodeProvider.notifier)
+                              ref
+                                  .read(audioNodeProvider.notifier)
                                   .resetToDefaultDevice();
                             }
-                            ref.read(nodeManagementProvider.notifier)
+                            ref
+                                .read(nodeManagementProvider.notifier)
                                 .resetToDefault(targetNodeId: node.nodeId);
                           }
                         : null,
@@ -448,11 +558,193 @@ class _NodeDetailColumnState extends ConsumerState<_NodeDetailColumn> {
                   if (mgmtState.isSending) ...[
                     const SizedBox(width: 8),
                     const SizedBox(
-                      width: 12, height: 12,
+                      width: 12,
+                      height: 12,
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: ScColors.active),
                     ),
                   ],
+                ],
+              ),
+            ),
+            const Divider(height: 1, color: ScColors.divider),
+            _SectionHeader('BACKEND'),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: ScSpacing.panelPad, vertical: 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _PropRow(
+                    'Aktiv',
+                    activeBackend == null
+                        ? 'Nicht gemeldet'
+                        : audioBackendToWireName(activeBackend).toUpperCase(),
+                  ),
+                  _PropRow(
+                    'Order',
+                    backendOrder.isEmpty
+                        ? 'Nicht konfiguriert'
+                        : backendOrder
+                            .map((b) => audioBackendToWireName(b).toUpperCase())
+                            .join(' → '),
+                  ),
+                  const SizedBox(height: 8),
+                  if (backendChoices.isEmpty)
+                    Text(
+                      'Keine Backend-Informationen verfügbar',
+                      style: ScText.label.copyWith(color: ScColors.textDim),
+                    )
+                  else ...[
+                    Text('Bevorzugtes Backend', style: ScText.label),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: backendChoices.map((backend) {
+                        final selected = _preferredBackend == backend;
+                        return ChoiceChip(
+                          label: Text(
+                              audioBackendToWireName(backend).toUpperCase()),
+                          selected: selected,
+                          onSelected: canInteract
+                              ? (_) => setState(() {
+                                    _preferredBackend = backend;
+                                    _selectedBackends.add(backend);
+                                  })
+                              : null,
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 8),
+                    Text('Fallbacks aktivieren', style: ScText.label),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: backendChoices.map((backend) {
+                        final selected = _selectedBackends.contains(backend);
+                        final isPreferred = _preferredBackend == backend;
+                        return FilterChip(
+                          label: Text(
+                            '${audioBackendToWireName(backend).toUpperCase()}${isPreferred ? ' • PREF' : ''}',
+                          ),
+                          selected: selected,
+                          onSelected: canInteract
+                              ? (value) => setState(() {
+                                    if (value) {
+                                      _selectedBackends.add(backend);
+                                      _preferredBackend ??= backend;
+                                    } else {
+                                      _selectedBackends.remove(backend);
+                                      if (_preferredBackend == backend) {
+                                        _preferredBackend =
+                                            _selectedBackends.isNotEmpty
+                                                ? _selectedBackends.first
+                                                : null;
+                                      }
+                                    }
+                                  })
+                              : null,
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      ScButton(
+                        label: 'Backend anwenden',
+                        icon: Icons.tune,
+                        variant: ScButtonVariant.secondary,
+                        size: ScButtonSize.compact,
+                        onPressed: canInteract && backendChoices.isNotEmpty
+                            ? () => ref
+                                .read(nodeManagementProvider.notifier)
+                                .setAudioBackendPriority(
+                                  targetNodeId: node.nodeId,
+                                  preferredBackend: _preferredBackend,
+                                  backendPriority: backendOrder,
+                                )
+                            : null,
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1, color: ScColors.divider),
+            _SectionHeader('AUDIO-FORMAT'),
+            Padding(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: ScSpacing.panelPad, vertical: 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _PropRow(
+                    'Aktuell',
+                    node.sampleRate != null && node.channels != null
+                        ? '${node.sampleRate} Hz / ${node.channels} ch'
+                        : 'Nicht gemeldet',
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _sampleRateCtrl,
+                          keyboardType: TextInputType.number,
+                          style: ScText.label
+                              .copyWith(color: ScColors.textPrimary),
+                          decoration: const InputDecoration(
+                            labelText: 'Sample-Rate (Hz)',
+                            isDense: true,
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: TextField(
+                          controller: _channelsCtrl,
+                          keyboardType: TextInputType.number,
+                          style: ScText.label
+                              .copyWith(color: ScColors.textPrimary),
+                          decoration: const InputDecoration(
+                            labelText: 'Kanäle',
+                            isDense: true,
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      ScButton(
+                        label: 'Format anwenden',
+                        icon: Icons.equalizer,
+                        variant: ScButtonVariant.secondary,
+                        size: ScButtonSize.compact,
+                        onPressed: canInteract
+                            ? () {
+                                final sampleRate =
+                                    int.tryParse(_sampleRateCtrl.text.trim());
+                                final channels =
+                                    int.tryParse(_channelsCtrl.text.trim());
+                                ref
+                                    .read(nodeManagementProvider.notifier)
+                                    .setAudioFormat(
+                                      targetNodeId: node.nodeId,
+                                      sampleRate: sampleRate,
+                                      channels: channels,
+                                    );
+                              }
+                            : null,
+                      ),
+                    ],
+                  ),
                 ],
               ),
             ),
@@ -473,7 +765,8 @@ class _NodeDetailColumnState extends ConsumerState<_NodeDetailColumn> {
                   horizontal: ScSpacing.panelPad, vertical: 6),
               child: Row(
                 children: [
-                  const Icon(Icons.error_outline, size: 12, color: ScColors.error),
+                  const Icon(Icons.error_outline,
+                      size: 12, color: ScColors.error),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(mgmtState.error!,
@@ -489,15 +782,15 @@ class _NodeDetailColumnState extends ConsumerState<_NodeDetailColumn> {
   }
 
   static String _healthLabel(NodeHealthPhase h) => switch (h) {
-    NodeHealthPhase.online       => 'Online',
-    NodeHealthPhase.degraded     => 'Degraded',
-    NodeHealthPhase.reconnecting => 'Reconnecting…',
-    NodeHealthPhase.offline      => 'Offline',
-  };
+        NodeHealthPhase.online => 'Online',
+        NodeHealthPhase.degraded => 'Degraded',
+        NodeHealthPhase.reconnecting => 'Reconnecting…',
+        NodeHealthPhase.offline => 'Offline',
+      };
 
   static Color _clockColor(int ms) {
     final abs = ms.abs();
-    if (abs <= 5)  return ScColors.active;
+    if (abs <= 5) return ScColors.active;
     if (abs <= 20) return ScColors.warn;
     return ScColors.error;
   }
@@ -576,11 +869,13 @@ class _DeviceSelectRowState extends State<_DeviceSelectRow> {
   Widget build(BuildContext context) {
     final bg = widget.isSelected
         ? ScColors.active.withValues(alpha: 0.08)
-        : _hovered ? ScColors.hover : Colors.transparent;
+        : _hovered
+            ? ScColors.hover
+            : Colors.transparent;
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
-      onExit:  (_) => setState(() => _hovered = false),
+      onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
         onTap: widget.onTap,
         child: Container(
@@ -592,12 +887,14 @@ class _DeviceSelectRowState extends State<_DeviceSelectRow> {
               SizedBox(
                 width: 14,
                 child: widget.isCurrent
-                    ? const Icon(Icons.volume_up, size: 11, color: ScColors.active)
+                    ? const Icon(Icons.volume_up,
+                        size: 11, color: ScColors.active)
                     : widget.isSelected
                         ? Container(
-                            width: 4, height: 4,
+                            width: 4,
+                            height: 4,
                             decoration: const BoxDecoration(
-                              color: ScColors.active, shape: BoxShape.circle),
+                                color: ScColors.active, shape: BoxShape.circle),
                           )
                         : null,
               ),
@@ -642,7 +939,7 @@ class _TestSignalRow extends ConsumerStatefulWidget {
 }
 
 class _TestSignalRowState extends ConsumerState<_TestSignalRow> {
-  bool _toneActive  = false;
+  bool _toneActive = false;
   bool _sweepActive = false;
 
   @override
@@ -668,12 +965,14 @@ class _TestSignalRowState extends ConsumerState<_TestSignalRow> {
         ScButton(
           label: _sweepActive ? 'Stop' : 'Sweep',
           icon: _sweepActive ? Icons.stop : Icons.multiline_chart,
-          variant: _sweepActive ? ScButtonVariant.danger : ScButtonVariant.ghost,
+          variant:
+              _sweepActive ? ScButtonVariant.danger : ScButtonVariant.ghost,
           size: ScButtonSize.compact,
           onPressed: widget.isMaster
               ? () async {
                   setState(() => _sweepActive = true);
-                  await notifier.sendTestSweep(targetNodeId: widget.node.nodeId);
+                  await notifier.sendTestSweep(
+                      targetNodeId: widget.node.nodeId);
                   await Future.delayed(const Duration(milliseconds: 3100));
                   if (mounted) setState(() => _sweepActive = false);
                 }
@@ -681,7 +980,8 @@ class _TestSignalRowState extends ConsumerState<_TestSignalRow> {
         ),
         if (!widget.isMaster) ...[
           const SizedBox(width: 8),
-          Text('Nur Master', style: ScText.label.copyWith(color: ScColors.textDim)),
+          Text('Nur Master',
+              style: ScText.label.copyWith(color: ScColors.textDim)),
         ],
       ],
     );
@@ -706,11 +1006,19 @@ class _TaskEditorState extends State<_TaskEditor> {
   bool _dirty = false;
 
   static const _assignable = [
-    (task: NodeTask.NODE_TASK_MASTER,       label: 'Master',  color: ScColors.active),
-    (task: NodeTask.NODE_TASK_AUDIO_OUTPUT, label: 'Audio',   color: Color(0xFF4FC3F7)),
-    (task: NodeTask.NODE_TASK_EDITOR,       label: 'Editor',  color: ScColors.warn),
-    (task: NodeTask.NODE_TASK_MA_OSC,       label: 'MA OSC',  color: Color(0xFFCE93D8)),
-    (task: NodeTask.NODE_TASK_VIEWER,       label: 'Viewer',  color: ScColors.textDim),
+    (task: NodeTask.NODE_TASK_MASTER, label: 'Master', color: ScColors.active),
+    (
+      task: NodeTask.NODE_TASK_AUDIO_OUTPUT,
+      label: 'Audio',
+      color: Color(0xFF4FC3F7)
+    ),
+    (task: NodeTask.NODE_TASK_EDITOR, label: 'Editor', color: ScColors.warn),
+    (
+      task: NodeTask.NODE_TASK_MA_OSC,
+      label: 'MA OSC',
+      color: Color(0xFFCE93D8)
+    ),
+    (task: NodeTask.NODE_TASK_VIEWER, label: 'Viewer', color: ScColors.textDim),
   ];
 
   @override
@@ -732,10 +1040,9 @@ class _TaskEditorState extends State<_TaskEditor> {
 
   Set<NodeTask> _tasksFromNode() {
     return widget.node.tasks
-        .map((label) => _assignable
-            .map((e) => e.task)
-            .firstWhere((t) => t.name.toLowerCase().contains(label.toLowerCase()),
-                orElse: () => NodeTask.NODE_TASK_UNSPECIFIED))
+        .map((label) => _assignable.map((e) => e.task).firstWhere(
+            (t) => t.name.toLowerCase().contains(label.toLowerCase()),
+            orElse: () => NodeTask.NODE_TASK_UNSPECIFIED))
         .where((t) => t != NodeTask.NODE_TASK_UNSPECIFIED)
         .toSet();
   }
@@ -768,9 +1075,12 @@ class _TaskEditorState extends State<_TaskEditor> {
                 onTap: () => _toggle(e.task),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 100),
-                  padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                   decoration: BoxDecoration(
-                    color: isOn ? e.color.withValues(alpha: 0.15) : Colors.transparent,
+                    color: isOn
+                        ? e.color.withValues(alpha: 0.15)
+                        : Colors.transparent,
                     border: Border.all(
                       color: isOn ? e.color : e.color.withValues(alpha: 0.35),
                     ),

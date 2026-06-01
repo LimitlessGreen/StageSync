@@ -12,7 +12,7 @@ enum NodeHealthPhase { online, reconnecting, offline, degraded }
 @immutable
 class AuditionCapability {
   final bool supported;
-  final String? deviceName;  // e.g. "Headphones", "Kopfhörer"
+  final String? deviceName; // e.g. "Headphones", "Kopfhörer"
   final int? deviceIndex;
 
   const AuditionCapability({
@@ -21,8 +21,7 @@ class AuditionCapability {
     this.deviceIndex,
   });
 
-  static const AuditionCapability none =
-      AuditionCapability(supported: false);
+  static const AuditionCapability none = AuditionCapability(supported: false);
 }
 
 @immutable
@@ -44,6 +43,21 @@ class NodeStatus {
   /// Empty for nodes that have no audio capability or haven't reported yet.
   final List<AudioDevice> availableDevices;
 
+  /// Currently selected output device index as reported by the node.
+  final int? selectedDeviceIndex;
+
+  /// Currently active audio backend (e.g. jack/alsa/wasapi).
+  final AudioBackend? activeBackend;
+
+  /// Backend fallback order configured on the node.
+  final List<AudioBackend> backendPriority;
+
+  /// Current runtime sample rate in Hz. Null when the node does not report it.
+  final int? sampleRate;
+
+  /// Current runtime channel count. Null when the node does not report it.
+  final int? channels;
+
   const NodeStatus({
     required this.nodeId,
     required this.name,
@@ -52,14 +66,27 @@ class NodeStatus {
     this.clockDeltaMs,
     this.audition = AuditionCapability.none,
     this.availableDevices = const [],
+    this.selectedDeviceIndex,
+    this.activeBackend,
+    this.backendPriority = const [],
+    this.sampleRate,
+    this.channels,
   });
 
-  bool get isOnline   => health == NodeHealthPhase.online ||
-                         health == NodeHealthPhase.degraded;
-  bool get isAudio    => tasks.contains('audio');
-  bool get isMaNode   => tasks.contains('ma_osc');
-  bool get isMaster   => tasks.contains('master');
-  bool get isEditor   => tasks.contains('editor');
+  AudioDevice? get selectedAudioDevice {
+    if (selectedDeviceIndex == null) return null;
+    for (final device in availableDevices) {
+      if (device.index == selectedDeviceIndex) return device;
+    }
+    return null;
+  }
+
+  bool get isOnline =>
+      health == NodeHealthPhase.online || health == NodeHealthPhase.degraded;
+  bool get isAudio => tasks.contains('audio');
+  bool get isMaNode => tasks.contains('ma_osc');
+  bool get isMaster => tasks.contains('master');
+  bool get isEditor => tasks.contains('editor');
 
   NodeStatus copyWith({
     String? nodeId,
@@ -69,6 +96,11 @@ class NodeStatus {
     int? clockDeltaMs,
     AuditionCapability? audition,
     List<AudioDevice>? availableDevices,
+    int? selectedDeviceIndex,
+    AudioBackend? activeBackend,
+    List<AudioBackend>? backendPriority,
+    int? sampleRate,
+    int? channels,
   }) =>
       NodeStatus(
         nodeId: nodeId ?? this.nodeId,
@@ -78,5 +110,10 @@ class NodeStatus {
         clockDeltaMs: clockDeltaMs ?? this.clockDeltaMs,
         audition: audition ?? this.audition,
         availableDevices: availableDevices ?? this.availableDevices,
+        selectedDeviceIndex: selectedDeviceIndex ?? this.selectedDeviceIndex,
+        activeBackend: activeBackend ?? this.activeBackend,
+        backendPriority: backendPriority ?? this.backendPriority,
+        sampleRate: sampleRate ?? this.sampleRate,
+        channels: channels ?? this.channels,
       );
 }

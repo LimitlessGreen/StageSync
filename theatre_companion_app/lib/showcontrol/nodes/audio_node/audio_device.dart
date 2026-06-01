@@ -2,17 +2,44 @@ import 'package:meta/meta.dart';
 
 /// Audio backend identifier — maps to miniaudio's ma_backend enum.
 enum AudioBackend {
-  wasapi,        // Windows — WASAPI (exclusive mode = low latency)
-  asio,          // Windows — ASIO (requires driver, lowest latency)
-  directSound,   // Windows — DirectSound (legacy fallback)
-  coreAudio,     // macOS / iOS
-  alsa,          // Linux
-  pulseAudio,    // Linux
-  jack,          // Linux / macOS (pro audio)
-  aaudio,        // Android (API 26+, low latency)
-  openSLES,      // Android (legacy fallback)
+  wasapi, // Windows — WASAPI (exclusive mode = low latency)
+  asio, // Windows — ASIO (requires driver, lowest latency)
+  directSound, // Windows — DirectSound (legacy fallback)
+  coreAudio, // macOS / iOS
+  alsa, // Linux
+  pulseAudio, // Linux
+  jack, // Linux / macOS (pro audio)
+  aaudio, // Android (API 26+, low latency)
+  openSLES, // Android (legacy fallback)
   unknown,
 }
+
+AudioBackend audioBackendFromWireName(String name) =>
+    switch (name.trim().toLowerCase()) {
+      'wasapi' => AudioBackend.wasapi,
+      'asio' => AudioBackend.asio,
+      'directsound' || 'dsound' => AudioBackend.directSound,
+      'coreaudio' => AudioBackend.coreAudio,
+      'alsa' => AudioBackend.alsa,
+      'pulseaudio' || 'pulse' => AudioBackend.pulseAudio,
+      'jack' || 'jack2' => AudioBackend.jack,
+      'aaudio' => AudioBackend.aaudio,
+      'opensl' || 'opensles' => AudioBackend.openSLES,
+      _ => AudioBackend.unknown,
+    };
+
+String audioBackendToWireName(AudioBackend backend) => switch (backend) {
+      AudioBackend.wasapi => 'wasapi',
+      AudioBackend.asio => 'asio',
+      AudioBackend.directSound => 'directsound',
+      AudioBackend.coreAudio => 'coreaudio',
+      AudioBackend.alsa => 'alsa',
+      AudioBackend.pulseAudio => 'pulseaudio',
+      AudioBackend.jack => 'jack',
+      AudioBackend.aaudio => 'aaudio',
+      AudioBackend.openSLES => 'opensl',
+      AudioBackend.unknown => 'unknown',
+    };
 
 /// Platform-independent audio output device descriptor.
 ///
@@ -55,12 +82,13 @@ class AudioDevice {
   bool operator ==(Object other) =>
       other is AudioDevice && other.id == id && other.backend == backend;
 
-  AudioDevice copyWith({String? id, String? name, AudioBackend? backend, int? index}) =>
+  AudioDevice copyWith(
+          {String? id, String? name, AudioBackend? backend, int? index}) =>
       AudioDevice(
-        id:      id      ?? this.id,
-        name:    name    ?? this.name,
+        id: id ?? this.id,
+        name: name ?? this.name,
         backend: backend ?? this.backend,
-        index:   index   ?? this.index,
+        index: index ?? this.index,
       );
 
   @override

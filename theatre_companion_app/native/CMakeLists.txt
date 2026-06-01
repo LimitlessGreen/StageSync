@@ -108,10 +108,11 @@ elseif(ANDROID)
   target_link_libraries(miniaudio_wrapper PRIVATE aaudio OpenSLES log)
 else()
   target_compile_definitions(miniaudio_wrapper PRIVATE
+    MA_ENABLE_JACK
     MA_ENABLE_ALSA
     MA_ENABLE_PULSEAUDIO
   )
-  target_link_libraries(miniaudio_wrapper PRIVATE dl pthread m)
+  target_link_libraries(miniaudio_wrapper PRIVATE dl pthread m jack)
 endif()
 
 target_compile_options(miniaudio_wrapper PRIVATE
