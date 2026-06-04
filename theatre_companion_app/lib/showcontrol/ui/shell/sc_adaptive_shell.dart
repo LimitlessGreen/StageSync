@@ -25,10 +25,7 @@ class ScAdaptiveShell extends ConsumerWidget {
         shortcuts: ScShortcuts.all,
         child: Actions(
           actions: ScShortcuts.actions(ref),
-          child: Focus(
-            autofocus: true,
-              child: isDesktop ? const DesktopShell() : const MobileShell(),
-          ),
+          child: isDesktop ? const DesktopShell() : const MobileShell(),
         ),
       ),
     );
