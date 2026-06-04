@@ -56,6 +56,10 @@ class ShowControlState {
   /// Gesetzt von CUE_CUE_PAUSED (occurredAt), gelöscht bei Resume/Done.
   final Map<String, int> perCuePausedAtMs;
 
+  /// Resume-Zeitpunkte pro Cue in Unix-ms (aus CUE_CUE_RESUMED.occurredAt).
+  /// Wird für das Fade-In-Animationsfenster nach Resume genutzt.
+  final Map<String, int> perCueResumedAtMs;
+
   /// Alle Nodes der Session mit aktuellem Health-Status.
   final List<NodeStatus> nodeStatuses;
 
@@ -76,6 +80,7 @@ class ShowControlState {
     this.runningCueStartedServerMs = const {},
     this.perCuePausedIds = const {},
     this.perCuePausedAtMs = const {},
+    this.perCueResumedAtMs = const {},
     this.nodeStatuses = const [],
     this.patchConfig = PatchConfig.empty,
   });
@@ -89,6 +94,7 @@ class ShowControlState {
     Map<String, int>? runningCueStartedServerMs,
     Set<String>? perCuePausedIds,
     Map<String, int>? perCuePausedAtMs,
+    Map<String, int>? perCueResumedAtMs,
     List<NodeStatus>? nodeStatuses,
     PatchConfig? patchConfig,
     Object? activeCue = _unset,
@@ -110,6 +116,7 @@ class ShowControlState {
             runningCueStartedServerMs ?? this.runningCueStartedServerMs,
         perCuePausedIds: perCuePausedIds ?? this.perCuePausedIds,
         perCuePausedAtMs: perCuePausedAtMs ?? this.perCuePausedAtMs,
+        perCueResumedAtMs: perCueResumedAtMs ?? this.perCueResumedAtMs,
         nodeStatuses: nodeStatuses ?? this.nodeStatuses,
         patchConfig: patchConfig ?? this.patchConfig,
         activeCueStartedServerMs: identical(activeCueStartedServerMs, _unset)

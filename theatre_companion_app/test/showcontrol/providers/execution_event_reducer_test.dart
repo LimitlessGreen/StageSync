@@ -262,8 +262,25 @@ void main() {
     });
   });
 
+  group('Per-cue CUE_CUE_PAUSED — fade window', () {
+    test('occurredAt is stored as freeze point (= now + fadeMs)', () {
+      final running = ShowControlState(
+        runningCueIds: {'cue-1'},
+        runningCueStartedServerMs: {'cue-1': _t0 - 5000},
+      );
+      final freezePoint = _t0 + 1000; // server: now + 1000ms fade
+      final s = _apply(running, _event(
+        ShowExecutionEvent_ExecutionEventType.CUE_CUE_PAUSED,
+        cueId: 'cue-1',
+        occurredAt: freezePoint,
+      ));
+      expect(s.perCuePausedAtMs['cue-1'], freezePoint,
+          reason: 'freeze point must equal occurredAt (now + fadeMs)');
+    });
+  });
+
   group('Per-cue CUE_CUE_RESUMED', () {
-    test('removes cue from perCuePausedIds', () {
+    test('removes cue from perCuePausedIds and stores resume timestamp', () {
       final paused = ShowControlState(
         activeCue: Cue()..cueId = 'cue-1',
         runningCueIds: {'cue-1'},
@@ -278,6 +295,8 @@ void main() {
       ));
       expect(s.perCuePausedIds, isEmpty);
       expect(s.perCuePausedAtMs, isEmpty);
+      expect(s.perCueResumedAtMs['cue-1'], _t0,
+          reason: 'resume timestamp stored for fade-in animation window');
     });
 
     test('adjusts start time so progress bar continues without jump', () {

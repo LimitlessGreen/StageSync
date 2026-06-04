@@ -25,9 +25,11 @@ class _ActiveCueMonitorState extends State<ActiveCueMonitor> {
   @override
   Widget build(BuildContext context) {
     final activeId = widget.playhead.activeCueId;
-    // Subscribe only while time is advancing — skip if globally or per-cue paused.
-    final perCuePaused = activeId != null && widget.playhead.isCuePaused(activeId);
-    if (widget.playhead.needsTick && !perCuePaused) ScTick.of(context);
+    // Ticker läuft solange Zeit voranschreitet — auch während Fade-Fenstern.
+    final fullyPaused = activeId != null &&
+        widget.playhead.isCuePaused(activeId) &&
+        !widget.playhead.isCueFading(activeId);
+    if (widget.playhead.needsTick && !fullyPaused) ScTick.of(context);
     if (activeId == null || widget.playhead.isIdle) {
       return Center(child: Text('Kein aktiver Cue', style: ScText.label));
     }

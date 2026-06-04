@@ -126,9 +126,13 @@ class PlayheadState {
   final Set<String> perCuePausedIds;
 
   /// Einfrierzeitpunkte pro per-Cue-pausierter Cue in Unix-ms.
-  /// Gesetzt wenn CUE_CUE_PAUSED eintrifft; gelöscht bei CUE_CUE_RESUMED/CUE_DONE.
-  /// Wird von [effectiveNowMsForCue] genutzt um Fortschrittsbalken einzufrieren.
+  /// Gesetzt wenn CUE_CUE_PAUSED eintrifft (= now + fadeOutMs); gelöscht bei Resume/Done.
+  /// Bis zu diesem Zeitpunkt läuft die Uhr weiter (Fade-Fenster), danach eingefroren.
   final Map<String, int> perCuePausedAtServerMs;
+
+  /// Zeitpunkt des letzten CUE_CUE_RESUMED pro Cue in Unix-ms.
+  /// Wird von _audioPhase genutzt um das Fade-In-Fenster nach Resume zu erkennen.
+  final Map<String, int> perCueResumedAtServerMs;
 
   const PlayheadState({
     required this.cueListId,
@@ -143,6 +147,7 @@ class PlayheadState {
     this.perCue = const {},
     this.perCuePausedIds = const {},
     this.perCuePausedAtServerMs = const {},
+    this.perCueResumedAtServerMs = const {},
   });
 
   static const PlayheadState empty = PlayheadState(cueListId: '');
@@ -172,6 +177,7 @@ class PlayheadState {
     Map<String, CueRunState>? perCue,
     Set<String>? perCuePausedIds,
     Map<String, int>? perCuePausedAtServerMs,
+    Map<String, int>? perCueResumedAtServerMs,
   }) =>
       PlayheadState(
         cueListId: cueListId ?? this.cueListId,
@@ -187,6 +193,7 @@ class PlayheadState {
         perCue: perCue ?? this.perCue,
         perCuePausedIds: perCuePausedIds ?? this.perCuePausedIds,
         perCuePausedAtServerMs: perCuePausedAtServerMs ?? this.perCuePausedAtServerMs,
+        perCueResumedAtServerMs: perCueResumedAtServerMs ?? this.perCueResumedAtServerMs,
       );
 }
 
@@ -211,16 +218,42 @@ extension PlayheadTiming on PlayheadState {
     return ClockSync.instance.serverNow();
   }
 
-  /// Effektive "jetzt"-Zeit für eine bestimmte Cue.
+  /// Effektive "jetzt"-Zeit für eine bestimmte Cue — spiegelt die globale
+  /// Fade-Fenster-Logik: während des Ausblendens läuft die Zeit weiter,
+  /// erst nach Ablauf des Fades wird der Balken eingefroren.
   ///
-  /// Berücksichtigt zusätzlich per-Cue-Pause: wenn die Cue per-Cue pausiert ist,
-  /// wird der Einfrierzeitpunkt zurückgegeben statt der laufenden Uhr.
-  /// Für alle anderen Fälle: identisch mit [effectiveNowMs].
+  /// - Fading (now < frozenAt) → laufende Serveruhr
+  /// - Paused  (now ≥ frozenAt) → eingefroren bei frozenAt
+  /// - Sonst → [effectiveNowMs]
   int effectiveNowMsForCue(String cueId) {
     if (perCuePausedIds.contains(cueId)) {
-      return perCuePausedAtServerMs[cueId] ?? effectiveNowMs();
+      final frozenAt = perCuePausedAtServerMs[cueId];
+      if (frozenAt == null) return effectiveNowMs();
+      final now = ClockSync.instance.serverNow();
+      return now < frozenAt ? now : frozenAt;
     }
     return effectiveNowMs();
+  }
+
+  /// true solange der Fade-Out noch läuft (Zeit < frozenAt).
+  /// Während dieses Fensters tickt der Bar weiter und zeigt pauseFading-Farbe.
+  bool isCueFading(String cueId) {
+    if (!perCuePausedIds.contains(cueId)) return false;
+    final frozenAt = perCuePausedAtServerMs[cueId];
+    if (frozenAt == null) return false;
+    return ClockSync.instance.serverNow() < frozenAt;
+  }
+
+  /// true wenn diese Cue vollständig per-Cue pausiert ist (Fade abgeschlossen).
+  bool isCuePaused(String cueId) =>
+      perCuePausedIds.contains(cueId) && !isCueFading(cueId);
+
+  /// true solange das Fade-In nach einem Resume noch läuft.
+  bool isCueResuming(String cueId, double resumeFadeMs) {
+    if (resumeFadeMs <= 0) return false;
+    final resumedAt = perCueResumedAtServerMs[cueId];
+    if (resumedAt == null) return false;
+    return ClockSync.instance.serverNow() < resumedAt + resumeFadeMs;
   }
 
   /// true solange der Widget-Ticker laufen muss.

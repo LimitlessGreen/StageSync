@@ -122,9 +122,24 @@ class _CueListRowState extends State<CueListRow> {
   bool get _isLiveRunning =>
       widget.isActive || widget._isAlsoRunning(widget.playhead);
 
-  /// Per-Cue-Pause: direkt aus dem server-autoritativen PlayheadState lesen.
+  /// true wenn Fade-Out abgeschlossen und Cue vollständig pausiert.
   bool get _perCuePaused =>
       widget.playhead?.isCuePaused(widget.cue.id) ?? false;
+
+  /// true während der Fade-Out-Zeitfenster (Audio läuft noch aus).
+  bool get _isFading =>
+      widget.playhead?.isCueFading(widget.cue.id) ?? false;
+
+  /// true während des Fade-In-Fensters nach Resume.
+  bool get _isResuming {
+    final ph = widget.playhead;
+    if (ph == null) return false;
+    final fadeInMs = switch (widget.cue.params) {
+      AudioParams p => p.resumeFadeMs > 0 ? p.resumeFadeMs : p.fadeInMs,
+      _ => 0.0,
+    };
+    return ph.isCueResuming(widget.cue.id, fadeInMs);
+  }
 
   // ── Fade-aware progress ──────────────────────────────────────────────────
 
@@ -173,22 +188,24 @@ class _CueListRowState extends State<CueListRow> {
     final elapsed = _elapsedMs;
     final isAlsoRunning = widget._isAlsoRunning(widget.playhead);
 
-    // Hintergrund-Cues: per-Cue- und globale Pause + Fade-Zonen.
+    // ── Per-cue fade-Zonen (gilt für aktive und Hintergrund-Cues) ──────────
+    if (_isFading)   return _AudioPhase.pauseFading; // Fade-Out läuft noch
+    if (_perCuePaused) return _AudioPhase.paused;    // Fade-Out abgeschlossen
+    if (_isResuming) return _AudioPhase.fadeIn;      // Fade-In nach Resume
+
+    // ── Hintergrund-Cues ────────────────────────────────────────────────────
     if (isAlsoRunning && !widget.isActive) {
-      if (_perCuePaused) return _AudioPhase.paused;
       if (ph.isPaused) return _AudioPhase.paused;
       if (widget.cue.params case AudioParams p) {
         if (p.fadeInMs > 0 && elapsed < p.fadeInMs) return _AudioPhase.fadeIn;
         final duration = widget.cue.displayDurationMs;
-        if (duration != null && p.fadeOutMs > 0) {
-          if (elapsed > duration - p.fadeOutMs) return _AudioPhase.fadeOut;
-        }
+        if (duration != null && p.fadeOutMs > 0 &&
+            elapsed > duration - p.fadeOutMs) return _AudioPhase.fadeOut;
       }
       return _AudioPhase.playing;
     }
 
-    // Primär-aktive Cue: volle Pause-/Done-Logik.
-    if (_perCuePaused) return _AudioPhase.paused;
+    // ── Primär-aktive Cue ───────────────────────────────────────────────────
     if (ph.isPaused) {
       final pausedAt = ph.pausedAtServerMs;
       if (pausedAt != null && ClockSync.instance.serverNow() < pausedAt) {
@@ -202,9 +219,8 @@ class _CueListRowState extends State<CueListRow> {
     if (widget.cue.params case AudioParams p) {
       if (p.fadeInMs > 0 && elapsed < p.fadeInMs) return _AudioPhase.fadeIn;
       final duration = widget.cue.displayDurationMs;
-      if (duration != null && p.fadeOutMs > 0) {
-        if (elapsed > duration - p.fadeOutMs) return _AudioPhase.fadeOut;
-      }
+      if (duration != null && p.fadeOutMs > 0 &&
+          elapsed > duration - p.fadeOutMs) return _AudioPhase.fadeOut;
     }
     return _AudioPhase.playing;
   }
@@ -226,13 +242,14 @@ class _CueListRowState extends State<CueListRow> {
     }
 
     final isAlsoRunning = widget._isAlsoRunning(widget.playhead);
-    // Subscribe to vsync ticker only while time is actually advancing.
-    // Per-cue paused → frozen → no tick needed.
-    final needsTick = _isLiveRunning &&
-        !_perCuePaused &&
-        !(widget.playhead?.isDone ?? false) &&
-        !(widget.playhead?.isPaused ?? false);
-    if (needsTick) ScTick.of(context);
+    // Ticker läuft solange Zeit voranschreitet:
+    // - normal spielend, global pausiert (Fade-Fenster), per-cue fadend, resumend.
+    // Nur wenn vollständig eingefroren (paused + kein Fade) kein Tick nötig.
+    final frozen = _perCuePaused && !_isFading && !_isResuming &&
+        !(widget.playhead?.isPaused == true && widget.playhead!.isCueFading(widget.cue.id));
+    if (_isLiveRunning && !frozen && !(widget.playhead?.isDone ?? false)) {
+      ScTick.of(context);
+    }
     final height =
         widget.expanded ? ScSpacing.rowHeightActive : ScSpacing.rowHeight;
     final fraction = _progressFraction;

@@ -86,6 +86,7 @@ ShowControlState applyExecutionEvent(
         runningCueStartedServerMs: starts,
         perCuePausedIds: const {},
         perCuePausedAtMs: const {},
+        perCueResumedAtMs: const {},
       );
 
     // ── Global PAUSE / RESUME ────────────────────────────────────────────────
@@ -122,6 +123,8 @@ ShowControlState applyExecutionEvent(
         }
       }
 
+      final stoppedResumedAt = Map<String, int>.from(state.perCueResumedAtMs)
+        ..removeWhere((id, _) => !running.contains(id));
       return state.copyWith(
         activeCue: nextActive,
         isPaused: false,
@@ -132,6 +135,7 @@ ShowControlState applyExecutionEvent(
         runningCueStartedServerMs: starts,
         perCuePausedIds: perCuePaused,
         perCuePausedAtMs: perCuePausedAt,
+        perCueResumedAtMs: stoppedResumedAt,
       );
 
     // ── CUE_DONE / CUE_ERROR (natürliches Ende oder lokaler Stop) ────────────
@@ -146,7 +150,6 @@ ShowControlState applyExecutionEvent(
       final isActiveCue = doneId.isNotEmpty && state.activeCue?.cueId == doneId;
 
       if (running.isEmpty) {
-        // Lokal gestoppte aktive Cue → idle; natürlich beendete → done-eingefroren.
         return state.copyWith(
           activeCue: isActiveCue ? null : state.activeCue,
           activeCueStartedServerMs: isActiveCue ? null : state.activeCueStartedServerMs,
@@ -155,16 +158,19 @@ ShowControlState applyExecutionEvent(
           cueDoneServerMs: isActiveCue ? null : eventMs(),
           perCuePausedIds: const {},
           perCuePausedAtMs: const {},
+          perCueResumedAtMs: const {},
         );
       }
 
       final starts = Map<String, int>.from(state.runningCueStartedServerMs)
         ..removeWhere((id, _) => !running.contains(id));
+      final doneResumedAt = Map<String, int>.from(state.perCueResumedAtMs)..remove(doneId);
       return state.copyWith(
         runningCueIds: running,
         runningCueStartedServerMs: starts,
         perCuePausedIds: perCuePaused,
         perCuePausedAtMs: perCuePausedAt,
+        perCueResumedAtMs: doneResumedAt,
       );
 
     // ── Per-Cue PAUSE ────────────────────────────────────────────────────────
@@ -185,15 +191,21 @@ ShowControlState applyExecutionEvent(
       final frozenAt = state.perCuePausedAtMs[cueId];
       final origStart = starts[cueId];
       if (frozenAt != null && origStart != null) {
+        // Adjust start so elapsed position is preserved (no jump).
+        // elapsed_at_pause = frozenAt - origStart; newStart = resumeTime - elapsed
         starts[cueId] = resumeTime - (frozenAt - origStart);
       }
       final resumedIds = event.perCuePausedIds.isNotEmpty
           ? event.perCuePausedIds.toSet()
           : <String>{...state.perCuePausedIds}..remove(cueId);
       final pausedAt = Map<String, int>.from(state.perCuePausedAtMs)..remove(cueId);
+      // Store resume time for fade-in animation window in the UI.
+      final resumedAt = Map<String, int>.from(state.perCueResumedAtMs);
+      if (cueId.isNotEmpty) resumedAt[cueId] = resumeTime;
       return state.copyWith(
         perCuePausedIds: resumedIds,
         perCuePausedAtMs: pausedAt,
+        perCueResumedAtMs: resumedAt,
         runningCueStartedServerMs: starts,
       );
 
