@@ -335,21 +335,22 @@ class _MobileCueListState extends State<_MobileCueList> {
       itemCount: cues.length,
       itemBuilder: (context, i) {
         final cue = cues[i];
-        final isActive = widget.playhead.activeCueId == cue.id;
-        final isPast = activeIdx >= 0 && i < activeIdx;
+        final isRunning = widget.playhead.runningCueIds.contains(cue.id);
+        final isActive  = widget.playhead.activeCueId == cue.id;
+        final isPast = !isRunning && activeIdx >= 0 && i < activeIdx;
 
         return CueListRow(
-          key: ValueKey(cue.id),
-          cue: cue,
-          runState: widget.playhead.runStateFor(cue.id),
-          playhead: widget.playhead,
-          isActive: isActive,
-          isPast: isPast,
-          expanded: isActive,
-          showDragHandle: false,
-          onTap: () => widget.notifier.goToCue(cue.id),
-          onLongPress: () => showCueDetailSheet(context, cue, widget.notifier),
-        );
+           key: ValueKey(cue.id),
+           cue: cue,
+           runState: widget.playhead.runStateFor(cue.id),
+            playhead: widget.playhead,
+             isActive: isActive,
+             isPast: isPast,
+             expanded: isRunning,
+            showDragHandle: false,
+            onTap: () => widget.notifier.goToCue(cue.id),
+            onLongPress: () => showCueDetailSheet(context, cue, widget.notifier),
+          );
       },
     );
   }
