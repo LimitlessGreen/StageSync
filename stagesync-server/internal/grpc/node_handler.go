@@ -18,8 +18,11 @@ import (
 // PauseCueTracker / ResumeCueTracker broadcasten per-Cue-Pause-Events an alle Watcher.
 type CueTrackStopper interface {
 	StopCueTracker(sessionID, cueId string)
-	PauseCueTracker(sessionID, cueId string)
-	ResumeCueTracker(sessionID, cueId string)
+	// fadeOutMs: Fade-Dauer in ms — OccurredAt wird um diesen Wert nach vorne gesetzt
+	// damit der Client-Timer exakt an der richtigen Stelle einfriert.
+	PauseCueTracker(sessionID, cueId string, fadeOutMs float64)
+	// fadeInMs: wird im Broadcast-Event als Metadatum mitgesandt (aktuell informativ).
+	ResumeCueTracker(sessionID, cueId string, fadeInMs float64)
 }
 
 type NodeHandler struct {
@@ -252,11 +255,13 @@ func (h *NodeHandler) SendNodeCommand(ctx context.Context, req *pb.SendNodeComma
 	}
 
 	// AudioPause / AudioResume mit expliziter cue_id → per-Cue-Pause broadcasten.
+	// fadeOutMs / fadeInMs werden weitergegeben damit der OccurredAt-Timestamp
+	// korrekt nach Ende des Fades gesetzt wird (analog zur globalen Pause-Logik).
 	if pause := req.Command.GetAudioPause(); pause != nil && pause.CueId != "" && h.cueTrackStopper != nil {
-		h.cueTrackStopper.PauseCueTracker(req.SessionId, pause.CueId)
+		h.cueTrackStopper.PauseCueTracker(req.SessionId, pause.CueId, pause.FadeOutMs)
 	}
 	if resume := req.Command.GetAudioResume(); resume != nil && resume.CueId != "" && h.cueTrackStopper != nil {
-		h.cueTrackStopper.ResumeCueTracker(req.SessionId, resume.CueId)
+		h.cueTrackStopper.ResumeCueTracker(req.SessionId, resume.CueId, resume.FadeInMs)
 	}
 
 	return &pb.NodeCommandResponse{Success: true}, nil

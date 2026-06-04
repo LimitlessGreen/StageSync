@@ -125,27 +125,31 @@ func (e *Engine) perCuePausedIDsList() []string {
 	return ids
 }
 
-// PauseCueTracker markiert eine Cue als per-Cue-pausiert und broadcastet
-// CUE_CUE_PAUSED. Aufgerufen vom NodeHandler bei AudioPause mit expliziter cue_id.
-func (e *Engine) PauseCueTracker(cueId string) {
+// PauseCueTracker markiert eine Cue als per-Cue-pausiert und broadcastet CUE_CUE_PAUSED.
+// OccurredAt = jetzt + fadeOutMs, damit der Client-Timer exakt nach Ende des Fades
+// einfriert (analog zur globalen Pause-Logik in Pause()).
+func (e *Engine) PauseCueTracker(cueId string, fadeOutMs float64) {
 	e.mu.Lock()
 	e.addPerCuePaused(cueId)
 	pausedIds := e.perCuePausedIDsList()
 	runningIds := e.runningCueIDsList()
 	e.mu.Unlock()
 
+	// Zeitpunkt = jetzt + Fade-Dauer: Audio ist erst dann wirklich still.
+	effectivePausedMs := time.Now().UnixMilli() + int64(fadeOutMs)
 	e.store.BroadcastExec(&pb.ShowExecutionEvent{
-		Type:              pb.ShowExecutionEvent_CUE_CUE_PAUSED,
-		AffectedCue:       &pb.Cue{CueId: cueId},
-		OccurredAt:        nowProto(),
-		RunningCueIds:     runningIds,
-		PerCuePausedIds:   pausedIds,
+		Type:            pb.ShowExecutionEvent_CUE_CUE_PAUSED,
+		AffectedCue:     &pb.Cue{CueId: cueId},
+		OccurredAt:      &pb.Timestamp{UnixMillis: effectivePausedMs},
+		RunningCueIds:   runningIds,
+		PerCuePausedIds: pausedIds,
 	})
 }
 
 // ResumeCueTracker hebt per-Cue-Pause auf und broadcastet CUE_CUE_RESUMED.
-// Aufgerufen vom NodeHandler bei AudioResume mit expliziter cue_id.
-func (e *Engine) ResumeCueTracker(cueId string) {
+// OccurredAt = jetzt (Resumezeitpunkt). Der Client berechnet daraus die neue
+// effektive Startzeit: resumeTime - (pausedAt - originalStart).
+func (e *Engine) ResumeCueTracker(cueId string, fadeInMs float64) {
 	e.mu.Lock()
 	e.removePerCuePaused(cueId)
 	pausedIds := e.perCuePausedIDsList()
@@ -153,11 +157,11 @@ func (e *Engine) ResumeCueTracker(cueId string) {
 	e.mu.Unlock()
 
 	e.store.BroadcastExec(&pb.ShowExecutionEvent{
-		Type:              pb.ShowExecutionEvent_CUE_CUE_RESUMED,
-		AffectedCue:       &pb.Cue{CueId: cueId},
-		OccurredAt:        nowProto(),
-		RunningCueIds:     runningIds,
-		PerCuePausedIds:   pausedIds,
+		Type:            pb.ShowExecutionEvent_CUE_CUE_RESUMED,
+		AffectedCue:     &pb.Cue{CueId: cueId},
+		OccurredAt:      nowProto(),
+		RunningCueIds:   runningIds,
+		PerCuePausedIds: pausedIds,
 	})
 }
 

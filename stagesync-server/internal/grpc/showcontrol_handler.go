@@ -203,17 +203,15 @@ func (h *ShowControlHandler) StopCueTracker(sessionID, cueId string) {
 
 // PauseCueTracker implementiert CueTrackStopper: markiert eine Cue als per-Cue-pausiert
 // und broadcastet CUE_CUE_PAUSED. Wird vom NodeHandler bei AudioPause mit cue_id aufgerufen.
-func (h *ShowControlHandler) PauseCueTracker(sessionID, cueId string) {
+func (h *ShowControlHandler) PauseCueTracker(sessionID, cueId string, fadeOutMs float64) {
 	if engine, ok := h.getEngine(sessionID); ok {
-		engine.PauseCueTracker(cueId)
+		engine.PauseCueTracker(cueId, fadeOutMs)
 	}
 }
 
-// ResumeCueTracker implementiert CueTrackStopper: hebt per-Cue-Pause auf
-// und broadcastet CUE_CUE_RESUMED. Wird vom NodeHandler bei AudioResume mit cue_id aufgerufen.
-func (h *ShowControlHandler) ResumeCueTracker(sessionID, cueId string) {
+func (h *ShowControlHandler) ResumeCueTracker(sessionID, cueId string, fadeInMs float64) {
 	if engine, ok := h.getEngine(sessionID); ok {
-		engine.ResumeCueTracker(cueId)
+		engine.ResumeCueTracker(cueId, fadeInMs)
 	}
 }
 

@@ -897,11 +897,28 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
         state = state.copyWith(perCuePausedIds: pausedIds, perCuePausedAtMs: newPausedAt);
       case ShowExecutionEvent_ExecutionEventType.CUE_CUE_RESUMED:
         final cueId = event.hasAffectedCue() ? event.affectedCue.cueId : '';
+        final resumeTime = _eventServerMs(event);
+
+        // Startzeit anpassen damit der Balken ohne Sprung weiterläuft.
+        // Logik: Audio hat bei pausedAt pausiert. Elapsed = pausedAt - originalStart.
+        // Neue Startzeit = resumeTime - elapsed, so dass now - newStart = elapsed.
+        final pausedAt = state.perCuePausedAtMs[cueId];
+        final originalStart = state.runningCueStartedServerMs[cueId];
+        final newStarts = Map<String, int>.from(state.runningCueStartedServerMs);
+        if (pausedAt != null && originalStart != null) {
+          final elapsed = pausedAt - originalStart;
+          newStarts[cueId] = resumeTime - elapsed;
+        }
+
         final resumedIds = event.perCuePausedIds.isNotEmpty
             ? event.perCuePausedIds.toSet()
             : <String>{...state.perCuePausedIds}..remove(cueId);
         final newPausedAt = Map<String, int>.from(state.perCuePausedAtMs)..remove(cueId);
-        state = state.copyWith(perCuePausedIds: resumedIds, perCuePausedAtMs: newPausedAt);
+        state = state.copyWith(
+          perCuePausedIds: resumedIds,
+          perCuePausedAtMs: newPausedAt,
+          runningCueStartedServerMs: newStarts,
+        );
       default:
         break;
     }

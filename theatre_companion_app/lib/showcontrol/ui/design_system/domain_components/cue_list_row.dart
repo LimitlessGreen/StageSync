@@ -159,7 +159,7 @@ class _CueListRowState extends State<CueListRow> {
   double get _elapsedMs {
     final start = _cueStartMs;
     if (start == null) return 0.0;
-    return (_effectiveNowMs() - start).toDouble().clamp(0.0, double.infinity);
+    return (_effectiveNowMs() - start).toDouble().clamp(0.0, double.maxFinite);
   }
 
   /// Audio-Phase — steuert Bar-Farbe und Overlay.
@@ -173,9 +173,10 @@ class _CueListRowState extends State<CueListRow> {
     final elapsed = _elapsedMs;
     final isAlsoRunning = widget._isAlsoRunning(widget.playhead);
 
-    // Hintergrund-Cues: nur Fade-In/Out aus Cue-Params ableiten.
+    // Hintergrund-Cues: per-Cue- und globale Pause + Fade-Zonen.
     if (isAlsoRunning && !widget.isActive) {
       if (_perCuePaused) return _AudioPhase.paused;
+      if (ph.isPaused) return _AudioPhase.paused;
       if (widget.cue.params case AudioParams p) {
         if (p.fadeInMs > 0 && elapsed < p.fadeInMs) return _AudioPhase.fadeIn;
         final duration = widget.cue.displayDurationMs;
@@ -658,13 +659,14 @@ class _RemainingTime extends StatelessWidget {
     final start = playhead.cueStartedServerMsByCueId[cueId]
         ?? playhead.startedServerMs
         ?? ClockSync.instance.serverNow();
-    final now = playhead.effectiveNowMs();
+    final now = playhead.effectiveNowMsForCue(cueId);
     final elapsed = (now - start).clamp(0, 99 * 60 * 1000).toDouble();
     final remaining = (duration - elapsed).clamp(0.0, duration);
+    final paused = playhead.isCuePaused(cueId) || playhead.isPaused;
     return Text(
       '-${_fmt(remaining)}',
       style: ScText.number.copyWith(
-        color: playhead.isPaused ? ScColors.warn : ScColors.active,
+        color: paused ? ScColors.warn : ScColors.active,
         fontSize: 13,
       ),
     );
