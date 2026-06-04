@@ -17,8 +17,11 @@ import '../design_system/domain_components/node_status_badge.dart';
 import '../design_system/domain_components/active_next_cue_display.dart';
 import '../design_system/domain_components/sc_cue_detail_sheet.dart';
 import '../design_system/domain_components/master_volume_slider.dart';
+import '../design_system/domain_components/active_cue_control_strip.dart';
+import '../design_system/sc_tick.dart';
 import '../../nodes/audio_node/audio_node_service.dart' show AudioNodeState;
 import '../../domain/show.dart';
+import '../../domain/cue_params.dart';
 import '../../domain/patch_config.dart';
 import '../../domain/playhead.dart';
 import '../../../ui/widgets/talkback_bar.dart';
@@ -115,7 +118,8 @@ class _MobileShellState extends ConsumerState<MobileShell> {
       onResume: () => notifier.resume(),
     );
 
-    return Scaffold(
+    return ScTick(
+     child: Scaffold(
       backgroundColor: ScColors.bg,
       body: SafeArea(
         child: OrientationBuilder(
@@ -170,7 +174,7 @@ class _MobileShellState extends ConsumerState<MobileShell> {
           },
         ),
       ),
-    );
+     ));
   }
 }
 
@@ -339,18 +343,39 @@ class _MobileCueListState extends State<_MobileCueList> {
         final isActive  = widget.playhead.activeCueId == cue.id;
         final isPast = !isRunning && activeIdx >= 0 && i < activeIdx;
 
-        return CueListRow(
-           key: ValueKey(cue.id),
-           cue: cue,
-           runState: widget.playhead.runStateFor(cue.id),
-            playhead: widget.playhead,
-             isActive: isActive,
-             isPast: isPast,
-             expanded: isRunning,
-            showDragHandle: false,
-            onTap: () => widget.notifier.goToCue(cue.id),
-            onLongPress: () => showCueDetailSheet(context, cue, widget.notifier),
-          );
+        final row = CueListRow(
+          key: ValueKey('row_${cue.id}'),
+          cue: cue,
+          runState: widget.playhead.runStateFor(cue.id),
+          playhead: widget.playhead,
+          isActive: isActive,
+          isPast: isPast,
+          expanded: isRunning,
+          showDragHandle: false,
+          onTap: () => widget.notifier.goToCue(cue.id),
+          onLongPress: () => showCueDetailSheet(context, cue, widget.notifier),
+        );
+
+        final showStrip = isRunning && cue.params is AudioParams;
+        return Column(
+          key: ValueKey(cue.id),
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            row,
+            if (showStrip)
+              ActiveCueControlStrip(
+                key: ValueKey('strip_${cue.id}'),
+                cue: cue,
+                playhead: widget.playhead,
+                onFadeUp: (ms) => widget.notifier.fadeUpAudio(cue.id, durationMs: ms),
+                onFadeOut: (ms) => widget.notifier.fadeOutAudio(cue.id, durationMs: ms),
+                onStop: () => widget.notifier.stopCueAudio(cue.id),
+                onPause: () => widget.notifier.pauseCueAudio(cue.id),
+                onResume: () => widget.notifier.resumeCueAudio(cue.id),
+              ),
+          ],
+        );
       },
     );
   }

@@ -309,34 +309,34 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
      }
    }
 
-   /// Blendet eine laufende Audio-Cue auf ihr ursprüngliches Volumen hoch.
+   /// Blendet eine Cue hoch.
+   ///
+   /// Ist die Cue per-Cue pausiert (Fade-Out wurde vorher ausgelöst), wird sie
+   /// mit einem Fade-In fortgesetzt. Läuft sie bereits, wird nur die Lautstärke
+   /// auf den konfigurierten Wert hochgefadet.
    Future<void> fadeUpAudio(String cueId, {double durationMs = 1000.0}) async {
      if (!_session.isInSession) return;
-     // Ziel-Volumen aus den AudioParams der Cue ermitteln
-     Cue? protoCue;
-     for (final c in (state.cueList?.cues ?? [])) {
-       if (c.cueId == cueId) { protoCue = c; break; }
-     }
-     final targetVolumeDb = (protoCue?.hasAudio() == true)
-         ? protoCue!.audio.volumeDb
-         : 0.0;
 
-     await sendAudioFade(
-       cueId,
-       targetVolumeDb: targetVolumeDb,
-       durationMs: durationMs,
-       stopWhenDone: false,
-     );
+     if (state.perCuePausedIds.contains(cueId)) {
+       // Cue ist pausiert → Resume mit Fade-In
+       await resumeCueAudio(cueId, fadeInMs: durationMs);
+     } else {
+       // Cue spielt → Lautstärke auf konfigurierten Wert hochfaden
+       Cue? protoCue;
+       for (final c in (state.cueList?.cues ?? [])) {
+         if (c.cueId == cueId) { protoCue = c; break; }
+       }
+       final targetVolumeDb = (protoCue?.hasAudio() == true)
+           ? protoCue!.audio.volumeDb
+           : 0.0;
+       await sendAudioFade(cueId, targetVolumeDb: targetVolumeDb, durationMs: durationMs, stopWhenDone: false);
+     }
    }
 
-   /// Blendet eine laufende Audio-Cue auf Stille aus (und stoppt danach).
+   /// Blendet eine Cue aus und **pausiert** danach (nicht stoppen).
+   /// So kann mit Fade-Up nahtlos fortgesetzt werden.
    Future<void> fadeOutAudio(String cueId, {double durationMs = 1000.0}) async {
-     await sendAudioFade(
-       cueId,
-       targetVolumeDb: -40.0,
-       durationMs: durationMs,
-       stopWhenDone: true,
-     );
+     await pauseCueAudio(cueId, fadeOutMs: durationMs);
    }
 
    /// Stoppt eine laufende Audio-Cue sofort (mit kurzem Fade gegen Knackser).
