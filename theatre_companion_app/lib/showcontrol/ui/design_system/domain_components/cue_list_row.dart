@@ -128,11 +128,11 @@ class _CueListRowState extends State<CueListRow> {
 
   // ── Fade-aware progress ──────────────────────────────────────────────────
 
-  /// Current server time, accounting for pause-fade window.
+  /// Current server time for this cue — frozen if per-cue or globally paused.
   int _effectiveNowMs() {
     final ph = widget.playhead;
     if (ph == null) return ClockSync.instance.serverNow();
-    return ph.effectiveNowMs();
+    return ph.effectiveNowMsForCue(widget.cue.id);
   }
 
   /// Start-Serverzeit dieser Cue.
@@ -224,11 +224,14 @@ class _CueListRowState extends State<CueListRow> {
       return _NoteRow(cue: widget.cue, note: note, onTap: widget.onTap);
     }
 
-    // Subscribe to shared vsync ticker while this row is live.
     final isAlsoRunning = widget._isAlsoRunning(widget.playhead);
-    if (_isLiveRunning && !_perCuePaused && !(widget.playhead?.isDone ?? false)) {
-      ScTick.of(context);
-    }
+    // Subscribe to vsync ticker only while time is actually advancing.
+    // Per-cue paused → frozen → no tick needed.
+    final needsTick = _isLiveRunning &&
+        !_perCuePaused &&
+        !(widget.playhead?.isDone ?? false) &&
+        !(widget.playhead?.isPaused ?? false);
+    if (needsTick) ScTick.of(context);
     final height =
         widget.expanded ? ScSpacing.rowHeightActive : ScSpacing.rowHeight;
     final fraction = _progressFraction;

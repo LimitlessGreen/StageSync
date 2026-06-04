@@ -24,9 +24,10 @@ class ActiveCueMonitor extends StatefulWidget {
 class _ActiveCueMonitorState extends State<ActiveCueMonitor> {
   @override
   Widget build(BuildContext context) {
-    // Subscribe to shared vsync ticker — rebuilds each frame when live.
-    if (widget.playhead.needsTick) ScTick.of(context);
     final activeId = widget.playhead.activeCueId;
+    // Subscribe only while time is advancing — skip if globally or per-cue paused.
+    final perCuePaused = activeId != null && widget.playhead.isCuePaused(activeId);
+    if (widget.playhead.needsTick && !perCuePaused) ScTick.of(context);
     if (activeId == null || widget.playhead.isIdle) {
       return Center(child: Text('Kein aktiver Cue', style: ScText.label));
     }
@@ -178,7 +179,8 @@ class _ElapsedTimer extends StatelessWidget {
     final start = playhead.startedServerMs;
     if (start == null) return Text('0:00', style: ScText.timer);
 
-    final ms = (playhead.effectiveNowMs() - start).clamp(0, 99 * 60 * 1000);
+    final cueId = playhead.activeCueId ?? '';
+    final ms = (playhead.effectiveNowMsForCue(cueId) - start).clamp(0, 99 * 60 * 1000);
 
     return Text(
       _format(ms),
@@ -205,7 +207,7 @@ class _ProgressBar extends StatelessWidget {
     final start = playhead.startedServerMs;
     final duration = cue.displayDurationMs;
     if (start == null || duration == null || duration == 0) return 0.0;
-    return ((playhead.effectiveNowMs() - start) / duration).clamp(0.0, 1.0);
+    return ((playhead.effectiveNowMsForCue(cue.id) - start) / duration).clamp(0.0, 1.0);
   }
 
   @override
@@ -298,7 +300,7 @@ class _ChildCueRow extends StatelessWidget {
         : childId.substring(0, childId.length.clamp(0, 8));
     final startMs = playhead.cueStartedServerMsByCueId[childId];
     final elapsedMs = startMs != null
-        ? (playhead.effectiveNowMs() - startMs).clamp(0, 99 * 60 * 1000).toDouble()
+        ? (playhead.effectiveNowMsForCue(childId) - startMs).clamp(0, 99 * 60 * 1000).toDouble()
         : null;
     final durationMs = cue?.displayDurationMs;
     final fraction = (elapsedMs != null && durationMs != null && durationMs > 0)

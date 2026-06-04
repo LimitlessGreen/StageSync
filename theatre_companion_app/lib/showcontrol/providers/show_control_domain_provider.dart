@@ -181,5 +181,6 @@ PlayheadState _buildPlayhead(ShowControlState state, CueList? cueList) {
     doneServerMs: state.cueDoneServerMs,
     perCue: perCue,
     perCuePausedIds: perCuePaused,
+    perCuePausedAtServerMs: state.perCuePausedAtMs,
   );
 }

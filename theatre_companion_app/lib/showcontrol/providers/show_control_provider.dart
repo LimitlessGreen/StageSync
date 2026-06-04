@@ -51,6 +51,10 @@ class ShowControlState {
   /// Unabhängig von der globalen CueList-Pause ([isPaused]).
   final Set<String> perCuePausedIds;
 
+  /// Einfrierzeitpunkte pro per-Cue-pausierter Cue in Unix-ms.
+  /// Gesetzt von CUE_CUE_PAUSED (occurredAt), gelöscht bei Resume/Done.
+  final Map<String, int> perCuePausedAtMs;
+
   /// Alle Nodes der Session mit aktuellem Health-Status.
   final List<NodeStatus> nodeStatuses;
 
@@ -70,6 +74,7 @@ class ShowControlState {
     this.runningCueIds = const {},
     this.runningCueStartedServerMs = const {},
     this.perCuePausedIds = const {},
+    this.perCuePausedAtMs = const {},
     this.nodeStatuses = const [],
     this.patchConfig = PatchConfig.empty,
   });
@@ -82,6 +87,7 @@ class ShowControlState {
     Set<String>? runningCueIds,
     Map<String, int>? runningCueStartedServerMs,
     Set<String>? perCuePausedIds,
+    Map<String, int>? perCuePausedAtMs,
     List<NodeStatus>? nodeStatuses,
     PatchConfig? patchConfig,
     Object? activeCue = _unset,
@@ -102,6 +108,7 @@ class ShowControlState {
         runningCueStartedServerMs:
             runningCueStartedServerMs ?? this.runningCueStartedServerMs,
         perCuePausedIds: perCuePausedIds ?? this.perCuePausedIds,
+        perCuePausedAtMs: perCuePausedAtMs ?? this.perCuePausedAtMs,
         nodeStatuses: nodeStatuses ?? this.nodeStatuses,
         patchConfig: patchConfig ?? this.patchConfig,
         activeCueStartedServerMs: identical(activeCueStartedServerMs, _unset)
@@ -213,6 +220,7 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
       runningCueIds: const {},
       runningCueStartedServerMs: const {},
       perCuePausedIds: const {},
+      perCuePausedAtMs: const {},
     );
   }
 
@@ -799,9 +807,11 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
               event.hasAffectedCue() ? event.affectedCue : state.activeCue,
           activeCueStartedServerMs: startMs,
           pausedAtServerMs: null,
-          cueDoneServerMs: null, // neuer GO/Resume → done-Zustand löschen
+          cueDoneServerMs: null,
           runningCueIds: startedRunning,
           runningCueStartedServerMs: startedStarts,
+          perCuePausedIds: const {},
+          perCuePausedAtMs: const {},
         );
       case ShowExecutionEvent_ExecutionEventType.CUE_PAUSED:
         state = state.copyWith(
@@ -876,17 +886,22 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
           );
         }
       case ShowExecutionEvent_ExecutionEventType.CUE_CUE_PAUSED:
-        // Per-Cue-Pause: eine einzelne Cue wurde direkt auf dem Audio-Node pausiert.
+        final cueId = event.hasAffectedCue() ? event.affectedCue.cueId : '';
         final pausedIds = event.perCuePausedIds.isNotEmpty
             ? event.perCuePausedIds.toSet()
-            : <String>{...state.perCuePausedIds, if (event.hasAffectedCue()) event.affectedCue.cueId};
-        state = state.copyWith(perCuePausedIds: pausedIds);
+            : <String>{...state.perCuePausedIds, if (cueId.isNotEmpty) cueId};
+        // Einfrierzeitpunkt speichern: occurredAt vom Server (enthält Fade-Dauer)
+        final pausedAt = _eventServerMs(event);
+        final newPausedAt = Map<String, int>.from(state.perCuePausedAtMs);
+        if (cueId.isNotEmpty) newPausedAt[cueId] = pausedAt;
+        state = state.copyWith(perCuePausedIds: pausedIds, perCuePausedAtMs: newPausedAt);
       case ShowExecutionEvent_ExecutionEventType.CUE_CUE_RESUMED:
-        // Per-Cue-Resume: Pause auf dem Audio-Node aufgehoben.
+        final cueId = event.hasAffectedCue() ? event.affectedCue.cueId : '';
         final resumedIds = event.perCuePausedIds.isNotEmpty
             ? event.perCuePausedIds.toSet()
-            : <String>{...state.perCuePausedIds}..remove(event.hasAffectedCue() ? event.affectedCue.cueId : '');
-        state = state.copyWith(perCuePausedIds: resumedIds);
+            : <String>{...state.perCuePausedIds}..remove(cueId);
+        final newPausedAt = Map<String, int>.from(state.perCuePausedAtMs)..remove(cueId);
+        state = state.copyWith(perCuePausedIds: resumedIds, perCuePausedAtMs: newPausedAt);
       default:
         break;
     }

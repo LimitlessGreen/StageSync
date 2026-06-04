@@ -125,6 +125,11 @@ class PlayheadState {
   /// Unabhängig von globaler CueList-Pause ([phase] == paused).
   final Set<String> perCuePausedIds;
 
+  /// Einfrierzeitpunkte pro per-Cue-pausierter Cue in Unix-ms.
+  /// Gesetzt wenn CUE_CUE_PAUSED eintrifft; gelöscht bei CUE_CUE_RESUMED/CUE_DONE.
+  /// Wird von [effectiveNowMsForCue] genutzt um Fortschrittsbalken einzufrieren.
+  final Map<String, int> perCuePausedAtServerMs;
+
   const PlayheadState({
     required this.cueListId,
     this.activeCueId,
@@ -137,6 +142,7 @@ class PlayheadState {
     this.doneServerMs,
     this.perCue = const {},
     this.perCuePausedIds = const {},
+    this.perCuePausedAtServerMs = const {},
   });
 
   static const PlayheadState empty = PlayheadState(cueListId: '');
@@ -165,6 +171,7 @@ class PlayheadState {
     int? doneServerMs,
     Map<String, CueRunState>? perCue,
     Set<String>? perCuePausedIds,
+    Map<String, int>? perCuePausedAtServerMs,
   }) =>
       PlayheadState(
         cueListId: cueListId ?? this.cueListId,
@@ -179,6 +186,7 @@ class PlayheadState {
         doneServerMs: doneServerMs,
         perCue: perCue ?? this.perCue,
         perCuePausedIds: perCuePausedIds ?? this.perCuePausedIds,
+        perCuePausedAtServerMs: perCuePausedAtServerMs ?? this.perCuePausedAtServerMs,
       );
 }
 
@@ -201,6 +209,18 @@ extension PlayheadTiming on PlayheadState {
       return now < p ? now : p;
     }
     return ClockSync.instance.serverNow();
+  }
+
+  /// Effektive "jetzt"-Zeit für eine bestimmte Cue.
+  ///
+  /// Berücksichtigt zusätzlich per-Cue-Pause: wenn die Cue per-Cue pausiert ist,
+  /// wird der Einfrierzeitpunkt zurückgegeben statt der laufenden Uhr.
+  /// Für alle anderen Fälle: identisch mit [effectiveNowMs].
+  int effectiveNowMsForCue(String cueId) {
+    if (perCuePausedIds.contains(cueId)) {
+      return perCuePausedAtServerMs[cueId] ?? effectiveNowMs();
+    }
+    return effectiveNowMs();
   }
 
   /// true solange der Widget-Ticker laufen muss.
