@@ -823,26 +823,28 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
         // isPaused optimistisch lösen falls das Event separat kommt.
         state = state.copyWith(isPaused: false);
       case ShowExecutionEvent_ExecutionEventType.CUE_STOPPED:
+        final stoppedCueId = event.hasAffectedCue() ? event.affectedCue.cueId : '';
         final stoppedRunning = event.runningCueIds.isNotEmpty
             ? event.runningCueIds.toSet()
-            : <String>{
-                ...state.runningCueIds,
-              }..remove(event.hasAffectedCue() ? event.affectedCue.cueId : '');
+            : <String>{...state.runningCueIds}..remove(stoppedCueId);
 
         final stoppedStarts = Map<String, int>.from(state.runningCueStartedServerMs)
           ..removeWhere((id, _) => !stoppedRunning.contains(id));
 
+        // Per-cue-Pause für alle nicht mehr laufenden Cues bereinigen.
+        final stoppedPerCuePaused = <String>{...state.perCuePausedIds}
+          ..removeWhere((id) => !stoppedRunning.contains(id));
+        final stoppedPerCuePausedAt = Map<String, int>.from(state.perCuePausedAtMs)
+          ..removeWhere((id, _) => !stoppedRunning.contains(id));
+
         final Cue? nextActiveCue;
         if (stoppedRunning.isNotEmpty) {
-          if (event.hasAffectedCue() &&
-              state.activeCue?.cueId == event.affectedCue.cueId) {
+          if (stoppedCueId.isNotEmpty &&
+              state.activeCue?.cueId == stoppedCueId) {
             final fallbackId = stoppedRunning.first;
             Cue? fallbackCue;
             for (final c in (state.cueList?.cues ?? const <Cue>[])) {
-              if (c.cueId == fallbackId) {
-                fallbackCue = c;
-                break;
-              }
+              if (c.cueId == fallbackId) { fallbackCue = c; break; }
             }
             nextActiveCue = fallbackCue;
           } else {
@@ -858,24 +860,39 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
           activeCueStartedServerMs:
               stoppedRunning.isNotEmpty ? state.activeCueStartedServerMs : null,
           pausedAtServerMs: null,
-          cueDoneServerMs:
-              stoppedRunning.isEmpty ? _eventServerMs(event) : null,
+          cueDoneServerMs: stoppedRunning.isEmpty ? _eventServerMs(event) : null,
           runningCueIds: stoppedRunning,
           runningCueStartedServerMs: stoppedStarts,
+          perCuePausedIds: stoppedPerCuePaused,
+          perCuePausedAtMs: stoppedPerCuePausedAt,
         );
       case ShowExecutionEvent_ExecutionEventType.CUE_DONE:
       case ShowExecutionEvent_ExecutionEventType.CUE_ERROR:
+        final doneCueId = event.hasAffectedCue() ? event.affectedCue.cueId : '';
         final updatedRunning = event.runningCueIds.isNotEmpty
             ? event.runningCueIds.toSet()
-            : <String>{
-                ...state.runningCueIds,
-              }..remove(event.hasAffectedCue() ? event.affectedCue.cueId : '');
+            : <String>{...state.runningCueIds}..remove(doneCueId);
+
+        // Per-cue-Pause für die beendete Cue immer bereinigen.
+        final donePerCuePaused = <String>{...state.perCuePausedIds}..remove(doneCueId);
+        final donePerCuePausedAt = Map<String, int>.from(state.perCuePausedAtMs)
+          ..remove(doneCueId);
+
+        // Wenn die gestoppte Cue die aktive war und keine anderen mehr laufen,
+        // activeCue auf null setzen damit phase → idle geht (nicht done-eingefroren).
+        final doneIsActiveCue = doneCueId.isNotEmpty &&
+            state.activeCue?.cueId == doneCueId;
+
         if (updatedRunning.isEmpty) {
-          // Keine Cues mehr aktiv → done-Zustand: Timer einfrieren, nicht weiter zählen
           state = state.copyWith(
+            // Lokal gestoppte aktive Cue: idle statt done → Bar reset auf 0
+            activeCue: doneIsActiveCue ? null : state.activeCue,
+            activeCueStartedServerMs: doneIsActiveCue ? null : state.activeCueStartedServerMs,
             runningCueIds: const {},
             runningCueStartedServerMs: const {},
-            cueDoneServerMs: _eventServerMs(event),
+            cueDoneServerMs: doneIsActiveCue ? null : _eventServerMs(event),
+            perCuePausedIds: const {},
+            perCuePausedAtMs: const {},
           );
         } else {
           final updatedStarts = Map<String, int>.from(state.runningCueStartedServerMs)
@@ -883,6 +900,8 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
           state = state.copyWith(
             runningCueIds: updatedRunning,
             runningCueStartedServerMs: updatedStarts,
+            perCuePausedIds: donePerCuePaused,
+            perCuePausedAtMs: donePerCuePausedAt,
           );
         }
       case ShowExecutionEvent_ExecutionEventType.CUE_CUE_PAUSED:
