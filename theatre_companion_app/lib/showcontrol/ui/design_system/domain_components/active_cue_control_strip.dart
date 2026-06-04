@@ -4,22 +4,15 @@ import '../../../domain/cue_params.dart';
 import '../../../domain/playhead.dart';
 import '../sc_colors.dart';
 import '../sc_typography.dart';
-import '../sc_tick.dart';
 
-/// DAW-style runtime control strip that slides in below the active cue row.
+/// DAW-style runtime control strip below the active audio cue.
 ///
-/// Design rationale (QLab / Reaper best-practice):
-/// - Inline row controls are reserved for non-runtime interactions (edit, drag, delete).
-/// - Runtime controls (fade, pause, stop) live in a dedicated strip below the cue,
-///   visually attached to it but clearly separated from the list chrome.
-/// - Fade duration is adjustable via a compact drag-field, not hardcoded.
-///
-/// The strip is only rendered when the cue is an AudioCue and [isVisible] is true.
+/// Adapts layout to available width:
+/// - Wide (≥ 480px / desktop): single compact row — duration picker + buttons
+/// - Narrow (< 480px / mobile): 2×2 button grid + duration row below
 class ActiveCueControlStrip extends StatefulWidget {
   final Cue cue;
   final PlayheadState playhead;
-
-  /// Callbacks wired to ShowControlNotifier — all take fade-duration in ms.
   final ValueChanged<double>? onFadeUp;
   final ValueChanged<double>? onFadeOut;
   final VoidCallback? onStop;
@@ -45,8 +38,6 @@ class _ActiveCueControlStripState extends State<ActiveCueControlStrip>
     with SingleTickerProviderStateMixin {
   late final AnimationController _slideCtrl;
   late final Animation<double> _slideAnim;
-
-  /// User-adjustable fade duration (ms). Defaults from cue params.
   double _fadeDurationMs = 1000.0;
 
   @override
@@ -58,12 +49,8 @@ class _ActiveCueControlStripState extends State<ActiveCueControlStrip>
     );
     _slideAnim = CurvedAnimation(parent: _slideCtrl, curve: Curves.easeOut);
     _slideCtrl.forward();
-    _initFadeDuration();
-  }
-
-  void _initFadeDuration() {
-    if (widget.cue.params case AudioParams p) {
-      if (p.fadeOutMs > 0) _fadeDurationMs = p.fadeOutMs;
+    if (widget.cue.params case AudioParams p when p.fadeOutMs > 0) {
+      _fadeDurationMs = p.fadeOutMs;
     }
   }
 
@@ -77,138 +64,245 @@ class _ActiveCueControlStripState extends State<ActiveCueControlStrip>
 
   @override
   Widget build(BuildContext context) {
-    // Subscribe to shared ticker for live volume display.
-    ScTick.of(context);
-
     final params = widget.cue.params;
     if (params is! AudioParams) return const SizedBox.shrink();
 
     return SizeTransition(
       sizeFactor: _slideAnim,
       axisAlignment: -1,
-      child: Container(
-        color: ScColors.surface2,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        child: Row(
-          children: [
-            // ── Fade duration picker ────────────────────────────────────
-            _FadeDurationPicker(
-              value: _fadeDurationMs,
-              onChanged: (v) => setState(() => _fadeDurationMs = v),
-            ),
-            const SizedBox(width: 8),
-            Container(width: 1, height: 20, color: ScColors.divider),
-            const SizedBox(width: 8),
-
-            // ── Fade Up ─────────────────────────────────────────────────
-            _StripButton(
-              icon: Icons.trending_up,
-              label: 'Fade Up',
-              color: ScColors.active,
-              onPressed: widget.onFadeUp != null
-                  ? () => widget.onFadeUp!(_fadeDurationMs)
-                  : null,
-            ),
-            const SizedBox(width: 4),
-
-            // ── Fade Out ────────────────────────────────────────────────
-            _StripButton(
-              icon: Icons.trending_down,
-              label: 'Fade Out',
-              color: ScColors.warn,
-              onPressed: widget.onFadeOut != null
-                  ? () => widget.onFadeOut!(_fadeDurationMs)
-                  : null,
-            ),
-            const SizedBox(width: 8),
-            Container(width: 1, height: 20, color: ScColors.divider),
-            const SizedBox(width: 8),
-
-            // ── Pause / Resume ──────────────────────────────────────────
-            _StripButton(
-              icon: _isPaused ? Icons.play_arrow : Icons.pause,
-              label: _isPaused ? 'Resume' : 'Pause',
-              color: ScColors.textSecondary,
-              onPressed: _isPaused ? widget.onResume : widget.onPause,
-            ),
-            const SizedBox(width: 4),
-
-            // ── Stop ────────────────────────────────────────────────────
-            _StripButton(
-              icon: Icons.stop,
-              label: 'Stop',
-              color: ScColors.error,
-              onPressed: widget.onStop,
-            ),
-
-            // ── Level indicator (read-only) ─────────────────────────────
-            const Spacer(),
-            _LevelReadout(params: params),
-          ],
-        ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 480;
+          return compact
+              ? _MobileLayout(
+                  params: params,
+                  isPaused: _isPaused,
+                  fadeDurationMs: _fadeDurationMs,
+                  onFadeDurationChanged: (v) => setState(() => _fadeDurationMs = v),
+                  onFadeUp: widget.onFadeUp != null ? () => widget.onFadeUp!(_fadeDurationMs) : null,
+                  onFadeOut: widget.onFadeOut != null ? () => widget.onFadeOut!(_fadeDurationMs) : null,
+                  onPause: widget.onPause,
+                  onResume: widget.onResume,
+                  onStop: widget.onStop,
+                )
+              : _DesktopLayout(
+                  params: params,
+                  isPaused: _isPaused,
+                  fadeDurationMs: _fadeDurationMs,
+                  onFadeDurationChanged: (v) => setState(() => _fadeDurationMs = v),
+                  onFadeUp: widget.onFadeUp != null ? () => widget.onFadeUp!(_fadeDurationMs) : null,
+                  onFadeOut: widget.onFadeOut != null ? () => widget.onFadeOut!(_fadeDurationMs) : null,
+                  onPause: widget.onPause,
+                  onResume: widget.onResume,
+                  onStop: widget.onStop,
+                );
+        },
       ),
     );
   }
 }
 
-// ── Fade Duration Picker ──────────────────────────────────────────────────────
+// ── Desktop layout: compact horizontal row ────────────────────────────────────
 
-/// Compact drag-field for fade duration selection.
-/// Drag left/right to adjust; double-tap to reset to 1s.
-class _FadeDurationPicker extends StatefulWidget {
-  final double value;
-  final ValueChanged<double> onChanged;
+class _DesktopLayout extends StatelessWidget {
+  final AudioParams params;
+  final bool isPaused;
+  final double fadeDurationMs;
+  final ValueChanged<double> onFadeDurationChanged;
+  final VoidCallback? onFadeUp;
+  final VoidCallback? onFadeOut;
+  final VoidCallback? onPause;
+  final VoidCallback? onResume;
+  final VoidCallback? onStop;
 
-  const _FadeDurationPicker({required this.value, required this.onChanged});
-
-  @override
-  State<_FadeDurationPicker> createState() => _FadeDurationPickerState();
-}
-
-class _FadeDurationPickerState extends State<_FadeDurationPicker> {
-  double _dragStart = 0;
-  double _startValue = 0;
-
-  static const _presets = [250.0, 500.0, 1000.0, 2000.0, 5000.0];
-
-  String _fmt(double ms) {
-    if (ms < 1000) return '${ms.toInt()}ms';
-    return '${(ms / 1000).toStringAsFixed(1)}s';
-  }
+  const _DesktopLayout({
+    required this.params,
+    required this.isPaused,
+    required this.fadeDurationMs,
+    required this.onFadeDurationChanged,
+    this.onFadeUp,
+    this.onFadeOut,
+    this.onPause,
+    this.onResume,
+    this.onStop,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onHorizontalDragStart: (d) {
-        _dragStart = d.globalPosition.dx;
-        _startValue = widget.value;
-      },
-      onHorizontalDragUpdate: (d) {
-        final delta = d.globalPosition.dx - _dragStart;
-        final newVal = (_startValue + delta * 20).clamp(100.0, 30000.0);
-        widget.onChanged(newVal);
-      },
-      onDoubleTap: () => widget.onChanged(1000.0),
-      child: Tooltip(
-        message: 'Fade-Dauer — Drag links/rechts, Doppelklick = 1s\nPresets: ${_presets.map(_fmt).join(', ')}',
+    return Container(
+      color: ScColors.surface2,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      child: Row(
+        children: [
+          _FadeDurationPicker(value: fadeDurationMs, onChanged: onFadeDurationChanged),
+          const SizedBox(width: 8),
+          _divider(),
+          const SizedBox(width: 8),
+          _StripButton(icon: Icons.trending_up,   label: 'Fade Up',  color: ScColors.active,         onPressed: onFadeUp),
+          const SizedBox(width: 4),
+          _StripButton(icon: Icons.trending_down, label: 'Fade Out', color: ScColors.warn,           onPressed: onFadeOut),
+          const SizedBox(width: 8),
+          _divider(),
+          const SizedBox(width: 8),
+          _StripButton(
+            icon: isPaused ? Icons.play_arrow : Icons.pause,
+            label: isPaused ? 'Resume' : 'Pause',
+            color: ScColors.textSecondary,
+            onPressed: isPaused ? onResume : onPause,
+          ),
+          const SizedBox(width: 4),
+          _StripButton(icon: Icons.stop, label: 'Stop', color: ScColors.error, onPressed: onStop),
+          const Spacer(),
+          _LevelReadout(params: params),
+        ],
+      ),
+    );
+  }
+
+  Widget _divider() => Container(width: 1, height: 20, color: ScColors.divider);
+}
+
+// ── Mobile layout: 2×2 grid + duration row ────────────────────────────────────
+
+class _MobileLayout extends StatelessWidget {
+  final AudioParams params;
+  final bool isPaused;
+  final double fadeDurationMs;
+  final ValueChanged<double> onFadeDurationChanged;
+  final VoidCallback? onFadeUp;
+  final VoidCallback? onFadeOut;
+  final VoidCallback? onPause;
+  final VoidCallback? onResume;
+  final VoidCallback? onStop;
+
+  const _MobileLayout({
+    required this.params,
+    required this.isPaused,
+    required this.fadeDurationMs,
+    required this.onFadeDurationChanged,
+    this.onFadeUp,
+    this.onFadeOut,
+    this.onPause,
+    this.onResume,
+    this.onStop,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: ScColors.surface2,
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // ── 2×2 button grid ───────────────────────────────────────────
+          Row(
+            children: [
+              Expanded(
+                child: _MobileButton(
+                  icon: Icons.trending_up,
+                  label: 'Fade Up',
+                  color: ScColors.active,
+                  onPressed: onFadeUp,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _MobileButton(
+                  icon: Icons.trending_down,
+                  label: 'Fade Out',
+                  color: ScColors.warn,
+                  onPressed: onFadeOut,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: _MobileButton(
+                  icon: isPaused ? Icons.play_arrow : Icons.pause,
+                  label: isPaused ? 'Resume' : 'Pause',
+                  color: ScColors.textSecondary,
+                  onPressed: isPaused ? onResume : onPause,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _MobileButton(
+                  icon: Icons.stop,
+                  label: 'Stop',
+                  color: ScColors.error,
+                  onPressed: onStop,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // ── Fade duration + level: compact bottom row ─────────────────
+          Row(
+            children: [
+              _FadeDurationPicker(
+                value: fadeDurationMs,
+                onChanged: onFadeDurationChanged,
+                mobilePresets: true,
+              ),
+              const Spacer(),
+              _LevelReadout(params: params),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Mobile button — full-width, taller touch target ───────────────────────────
+
+class _MobileButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback? onPressed;
+
+  const _MobileButton({
+    required this.icon,
+    required this.label,
+    required this.color,
+    this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = onPressed != null;
+    return Material(
+      color: enabled ? color.withValues(alpha: 0.10) : Colors.transparent,
+      borderRadius: BorderRadius.circular(6),
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: BorderRadius.circular(6),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          height: 44,
           decoration: BoxDecoration(
-            color: ScColors.bg,
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: ScColors.divider),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: enabled ? color.withValues(alpha: 0.40) : ScColors.divider,
+            ),
           ),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.timer_outlined, size: 11, color: ScColors.textDim),
-              const SizedBox(width: 4),
+              Icon(icon, size: 16, color: enabled ? color : ScColors.textDim),
+              const SizedBox(width: 6),
               Text(
-                _fmt(widget.value),
-                style: ScText.numberSmall.copyWith(fontSize: 11),
+                label,
+                style: ScText.label.copyWith(
+                  color: enabled ? color : ScColors.textDim,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-              const SizedBox(width: 2),
-              const Icon(Icons.unfold_more, size: 11, color: ScColors.textDim),
             ],
           ),
         ),
@@ -217,7 +311,7 @@ class _FadeDurationPickerState extends State<_FadeDurationPicker> {
   }
 }
 
-// ── Strip Button ──────────────────────────────────────────────────────────────
+// ── Desktop strip button ──────────────────────────────────────────────────────
 
 class _StripButton extends StatelessWidget {
   final IconData icon;
@@ -252,11 +346,7 @@ class _StripButton extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                icon,
-                size: 13,
-                color: enabled ? color : ScColors.textDim,
-              ),
+              Icon(icon, size: 13, color: enabled ? color : ScColors.textDim),
               const SizedBox(width: 4),
               Text(
                 label,
@@ -274,12 +364,112 @@ class _StripButton extends StatelessWidget {
   }
 }
 
+// ── Fade Duration Picker ──────────────────────────────────────────────────────
+
+class _FadeDurationPicker extends StatefulWidget {
+  final double value;
+  final ValueChanged<double> onChanged;
+  final bool mobilePresets;
+
+  const _FadeDurationPicker({
+    required this.value,
+    required this.onChanged,
+    this.mobilePresets = false,
+  });
+
+  @override
+  State<_FadeDurationPicker> createState() => _FadeDurationPickerState();
+}
+
+class _FadeDurationPickerState extends State<_FadeDurationPicker> {
+  double _dragStart = 0;
+  double _startValue = 0;
+
+  static const _presets = [250.0, 500.0, 1000.0, 2000.0, 5000.0];
+
+  String _fmt(double ms) {
+    if (ms < 1000) return '${ms.toInt()}ms';
+    return '${(ms / 1000).toStringAsFixed(1)}s';
+  }
+
+  void _showPresetsMenu(BuildContext context) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box == null) return;
+    final pos = box.localToGlobal(Offset.zero);
+    final size = MediaQuery.sizeOf(context);
+    showMenu<double>(
+      context: context,
+      color: ScColors.surface2,
+      position: RelativeRect.fromLTRB(
+        pos.dx, pos.dy + box.size.height,
+        size.width - pos.dx - box.size.width, 0,
+      ),
+      items: _presets.map((p) => PopupMenuItem(
+        value: p,
+        height: 36,
+        child: Text(_fmt(p), style: ScText.label),
+      )).toList(),
+    ).then((v) { if (v != null) widget.onChanged(v); });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // On mobile: tap opens preset menu (easier than horizontal drag)
+    // On desktop: drag to adjust, double-tap to reset
+    final inner = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: ScColors.bg,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: ScColors.divider),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.timer_outlined, size: 12, color: ScColors.textDim),
+          const SizedBox(width: 5),
+          Text(
+            _fmt(widget.value),
+            style: ScText.numberSmall.copyWith(fontSize: 12),
+          ),
+          const SizedBox(width: 3),
+          const Icon(Icons.expand_more, size: 12, color: ScColors.textDim),
+        ],
+      ),
+    );
+
+    if (widget.mobilePresets) {
+      // Mobile: tap = preset menu
+      return GestureDetector(
+        onTap: () => _showPresetsMenu(context),
+        child: inner,
+      );
+    }
+
+    // Desktop: drag to adjust, double-tap = 1s, long-press = preset menu
+    return GestureDetector(
+      onHorizontalDragStart: (d) {
+        _dragStart = d.globalPosition.dx;
+        _startValue = widget.value;
+      },
+      onHorizontalDragUpdate: (d) {
+        final delta = d.globalPosition.dx - _dragStart;
+        widget.onChanged((_startValue + delta * 20).clamp(100.0, 30000.0));
+      },
+      onDoubleTap: () => widget.onChanged(1000.0),
+      onLongPress: () => _showPresetsMenu(context),
+      child: Tooltip(
+        message: 'Fade-Dauer — Drag, Doppelklick = 1s, Gedrückt halten = Presets',
+        child: inner,
+      ),
+    );
+  }
+}
+
 // ── Level Readout ─────────────────────────────────────────────────────────────
 
-/// Read-only volume display from cue params — shows configured volume.
 class _LevelReadout extends StatelessWidget {
   final AudioParams params;
-
   const _LevelReadout({required this.params});
 
   @override
@@ -287,11 +477,10 @@ class _LevelReadout extends StatelessWidget {
     final vol = params.volumeDb;
     final sign = vol >= 0 ? '+' : '';
     final color = vol > 0 ? ScColors.warn : ScColors.textDim;
-
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.volume_up, size: 11, color: color),
+        Icon(Icons.volume_up, size: 12, color: color),
         const SizedBox(width: 4),
         Text(
           '$sign${vol.toStringAsFixed(1)} dB',
