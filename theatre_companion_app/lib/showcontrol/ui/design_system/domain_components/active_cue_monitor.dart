@@ -1,9 +1,8 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import '../../../domain/playhead.dart';
 import '../../../domain/show.dart';
 import '../sc_colors.dart';
+import '../sc_tick.dart';
 import '../sc_typography.dart';
 
 /// Live active-cue monitor — 60-fps progress bar, per-node execution detail.
@@ -23,46 +22,10 @@ class ActiveCueMonitor extends StatefulWidget {
 }
 
 class _ActiveCueMonitorState extends State<ActiveCueMonitor> {
-  Timer? _timer;
-
-  @override
-  void initState() {
-    super.initState();
-    _syncTimer();
-  }
-
-  @override
-  void didUpdateWidget(ActiveCueMonitor old) {
-    super.didUpdateWidget(old);
-    _syncTimer();
-  }
-
-  void _syncTimer() {
-    if (widget.playhead.needsTick && _timer == null) {
-      _timer = Timer.periodic(const Duration(milliseconds: 50), (_) {
-        if (mounted) setState(() {});
-      });
-    } else if (!widget.playhead.needsTick && _timer != null) {
-      _timer!.cancel();
-      _timer = null;
-    }
-  }
-
-  @override
-  void deactivate() {
-    _timer?.cancel();
-    _timer = null;
-    super.deactivate();
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
+    // Subscribe to shared vsync ticker — rebuilds each frame when live.
+    if (widget.playhead.needsTick) ScTick.of(context);
     final activeId = widget.playhead.activeCueId;
     if (activeId == null || widget.playhead.isIdle) {
       return Center(child: Text('Kein aktiver Cue', style: ScText.label));
@@ -74,7 +37,9 @@ class _ActiveCueMonitorState extends State<ActiveCueMonitor> {
         ? widget.cueList?.cueById(widget.playhead.nextCueId!)
         : null;
 
-    final childIds = widget.playhead.runningCueIds
+    // Zeige alle parallel laufenden Cues an (von Group oder Audio-Loop)
+    // inklusive derer, die nicht die aktiveCueId sind
+    final otherRunningIds = widget.playhead.runningCueIds
         .where((id) => id != activeId)
         .toList();
 
@@ -87,12 +52,14 @@ class _ActiveCueMonitorState extends State<ActiveCueMonitor> {
         if (cue?.displayDurationMs != null)
           _ProgressBar(playhead: widget.playhead, cue: cue!),
         const SizedBox(height: 12),
-        if (childIds.isNotEmpty) ...[
-          Text('PARALLEL', style: ScText.panelTitle),
+        // Zeige auch andere laufende Cues (Audio-Loops, Group-Parallels)
+        if (otherRunningIds.isNotEmpty) ...[
+          Text('LAUFENDE CUES', style: ScText.panelTitle),
           const SizedBox(height: 6),
-          ...childIds.map((childId) {
+          ...otherRunningIds.map((childId) {
             final childCue = widget.cueList?.cueById(childId);
-            final childState = widget.playhead.runStateFor(childId);
+            final childState = widget.playhead.runStateFor(childId) ??
+                const CueRunState(lifecycle: CueLifecycle.running);
             return _ChildCueRow(
               childId: childId,
               cue: childCue,
@@ -329,29 +296,72 @@ class _ChildCueRow extends StatelessWidget {
     final label = cue != null
         ? '${cue!.number}  ${cue!.label}'
         : childId.substring(0, childId.length.clamp(0, 8));
+    final startMs = playhead.cueStartedServerMsByCueId[childId];
+    final elapsedMs = startMs != null
+        ? (playhead.effectiveNowMs() - startMs).clamp(0, 99 * 60 * 1000).toDouble()
+        : null;
+    final durationMs = cue?.displayDurationMs;
+    final fraction = (elapsedMs != null && durationMs != null && durationMs > 0)
+        ? (elapsedMs / durationMs).clamp(0.0, 1.0)
+        : null;
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 6, height: 6,
-            decoration:
-                BoxDecoration(color: _color, shape: BoxShape.circle),
+          Row(
+            children: [
+              Container(
+                width: 6, height: 6,
+                decoration:
+                    BoxDecoration(color: _color, shape: BoxShape.circle),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(label,
+                    style: ScText.label.copyWith(color: _color),
+                    overflow: TextOverflow.ellipsis),
+              ),
+              Text(
+                runState?.lifecycle.name ?? '',
+                style: ScText.label.copyWith(
+                    color: ScColors.textDim, fontSize: 10),
+              ),
+              if (elapsedMs != null) ...[
+                const SizedBox(width: 8),
+                Text(
+                  _fmtMs(elapsedMs),
+                  style: ScText.statusSmall.copyWith(color: ScColors.textDim),
+                ),
+              ],
+            ],
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(label,
-                style: ScText.label.copyWith(color: _color),
-                overflow: TextOverflow.ellipsis),
-          ),
-          Text(
-            runState?.lifecycle.name ?? '',
-            style: ScText.label.copyWith(
-                color: ScColors.textDim, fontSize: 10),
-          ),
+          if (fraction != null)
+            Padding(
+              padding: const EdgeInsets.only(left: 14, top: 3),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(3),
+                child: LinearProgressIndicator(
+                  value: fraction,
+                  minHeight: 4,
+                  backgroundColor: ScColors.divider,
+                  valueColor: AlwaysStoppedAnimation(_color),
+                ),
+              ),
+            ),
         ],
       ),
     );
+  }
+
+  static String _fmtMs(double ms) {
+    if (ms < 1000) return '${ms.toInt()}ms';
+    final s = ms / 1000;
+    if (s < 60) return '${s.toStringAsFixed(1)}s';
+    final m = (s / 60).floor();
+    final rs = (s % 60).toStringAsFixed(0).padLeft(2, '0');
+    return '$m:$rs';
   }
 }
 

@@ -1,11 +1,10 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import '../../../domain/show.dart';
 import '../../../domain/playhead.dart';
 import '../sc_colors.dart';
 import '../sc_typography.dart';
 import '../sc_spacing.dart';
+import '../sc_tick.dart';
 import '../primitives/sc_button.dart';
 
 /// Transport bar — always visible, knows [PlayheadState] and [CueList].
@@ -15,7 +14,9 @@ import '../primitives/sc_button.dart';
 ///
 /// All transport controls are grouped together on the right so the operator
 /// never has to jump across the screen. GO is the rightmost dominant element.
-class TransportBar extends StatefulWidget {
+///
+/// Timing is driven by the shared [ScTick] vsync ticker — no internal timer.
+class TransportBar extends StatelessWidget {
   final PlayheadState playhead;
   final CueList? cueList;
   final VoidCallback? onGo;
@@ -35,50 +36,12 @@ class TransportBar extends StatefulWidget {
     this.compact = false,
   });
 
-  @override
-  State<TransportBar> createState() => _TransportBarState();
-}
-
-class _TransportBarState extends State<TransportBar> {
-  Timer? _ticker;
-
-  @override
-  void initState() {
-    super.initState();
-    _updateTicker();
-  }
-
-  @override
-  void didUpdateWidget(TransportBar old) {
-    super.didUpdateWidget(old);
-    if (old.playhead.phase != widget.playhead.phase) _updateTicker();
-  }
-
-  void _updateTicker() {
-    _ticker?.cancel();
-    _ticker = null;
-    // Ticker auch während paused laufen lassen: Im Fade-Out-Fenster muss
-    // _elapsedStr weiter hochzählen. Nach dem Fade friert _elapsedStr von
-    // selbst ein (gibt pausedAtServerMs zurück), setState ist dann billig.
-    if (widget.playhead.isRunning || widget.playhead.isPaused) {
-      _ticker = Timer.periodic(const Duration(milliseconds: 100), (_) {
-        if (mounted) setState(() {});
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _ticker?.cancel();
-    super.dispose();
-  }
-
-  String get _elapsedStr {
-    final start = widget.playhead.startedServerMs;
+  String _elapsedStr() {
+    final start = playhead.startedServerMs;
     if (start == null) return '0:00';
-    final int nowMs = widget.playhead.phase == CueListPhase.idle
+    final int nowMs = playhead.phase == CueListPhase.idle
         ? -1
-        : widget.playhead.effectiveNowMs();
+        : playhead.effectiveNowMs();
     if (nowMs < 0) return '0:00';
     final ms = (nowMs - start).clamp(0, 99 * 60 * 1000);
     final s = ms ~/ 1000;
@@ -87,36 +50,36 @@ class _TransportBarState extends State<TransportBar> {
     return '$m:$rs';
   }
 
-  Color get _timerColor => switch (widget.playhead.phase) {
+  Color get _timerColor => switch (playhead.phase) {
     CueListPhase.running => ScColors.active,
     CueListPhase.paused  => ScColors.warn,
     CueListPhase.done    => ScColors.textDim,
     _                    => ScColors.textDim,
   };
 
-  IconData get _stateIcon => switch (widget.playhead.phase) {
+  IconData get _stateIcon => switch (playhead.phase) {
     CueListPhase.running => Icons.play_arrow,
     CueListPhase.paused  => Icons.pause,
     CueListPhase.done    => Icons.check,
     _                    => Icons.hourglass_empty,
   };
 
-  Color get _stateIconColor => switch (widget.playhead.phase) {
+  Color get _stateIconColor => switch (playhead.phase) {
     CueListPhase.running => ScColors.active,
     CueListPhase.paused  => ScColors.warn,
     _                    => ScColors.textDim,
   };
 
-  Cue? get _activeCue {
-    final id = widget.playhead.activeCueId;
-    if (id == null || widget.cueList == null) return null;
-    return widget.cueList!.cueById(id);
+  Cue? _activeCue() {
+    final id = playhead.activeCueId;
+    if (id == null || cueList == null) return null;
+    return cueList!.cueById(id);
   }
 
-  Cue? get _nextCue {
-    final id = widget.playhead.activeCueId;
-    if (id == null || widget.cueList == null) return null;
-    final cues = widget.cueList!.cues;
+  Cue? _nextCue() {
+    final id = playhead.activeCueId;
+    if (id == null || cueList == null) return null;
+    final cues = cueList!.cues;
     final idx = cues.indexWhere((c) => c.id == id);
     if (idx < 0 || idx + 1 >= cues.length) return null;
     return cues[idx + 1];
@@ -124,11 +87,12 @@ class _TransportBarState extends State<TransportBar> {
 
   @override
   Widget build(BuildContext context) {
-    final active = _activeCue;
-    final next   = _nextCue;
-    final showPhase = widget.playhead.isRunning ||
-        widget.playhead.isPaused ||
-        widget.playhead.isDone;
+    // Subscribe to shared vsync ticker — rebuilds each frame when live.
+    if (playhead.isRunning || playhead.isPaused) ScTick.of(context);
+
+    final active = _activeCue();
+    final next   = _nextCue();
+    final showPhase = playhead.isRunning || playhead.isPaused || playhead.isDone;
 
     return Container(
       height: ScSpacing.transportBarHeight,
@@ -153,14 +117,14 @@ class _TransportBarState extends State<TransportBar> {
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    _elapsedStr,
+                    _elapsedStr(),
                     style: ScText.timer.copyWith(fontSize: 15, color: _timerColor),
                   ),
                 ] else
                   Text('—', style: ScText.cueLabel.copyWith(color: ScColors.textDim)),
 
                 // Next cue preview
-                if (next != null && !widget.compact) ...[
+                if (next != null && !compact) ...[
                   Container(
                     width: 1, height: 20,
                     color: ScColors.divider,
@@ -198,28 +162,28 @@ class _TransportBarState extends State<TransportBar> {
               icon: Icons.stop,
               variant: ScButtonVariant.danger,
               size: ScButtonSize.compact,
-              onPressed: widget.onStop,
+              onPressed: onStop,
             ),
           ),
           const SizedBox(width: 6),
 
           // PAUSE / RESUME
           Tooltip(
-            message: widget.playhead.isPaused ? 'RESUME  [P]' : 'PAUSE  [P]',
-            child: widget.playhead.isPaused
+            message: playhead.isPaused ? 'RESUME  [P]' : 'PAUSE  [P]',
+            child: playhead.isPaused
                 ? ScButton(
                     label: 'RESUME',
                     icon: Icons.play_arrow,
                     variant: ScButtonVariant.secondary,
                     size: ScButtonSize.compact,
-                    onPressed: widget.onResume,
+                    onPressed: onResume,
                   )
                 : ScButton(
                     label: 'PAUSE',
                     icon: Icons.pause,
                     variant: ScButtonVariant.secondary,
                     size: ScButtonSize.compact,
-                    onPressed: widget.onPause,
+                    onPressed: onPause,
                   ),
           ),
           const SizedBox(width: 10),
@@ -233,7 +197,7 @@ class _TransportBarState extends State<TransportBar> {
                 label: 'GO',
                 variant: ScButtonVariant.primary,
                 size: ScButtonSize.transport,
-                onPressed: widget.onGo,
+                onPressed: onGo,
               ),
             ),
           ),

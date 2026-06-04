@@ -1,11 +1,10 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import '../../../domain/show.dart';
 import '../../../domain/cue_params.dart';
 import '../../../domain/playhead.dart';
 import '../../../session/clock_sync.dart';
 import '../sc_colors.dart';
+import '../sc_tick.dart';
 import '../sc_typography.dart';
 import '../sc_spacing.dart';
 import '../primitives/sc_chip.dart';
@@ -39,47 +38,51 @@ class CueListRow extends StatefulWidget {
   final VoidCallback? onToggleExpand;
   final Map<String, CueRunState>? childRunStates;
 
-  // ── Action callbacks ──────────────────────────────────────────────────────
-  final VoidCallback? onTap;
-  final VoidCallback? onDoubleTap;
-  final VoidCallback? onLongPress;
-  final VoidCallback? onDelete;
-  final VoidCallback? onGo;
-  final VoidCallback? onInsertBefore;
-  final VoidCallback? onInsertAfter;
-  final VoidCallback? onDuplicate;
-  final VoidCallback? onGroup;
+   // ── Action callbacks ──────────────────────────────────────────────────────
+   final VoidCallback? onTap;
+   final VoidCallback? onDoubleTap;
+   final VoidCallback? onLongPress;
+   final VoidCallback? onDelete;
+   final VoidCallback? onGo;
+   final VoidCallback? onInsertBefore;
+   final VoidCallback? onInsertAfter;
+    final VoidCallback? onDuplicate;
+    final VoidCallback? onGroup;
 
-  const CueListRow({
-    super.key,
-    required this.cue,
-    this.runState,
-    this.playhead,
-    this.isActive = false,
-    this.isPast = false,
-    this.isSelected = false,
-    this.expanded = false,
-    this.showDragHandle = false,
-    this.dragIndex,
-    this.depth = 0,
-    this.groupChildren,
-    this.isGroupExpanded = false,
-    this.onToggleExpand,
-    this.childRunStates,
-    this.onTap,
-    this.onDoubleTap,
-    this.onLongPress,
-    this.onDelete,
-    this.onGo,
-    this.onInsertBefore,
-    this.onInsertAfter,
-    this.onDuplicate,
-    this.onGroup,
-  });
+    const CueListRow({
+     super.key,
+     required this.cue,
+     this.runState,
+     this.playhead,
+     this.isActive = false,
+     this.isPast = false,
+     this.isSelected = false,
+     this.expanded = false,
+     this.showDragHandle = false,
+     this.dragIndex,
+     this.depth = 0,
+     this.groupChildren,
+     this.isGroupExpanded = false,
+     this.onToggleExpand,
+     this.childRunStates,
+     this.onTap,
+     this.onDoubleTap,
+     this.onLongPress,
+     this.onDelete,
+     this.onGo,
+     this.onInsertBefore,
+     this.onInsertAfter,
+      this.onDuplicate,
+      this.onGroup,
+    });
 
-  bool get hasError => runState?.lifecycle == CueLifecycle.error;
+    bool get hasError => runState?.lifecycle == CueLifecycle.error;
   bool get isPaused => runState?.lifecycle == CueLifecycle.paused;
   bool get isGroup => cue.params is GroupParams;
+
+  /// Cue ist Teil von runningCueIds (auch wenn nicht die primär-aktive Cue).
+  bool _isAlsoRunning(PlayheadState? playhead) =>
+      !isActive && (playhead?.runningCueIds.contains(cue.id) ?? false);
 
   @override
   State<CueListRow> createState() => _CueListRowState();
@@ -114,89 +117,77 @@ class CueListRow extends StatefulWidget {
 }
 
 class _CueListRowState extends State<CueListRow> {
-  Timer? _timer;
+  /// True wenn diese Row live-Updates braucht:
+  /// entweder primär aktiv ODER im Hintergrund noch spielend (isAlsoRunning).
+  bool get _isLiveRunning =>
+      widget.isActive || widget._isAlsoRunning(widget.playhead);
 
-  @override
-  void initState() {
-    super.initState();
-    _syncTimer();
-  }
-
-  @override
-  void didUpdateWidget(CueListRow old) {
-    super.didUpdateWidget(old);
-    _syncTimer();
-  }
-
-  void _syncTimer() {
-    // Keep timer running whenever the row needs live updates:
-    // - normal playback
-    // - pause-fade window (audio still audible, bar must keep advancing)
-    // - fade-in / fade-out phases within a running cue
-    // Stop only when fully idle, fully paused (post-fade), or done.
-    final needsTimer = widget.isActive && !(widget.playhead?.isDone ?? false);
-    if (needsTimer && _timer == null) {
-      _timer = Timer.periodic(const Duration(milliseconds: 50), (_) {
-        if (mounted) setState(() {});
-      });
-    } else if (!needsTimer && _timer != null) {
-      _timer!.cancel();
-      _timer = null;
-    }
-  }
-
-  @override
-  void deactivate() {
-    // Cancel immediately so no setState fires while element is in inactive pool.
-    _timer?.cancel();
-    _timer = null;
-    super.deactivate();
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
+  /// Per-Cue-Pause: direkt aus dem server-autoritativen PlayheadState lesen.
+  bool get _perCuePaused =>
+      widget.playhead?.isCuePaused(widget.cue.id) ?? false;
 
   // ── Fade-aware progress ──────────────────────────────────────────────────
 
   /// Current server time, accounting for pause-fade window.
-  ///
-  /// When PAUSE is fired with [PauseBehavior.fadeOut], audio continues for
-  /// [AudioParams.pauseFadeMs] ms. Progress must advance during that window
-  /// so the bar doesn't freeze while audio is still audible.
   int _effectiveNowMs() {
     final ph = widget.playhead;
     if (ph == null) return ClockSync.instance.serverNow();
     return ph.effectiveNowMs();
   }
 
+  /// Start-Serverzeit dieser Cue.
+  /// Für primär-aktive Cues: per-Cue-Zeit oder globaler Fallback.
+  /// Für Hintergrund-Cues (isAlsoRunning): nur per-Cue-Zeit —
+  /// startedServerMs gehört zur anderen (aktiven) Cue.
+  int? get _cueStartMs {
+    final ph = widget.playhead;
+    if (ph == null) return null;
+    final perCueStart = ph.cueStartedServerMsByCueId[widget.cue.id];
+    if (perCueStart != null) return perCueStart;
+    if (widget.isActive) return ph.startedServerMs; // Fallback nur für aktive Cue
+    return null;
+  }
+
   double get _progressFraction {
-    if (!widget.isActive) return 0.0;
-    final start = widget.playhead?.startedServerMs;
+    if (!_isLiveRunning) return 0.0;
+    final start = _cueStartMs;
     final duration = widget.cue.displayDurationMs;
     if (start == null || duration == null || duration <= 0) return 0.0;
     return ((_effectiveNowMs() - start) / duration).clamp(0.0, 1.0);
   }
 
   double get _elapsedMs {
-    final start = widget.playhead?.startedServerMs;
+    final start = _cueStartMs;
     if (start == null) return 0.0;
     return (_effectiveNowMs() - start).toDouble().clamp(0.0, double.infinity);
   }
 
-  /// Which audio phase we are currently in — drives bar color and overlay.
+  /// Audio-Phase — steuert Bar-Farbe und Overlay.
+  /// Hintergrund-Cues (isAlsoRunning): vereinfachte Phase, kein globaler
+  /// Pause-Status (der gehört zur primär-aktiven Cue).
   _AudioPhase get _audioPhase {
-    if (!widget.isActive) return _AudioPhase.idle;
+    if (!_isLiveRunning) return _AudioPhase.idle;
     final ph = widget.playhead;
     if (ph == null) return _AudioPhase.idle;
 
     final elapsed = _elapsedMs;
+    final isAlsoRunning = widget._isAlsoRunning(widget.playhead);
 
-    // Pause-fade: PAUSE was fired but audio is still fading out.
-    // pausedAtServerMs = press-time + fadeMs (end-of-fade), so while now < pausedAt
-    // the fade is still ongoing.
+    // Hintergrund-Cues: nur Fade-In/Out aus Cue-Params ableiten.
+    if (isAlsoRunning && !widget.isActive) {
+      if (_perCuePaused) return _AudioPhase.paused;
+      if (widget.cue.params case AudioParams p) {
+        if (p.fadeInMs > 0 && elapsed < p.fadeInMs) return _AudioPhase.fadeIn;
+        final duration = widget.cue.displayDurationMs;
+        if (duration != null && p.fadeOutMs > 0) {
+          if (elapsed > duration - p.fadeOutMs) return _AudioPhase.fadeOut;
+        }
+      }
+      return _AudioPhase.playing;
+    }
+
+    // Primär-aktive Cue: volle Pause-/Done-Logik.
+    if (_perCuePaused) return _AudioPhase.paused;
     if (ph.isPaused) {
       final pausedAt = ph.pausedAtServerMs;
       if (pausedAt != null && ClockSync.instance.serverNow() < pausedAt) {
@@ -207,7 +198,6 @@ class _CueListRowState extends State<CueListRow> {
 
     if (ph.isDone) return _AudioPhase.done;
 
-    // Within a running cue — check fade-in / fade-out windows.
     if (widget.cue.params case AudioParams p) {
       if (p.fadeInMs > 0 && elapsed < p.fadeInMs) return _AudioPhase.fadeIn;
       final duration = widget.cue.displayDurationMs;
@@ -234,6 +224,11 @@ class _CueListRowState extends State<CueListRow> {
       return _NoteRow(cue: widget.cue, note: note, onTap: widget.onTap);
     }
 
+    // Subscribe to shared vsync ticker while this row is live.
+    final isAlsoRunning = widget._isAlsoRunning(widget.playhead);
+    if (_isLiveRunning && !_perCuePaused && !(widget.playhead?.isDone ?? false)) {
+      ScTick.of(context);
+    }
     final height =
         widget.expanded ? ScSpacing.rowHeightActive : ScSpacing.rowHeight;
     final fraction = _progressFraction;
@@ -251,40 +246,54 @@ class _CueListRowState extends State<CueListRow> {
                 ? ScColors.selected
                 : widget.isActive
                     ? _typeColor.withValues(alpha: 0.06)
-                    : Colors.transparent,
+                    : isAlsoRunning
+                        ? _typeColor.withValues(alpha: 0.03)
+                        : Colors.transparent,
           ),
 
           // ── Progress sweep (QLab-style fill from left) ──────────────────
-          if (widget.isActive && fraction > 0)
+          // Zeigt auch für Hintergrund-Audio-Cues (isAlsoRunning) — gedimmt.
+          if ((widget.isActive || isAlsoRunning) && fraction > 0)
             Positioned.fill(
               child: LayoutBuilder(
-                builder: (_, constraints) => _ProgressSweepPainter(
-                  fraction: fraction,
-                  typeColor: _typeColor,
-                  audioPhase: audioPhase,
-                  cue: widget.cue,
-                  width: constraints.maxWidth,
-                  height: constraints.maxHeight,
+                builder: (_, constraints) => Opacity(
+                  opacity: isAlsoRunning && !widget.isActive ? 0.45 : 1.0,
+                  child: _ProgressSweepPainter(
+                    fraction: fraction,
+                    typeColor: _typeColor,
+                    audioPhase: audioPhase,
+                    cue: widget.cue,
+                    width: constraints.maxWidth,
+                    height: constraints.maxHeight,
+                  ),
                 ),
               ),
             ),
 
           // ── Left accent bar ─────────────────────────────────────────────
-          if (widget.isActive || widget.hasError)
+          if (widget.isActive || widget.hasError || isAlsoRunning)
             Positioned(
               left: 0, top: 0, bottom: 0,
-              child: Container(width: 3, color: _stateColor),
+              child: Container(
+                width: 3,
+                color: isAlsoRunning && !widget.isActive
+                    ? _typeColor.withValues(alpha: 0.5)
+                    : _stateColor,
+              ),
             ),
 
           // ── Bottom progress line ────────────────────────────────────────
-          if (widget.isActive)
+          if (widget.isActive || isAlsoRunning)
             Positioned(
               left: 0, right: 0, bottom: 0,
-              child: _CueProgressBar(
-                fraction: fraction,
-                audioPhase: audioPhase,
-                typeColor: _typeColor,
-                cue: widget.cue,
+              child: Opacity(
+                opacity: isAlsoRunning && !widget.isActive ? 0.5 : 1.0,
+                child: _CueProgressBar(
+                  fraction: fraction,
+                  audioPhase: audioPhase,
+                  typeColor: _typeColor,
+                  cue: widget.cue,
+                ),
               ),
             ),
 
@@ -369,17 +378,17 @@ class _CueListRowState extends State<CueListRow> {
                 ),
 
                 // Timing column: remaining-time when active, total otherwise
-                _TimingColumn(
-                  cue: widget.cue,
-                  playhead: widget.playhead,
-                  isActive: widget.isActive,
-                ),
+                 _TimingColumn(
+                   cue: widget.cue,
+                   playhead: widget.playhead,
+                   isActive: widget.isActive,
+                  ),
 
-                // Status dot
-                SizedBox(
-                  width: ScSpacing.cueStatusDotWidth,
-                  child: Center(child: _statusDot()),
-                ),
+                  // Status dot
+                  SizedBox(
+                    width: ScSpacing.cueStatusDotWidth,
+                    child: Center(child: _statusDot()),
+                  ),
 
                 // Delete button (desktop editor)
                 if (widget.showDragHandle && widget.onDelete != null)
@@ -517,17 +526,21 @@ class _CueListRowState extends State<CueListRow> {
   }
 
   Widget _statusDot() {
-    if (!widget.isActive && !widget.hasError && !widget.isPaused) {
+    final isAlsoRunning = widget._isAlsoRunning(widget.playhead);
+    if (!widget.isActive && !widget.hasError && !widget.isPaused && !isAlsoRunning) {
       return const SizedBox.shrink();
     }
+    final color = isAlsoRunning && !widget.isActive
+        ? _typeColor.withValues(alpha: 0.6)
+        : _stateColor;
     return Container(
       width: 8,
       height: 8,
       decoration: BoxDecoration(
-        color: _stateColor,
+        color: color,
         shape: BoxShape.circle,
         boxShadow: [
-          BoxShadow(color: _stateColor.withValues(alpha: 0.5), blurRadius: 4)
+          BoxShadow(color: color.withValues(alpha: 0.5), blurRadius: 4)
         ],
       ),
     );
@@ -553,10 +566,13 @@ class _TimingColumn extends StatelessWidget {
     final preWait = cue.timing.preWaitMs;
     final postWait = cue.timing.postWaitMs;
 
-    final autoSkip = switch (cue.params) {
-      AudioParams ap when ap.assetId.isNotEmpty && ap.startTimeMs == 0 => true,
-      _ => false,
-    };
+    final autoContinue = cue.timing.autoContinue;
+    // Läuft die Cue im Hintergrund (nicht die primär-aktive)?
+    final isAlsoRunning =
+        !isActive && (playhead?.runningCueIds.contains(cue.id) ?? false);
+    final hasStartTime = (playhead?.cueStartedServerMsByCueId[cue.id] ??
+            (isActive ? playhead?.startedServerMs : null)) !=
+        null;
 
     return SizedBox(
       width: ScSpacing.cueDurationWidth + 10,
@@ -564,10 +580,8 @@ class _TimingColumn extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          if (isActive &&
-              duration != null &&
-              playhead?.startedServerMs != null)
-            _RemainingTime(playhead: playhead!, duration: duration)
+          if ((isActive || isAlsoRunning) && duration != null && hasStartTime)
+            _RemainingTime(playhead: playhead!, cueId: cue.id, duration: duration)
           else
             Text(
               _fmt(duration),
@@ -579,12 +593,12 @@ class _TimingColumn extends StatelessWidget {
               _waitHint(preWait, postWait),
               style: ScText.statusSmall.copyWith(fontSize: 9),
             ),
-          // Kleiner Indikator wenn Auto-Skip-Silence aktiv ist
-          if (autoSkip && !isActive)
+          // Kleiner Indikator wenn Auto-Continue aktiv ist
+          if (autoContinue && !isActive && !isAlsoRunning)
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.skip_next, size: 9, color: ScColors.textDim),
+                Icon(Icons.play_arrow, size: 9, color: ScColors.textDim),
                 Text('AUTO',
                     style: ScText.statusSmall
                         .copyWith(fontSize: 8, color: ScColors.textDim)),
@@ -615,9 +629,14 @@ class _TimingColumn extends StatelessWidget {
 // Shows remaining time counting down (QLab style: -3.4s)
 class _RemainingTime extends StatelessWidget {
   final PlayheadState playhead;
+  final String cueId;
   final double duration;
 
-  const _RemainingTime({required this.playhead, required this.duration});
+  const _RemainingTime({
+    required this.playhead,
+    required this.cueId,
+    required this.duration,
+  });
 
   static String _fmt(double ms) {
     if (ms <= 0) return '0.0s';
@@ -631,7 +650,11 @@ class _RemainingTime extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final start = playhead.startedServerMs!;
+    // Per-Cue-Start hat Priorität; für primär-aktive Cues ist Fallback ok.
+    // Für Hintergrund-Cues darf der Fallback nicht verwendet werden (falsche Zeit).
+    final start = playhead.cueStartedServerMsByCueId[cueId]
+        ?? playhead.startedServerMs
+        ?? ClockSync.instance.serverNow();
     final now = playhead.effectiveNowMs();
     final elapsed = (now - start).clamp(0, 99 * 60 * 1000).toDouble();
     final remaining = (duration - elapsed).clamp(0.0, duration);
@@ -994,6 +1017,7 @@ class _NoteRow extends StatelessWidget {
     );
   }
 }
+
 
 // ── Node state chips ──────────────────────────────────────────────────────────
 
