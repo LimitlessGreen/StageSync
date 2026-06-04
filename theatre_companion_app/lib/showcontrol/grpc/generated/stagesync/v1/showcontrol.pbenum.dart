@@ -164,6 +164,12 @@ class ShowExecutionEvent_ExecutionEventType extends $pb.ProtobufEnum {
   static const ShowExecutionEvent_ExecutionEventType CUE_ERROR =
       ShowExecutionEvent_ExecutionEventType._(
           6, _omitEnumNames ? '' : 'CUE_ERROR');
+  static const ShowExecutionEvent_ExecutionEventType CUE_CUE_PAUSED =
+      ShowExecutionEvent_ExecutionEventType._(
+          7, _omitEnumNames ? '' : 'CUE_CUE_PAUSED');
+  static const ShowExecutionEvent_ExecutionEventType CUE_CUE_RESUMED =
+      ShowExecutionEvent_ExecutionEventType._(
+          8, _omitEnumNames ? '' : 'CUE_CUE_RESUMED');
 
   static const $core.List<ShowExecutionEvent_ExecutionEventType> values =
       <ShowExecutionEvent_ExecutionEventType>[
@@ -174,10 +180,12 @@ class ShowExecutionEvent_ExecutionEventType extends $pb.ProtobufEnum {
     CUE_STOPPED,
     CUE_DONE,
     CUE_ERROR,
+    CUE_CUE_PAUSED,
+    CUE_CUE_RESUMED,
   ];
 
   static final $core.List<ShowExecutionEvent_ExecutionEventType?> _byValue =
-      $pb.ProtobufEnum.$_initByValueList(values, 6);
+      $pb.ProtobufEnum.$_initByValueList(values, 8);
   static ShowExecutionEvent_ExecutionEventType? valueOf($core.int value) =>
       value < 0 || value >= _byValue.length ? null : _byValue[value];
 

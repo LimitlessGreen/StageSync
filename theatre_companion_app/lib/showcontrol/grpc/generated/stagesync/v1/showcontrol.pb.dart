@@ -2759,6 +2759,7 @@ class ShowExecutionEvent extends $pb.GeneratedMessage {
     $fixnum.Int64? cueStartedAtMs,
     $core.bool? isPaused,
     $core.Iterable<$core.String>? runningCueIds,
+    $core.Iterable<$core.String>? perCuePausedIds,
   }) {
     final result = create();
     if (seq != null) result.seq = seq;
@@ -2770,6 +2771,7 @@ class ShowExecutionEvent extends $pb.GeneratedMessage {
     if (cueStartedAtMs != null) result.cueStartedAtMs = cueStartedAtMs;
     if (isPaused != null) result.isPaused = isPaused;
     if (runningCueIds != null) result.runningCueIds.addAll(runningCueIds);
+    if (perCuePausedIds != null) result.perCuePausedIds.addAll(perCuePausedIds);
     return result;
   }
 
@@ -2798,6 +2800,7 @@ class ShowExecutionEvent extends $pb.GeneratedMessage {
     ..aInt64(13, _omitFieldNames ? '' : 'cueStartedAtMs')
     ..aOB(14, _omitFieldNames ? '' : 'isPaused')
     ..pPS(15, _omitFieldNames ? '' : 'runningCueIds')
+    ..pPS(16, _omitFieldNames ? '' : 'perCuePausedIds')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -2900,6 +2903,10 @@ class ShowExecutionEvent extends $pb.GeneratedMessage {
   /// IDs aller gleichzeitig laufenden Cues (parallele Group-Children).
   @$pb.TagNumber(15)
   $pb.PbList<$core.String> get runningCueIds => $_getList(8);
+
+  /// IDs aller per-Cue-pausierten Cues (unabhängig von globaler CueList-Pause).
+  @$pb.TagNumber(16)
+  $pb.PbList<$core.String> get perCuePausedIds => $_getList(9);
 }
 
 class WatchNodeHealthRequest extends $pb.GeneratedMessage {

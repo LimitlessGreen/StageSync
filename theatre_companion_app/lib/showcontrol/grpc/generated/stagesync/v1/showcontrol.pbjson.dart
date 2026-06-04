@@ -886,6 +886,13 @@ const ShowExecutionEvent$json = {
     {'1': 'cue_started_at_ms', '3': 13, '4': 1, '5': 3, '10': 'cueStartedAtMs'},
     {'1': 'is_paused', '3': 14, '4': 1, '5': 8, '10': 'isPaused'},
     {'1': 'running_cue_ids', '3': 15, '4': 3, '5': 9, '10': 'runningCueIds'},
+    {
+      '1': 'per_cue_paused_ids',
+      '3': 16,
+      '4': 3,
+      '5': 9,
+      '10': 'perCuePausedIds'
+    },
   ],
   '4': [ShowExecutionEvent_ExecutionEventType$json],
 };
@@ -901,6 +908,8 @@ const ShowExecutionEvent_ExecutionEventType$json = {
     {'1': 'CUE_STOPPED', '2': 4},
     {'1': 'CUE_DONE', '2': 5},
     {'1': 'CUE_ERROR', '2': 6},
+    {'1': 'CUE_CUE_PAUSED', '2': 7},
+    {'1': 'CUE_CUE_RESUMED', '2': 8},
   ],
 };
 
@@ -913,9 +922,11 @@ final $typed_data.Uint8List showExecutionEventDescriptor = $convert.base64Decode
     'ZRIXCgdub2RlX2lkGAsgASgJUgZub2RlSWQSGwoJZXJyb3JfbXNnGAwgASgJUghlcnJvck1zZx'
     'IpChFjdWVfc3RhcnRlZF9hdF9tcxgNIAEoA1IOY3VlU3RhcnRlZEF0TXMSGwoJaXNfcGF1c2Vk'
     'GA4gASgIUghpc1BhdXNlZBImCg9ydW5uaW5nX2N1ZV9pZHMYDyADKAlSDXJ1bm5pbmdDdWVJZH'
-    'MijAEKEkV4ZWN1dGlvbkV2ZW50VHlwZRIWChJFWEVDVVRJT05fU05BUFNIT1QQABIPCgtDVUVf'
-    'U1RBUlRFRBABEg4KCkNVRV9QQVVTRUQQAhIPCgtDVUVfUkVTVU1FRBADEg8KC0NVRV9TVE9QUE'
-    'VEEAQSDAoIQ1VFX0RPTkUQBRINCglDVUVfRVJST1IQBg==');
+    'MSKwoScGVyX2N1ZV9wYXVzZWRfaWRzGBAgAygJUg9wZXJDdWVQYXVzZWRJZHMitQEKEkV4ZWN1'
+    'dGlvbkV2ZW50VHlwZRIWChJFWEVDVVRJT05fU05BUFNIT1QQABIPCgtDVUVfU1RBUlRFRBABEg'
+    '4KCkNVRV9QQVVTRUQQAhIPCgtDVUVfUkVTVU1FRBADEg8KC0NVRV9TVE9QUEVEEAQSDAoIQ1VF'
+    'X0RPTkUQBRINCglDVUVfRVJST1IQBhISCg5DVUVfQ1VFX1BBVVNFRBAHEhMKD0NVRV9DVUVfUk'
+    'VTVU1FRBAI');
 
 @$core.Deprecated('Use watchNodeHealthRequestDescriptor instead')
 const WatchNodeHealthRequest$json = {

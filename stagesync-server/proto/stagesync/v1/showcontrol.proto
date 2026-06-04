@@ -334,13 +334,15 @@ message ShowExecutionEvent {
   Timestamp occurred_at   = 3;
 
   enum ExecutionEventType {
-    EXECUTION_SNAPSHOT = 0; // vollständiger Transport-State beim Stream-Start
-    CUE_STARTED        = 1;
-    CUE_PAUSED         = 2;
-    CUE_RESUMED        = 3;
-    CUE_STOPPED        = 4;
-    CUE_DONE           = 5;
-    CUE_ERROR          = 6;
+    EXECUTION_SNAPSHOT    = 0; // vollständiger Transport-State beim Stream-Start
+    CUE_STARTED           = 1;
+    CUE_PAUSED            = 2; // globale CueList-Pause
+    CUE_RESUMED           = 3; // globale CueList-Resume
+    CUE_STOPPED           = 4;
+    CUE_DONE              = 5;
+    CUE_ERROR             = 6;
+    CUE_CUE_PAUSED        = 7; // eine einzelne Cue per-Cue pausiert (Audio-Node direkt)
+    CUE_CUE_RESUMED       = 8; // eine einzelne Cue per-Cue fortgesetzt
   }
 
   Cue             affected_cue      = 10;
@@ -352,6 +354,8 @@ message ShowExecutionEvent {
   bool            is_paused         = 14;
   // IDs aller gleichzeitig laufenden Cues (parallele Group-Children).
   repeated string running_cue_ids   = 15;
+  // IDs aller per-Cue-pausierten Cues (unabhängig von globaler CueList-Pause).
+  repeated string per_cue_paused_ids = 16;
 }
 
 // ── Stream 3: Node Health ─────────────────────────────────────────────────────
