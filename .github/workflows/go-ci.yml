@@ -1,0 +1,100 @@
+name: Go CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'stagesync-server/**'
+      - '.github/workflows/go-ci.yml'
+  pull_request:
+    paths:
+      - 'stagesync-server/**'
+      - '.github/workflows/go-ci.yml'
+
+concurrency:
+  group: go-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: stagesync-server
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: stagesync-server/go.mod
+          cache-dependency-path: stagesync-server/go.sum
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: stagesync-server
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: stagesync-server/go.mod
+          cache-dependency-path: stagesync-server/go.sum
+
+      - name: Install system dependencies
+        run: sudo apt-get update -y && sudo apt-get install -y libasound2-dev
+
+      - name: Run tests
+        run: go test ./... -race -coverprofile=coverage.out
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: go-coverage
+          path: stagesync-server/coverage.out
+          retention-days: 7
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: stagesync-server/go.mod
+          cache-dependency-path: stagesync-server/go.sum
+
+      - name: Install system dependencies
+        if: matrix.goos == 'linux'
+        run: sudo apt-get update -y && sudo apt-get install -y libasound2-dev gcc-aarch64-linux-gnu
+
+      - name: Build
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 1
+          CC: ${{ matrix.goarch == 'arm64' && 'aarch64-linux-gnu-gcc' || 'gcc' }}
+        run: go build -v -o stagesync-server-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/server/
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: stagesync-server-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: stagesync-server/stagesync-server-${{ matrix.goos }}-${{ matrix.goarch }}
+          retention-days: 14
