@@ -192,6 +192,31 @@ func (h *ShowControlHandler) getEngine(sessionID string) (*showcontrol.Engine, b
 	return e, ok
 }
 
+// StopCueTracker implementiert CueTrackStopper: bricht den Audio-Tracker einer
+// einzelnen Cue ab und broadcastet CUE_DONE. Wird vom NodeHandler bei AudioStop
+// mit expliziter cue_id aufgerufen.
+func (h *ShowControlHandler) StopCueTracker(sessionID, cueId string) {
+	if engine, ok := h.getEngine(sessionID); ok {
+		engine.StopCueTracker(cueId)
+	}
+}
+
+// PauseCueTracker implementiert CueTrackStopper: markiert eine Cue als per-Cue-pausiert
+// und broadcastet CUE_CUE_PAUSED. Wird vom NodeHandler bei AudioPause mit cue_id aufgerufen.
+func (h *ShowControlHandler) PauseCueTracker(sessionID, cueId string) {
+	if engine, ok := h.getEngine(sessionID); ok {
+		engine.PauseCueTracker(cueId)
+	}
+}
+
+// ResumeCueTracker implementiert CueTrackStopper: hebt per-Cue-Pause auf
+// und broadcastet CUE_CUE_RESUMED. Wird vom NodeHandler bei AudioResume mit cue_id aufgerufen.
+func (h *ShowControlHandler) ResumeCueTracker(sessionID, cueId string) {
+	if engine, ok := h.getEngine(sessionID); ok {
+		engine.ResumeCueTracker(cueId)
+	}
+}
+
 func (h *ShowControlHandler) auth(sessionID, token string) error {
 	_, _, err := h.sessionMgr.ValidateToken(sessionID, token)
 	if err != nil {

@@ -13,14 +13,29 @@ import (
 	"stagesync-server/internal/session"
 )
 
+// CueTrackStopper wird vom NodeHandler aufgerufen wenn ein AudioStop mit
+// expliziter cue_id empfangen wird — so wird der Server-seitige Tracker beendet.
+// PauseCueTracker / ResumeCueTracker broadcasten per-Cue-Pause-Events an alle Watcher.
+type CueTrackStopper interface {
+	StopCueTracker(sessionID, cueId string)
+	PauseCueTracker(sessionID, cueId string)
+	ResumeCueTracker(sessionID, cueId string)
+}
+
 type NodeHandler struct {
 	pb.UnimplementedNodeServiceServer
-	sessionMgr *session.Manager
-	dispatcher *node.Dispatcher
+	sessionMgr       *session.Manager
+	dispatcher       *node.Dispatcher
+	cueTrackStopper  CueTrackStopper // optional; nil = kein serverseitiger Tracker-Stop
 }
 
 func NewNodeHandler(mgr *session.Manager, disp *node.Dispatcher) *NodeHandler {
 	return &NodeHandler{sessionMgr: mgr, dispatcher: disp}
+}
+
+// SetCueTrackStopper verbindet den ShowControlHandler für per-Cue-Stop.
+func (h *NodeHandler) SetCueTrackStopper(s CueTrackStopper) {
+	h.cueTrackStopper = s
 }
 
 func (h *NodeHandler) RegisterNode(ctx context.Context, req *pb.RegisterNodeRequest) (*pb.NodeResponse, error) {
@@ -229,6 +244,19 @@ func (h *NodeHandler) SendNodeCommand(ctx context.Context, req *pb.SendNodeComma
 			return nil, status.Errorf(codes.Unavailable, "node %q not connected", req.TargetNodeId)
 		}
 		return nil, status.Errorf(codes.Internal, "%v", err)
+	}
+
+	// AudioStop mit expliziter cue_id → Server-seitigen Tracker beenden.
+	if stop := req.Command.GetAudioStop(); stop != nil && stop.CueId != "" && h.cueTrackStopper != nil {
+		h.cueTrackStopper.StopCueTracker(req.SessionId, stop.CueId)
+	}
+
+	// AudioPause / AudioResume mit expliziter cue_id → per-Cue-Pause broadcasten.
+	if pause := req.Command.GetAudioPause(); pause != nil && pause.CueId != "" && h.cueTrackStopper != nil {
+		h.cueTrackStopper.PauseCueTracker(req.SessionId, pause.CueId)
+	}
+	if resume := req.Command.GetAudioResume(); resume != nil && resume.CueId != "" && h.cueTrackStopper != nil {
+		h.cueTrackStopper.ResumeCueTracker(req.SessionId, resume.CueId)
 	}
 
 	return &pb.NodeCommandResponse{Success: true}, nil

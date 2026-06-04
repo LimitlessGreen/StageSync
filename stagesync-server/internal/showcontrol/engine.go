@@ -65,6 +65,22 @@ type Engine struct {
 	// runningCueIDs: Menge aller gerade ausführenden Cue-IDs.
 	// Bei normalen Cues: {activeCueId}; bei Group-Cues: {groupId} ∪ {childIds…}
 	runningCueIDs map[string]struct{}
+
+	// perCuePausedIDs: Menge aller per-Cue pausierten Cue-IDs.
+	// Unabhängig von globalem Pause — ein einzelner AudioPause-Command auf einem Node.
+	perCuePausedIDs map[string]struct{}
+
+	// audioTrackers: pro laufender Audio-Cue ein eigener Cancel-Context.
+	// Diese Goroutinen laufen unabhängig vom execCtx weiter — ein neues GO
+	// cancelt nur execCtx, nicht die Hintergrund-Tracker. Nur STOP cancelt sie.
+	// Gespeichert als *audioTrackerEntry (Zeiger = Identitäts-Handle für CompareAndDelete).
+	audioTrackers sync.Map // map[cueID string]*audioTrackerEntry
+}
+
+// audioTrackerEntry hält den Cancel-Context eines Audio-Hintergrund-Trackers.
+// Der Zeiger dient als Identitäts-Handle für sync.Map.CompareAndDelete.
+type audioTrackerEntry struct {
+	cancel context.CancelFunc
 }
 
 func (e *Engine) addRunning(ids ...string) {
@@ -88,6 +104,61 @@ func (e *Engine) runningCueIDsList() []string {
 		ids = append(ids, id)
 	}
 	return ids
+}
+
+func (e *Engine) addPerCuePaused(id string) {
+	if e.perCuePausedIDs == nil {
+		e.perCuePausedIDs = make(map[string]struct{})
+	}
+	e.perCuePausedIDs[id] = struct{}{}
+}
+
+func (e *Engine) removePerCuePaused(id string) {
+	delete(e.perCuePausedIDs, id)
+}
+
+func (e *Engine) perCuePausedIDsList() []string {
+	ids := make([]string, 0, len(e.perCuePausedIDs))
+	for id := range e.perCuePausedIDs {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+// PauseCueTracker markiert eine Cue als per-Cue-pausiert und broadcastet
+// CUE_CUE_PAUSED. Aufgerufen vom NodeHandler bei AudioPause mit expliziter cue_id.
+func (e *Engine) PauseCueTracker(cueId string) {
+	e.mu.Lock()
+	e.addPerCuePaused(cueId)
+	pausedIds := e.perCuePausedIDsList()
+	runningIds := e.runningCueIDsList()
+	e.mu.Unlock()
+
+	e.store.BroadcastExec(&pb.ShowExecutionEvent{
+		Type:              pb.ShowExecutionEvent_CUE_CUE_PAUSED,
+		AffectedCue:       &pb.Cue{CueId: cueId},
+		OccurredAt:        nowProto(),
+		RunningCueIds:     runningIds,
+		PerCuePausedIds:   pausedIds,
+	})
+}
+
+// ResumeCueTracker hebt per-Cue-Pause auf und broadcastet CUE_CUE_RESUMED.
+// Aufgerufen vom NodeHandler bei AudioResume mit expliziter cue_id.
+func (e *Engine) ResumeCueTracker(cueId string) {
+	e.mu.Lock()
+	e.removePerCuePaused(cueId)
+	pausedIds := e.perCuePausedIDsList()
+	runningIds := e.runningCueIDsList()
+	e.mu.Unlock()
+
+	e.store.BroadcastExec(&pb.ShowExecutionEvent{
+		Type:              pb.ShowExecutionEvent_CUE_CUE_RESUMED,
+		AffectedCue:       &pb.Cue{CueId: cueId},
+		OccurredAt:        nowProto(),
+		RunningCueIds:     runningIds,
+		PerCuePausedIds:   pausedIds,
+	})
 }
 
 func NewEngine(sessionID, cueListID string, store *Store, dispatcher NodeDispatcher) *Engine {
@@ -118,11 +189,12 @@ func (e *Engine) SetSilenceDetector(d SilenceDetector) {
 // TransportSnapshot beschreibt den aktuellen Transport-Zustand (für den
 // Initial-Sync neuer Watcher).
 type TransportSnapshot struct {
-	ActiveCue      *pb.Cue
-	Running        bool
-	Paused         bool
-	CueStartedAtMs int64 // effektive Serverzeit-Startzeit (bei Pause: now - elapsed)
-	PausedAtMs     int64 // nur bei Pause gesetzt
+	ActiveCue       *pb.Cue
+	Running         bool
+	Paused          bool
+	CueStartedAtMs  int64    // effektive Serverzeit-Startzeit (bei Pause: now - elapsed)
+	PausedAtMs      int64    // nur bei globaler Pause gesetzt
+	PerCuePausedIDs []string // per-Cue pausierte Cue-IDs
 }
 
 // TransportSnapshot liefert den aktuellen Zustand für einen neu verbundenen Watcher.
@@ -130,9 +202,10 @@ func (e *Engine) TransportSnapshot() TransportSnapshot {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	ts := TransportSnapshot{
-		ActiveCue: e.store.GetActiveCue(e.cueListID),
-		Running:   e.running,
-		Paused:    e.paused,
+		ActiveCue:       e.store.GetActiveCue(e.cueListID),
+		Running:         e.running,
+		Paused:          e.paused,
+		PerCuePausedIDs: e.perCuePausedIDsList(),
 	}
 	if e.paused {
 		// Effektive Startzeit = Pausezeitpunkt minus bereits vergangene Zeit.
@@ -235,6 +308,18 @@ func (e *Engine) Stop(ctx context.Context) error {
 	warmer := e.warmer
 	e.mu.Unlock()
 
+	// Alle Audio-Hintergrund-Tracker beenden (stoppen ihre Goroutinen).
+	// runningCueIDs erst bereinigen — so verursachen die aufgeweckten Goroutinen
+	// keinen removeRunning-Race mehr.
+	e.mu.Lock()
+	e.runningCueIDs = make(map[string]struct{})
+	e.mu.Unlock()
+	e.audioTrackers.Range(func(k, v any) bool {
+		v.(*audioTrackerEntry).cancel()
+		e.audioTrackers.Delete(k)
+		return true
+	})
+
 	// Show beendet → RAM-Cache darf wieder normal evicten.
 	if warmer != nil {
 		warmer.UnlockShow()
@@ -277,6 +362,28 @@ func (e *Engine) reArmNext() {
 		return
 	}
 	e.armCue(context.Background(), next)
+}
+
+// StopCueTracker bricht den Audio-Hintergrund-Tracker einer einzelnen Cue ab,
+// entfernt sie aus runningCueIDs und perCuePausedIDs und broadcastet CUE_DONE.
+// Wird aufgerufen wenn ein Client explizit AudioStop für eine bestimmte Cue sendet.
+func (e *Engine) StopCueTracker(cueId string) {
+	if entry, loaded := e.audioTrackers.LoadAndDelete(cueId); loaded {
+		entry.(*audioTrackerEntry).cancel()
+	}
+
+	e.mu.Lock()
+	e.removeRunning(cueId)
+	e.removePerCuePaused(cueId)
+	ids := e.runningCueIDsList()
+	e.mu.Unlock()
+
+	e.store.BroadcastExec(&pb.ShowExecutionEvent{
+		Type:          pb.ShowExecutionEvent_CUE_DONE,
+		AffectedCue:   &pb.Cue{CueId: cueId},
+		OccurredAt:    nowProto(),
+		RunningCueIds: ids,
+	})
 }
 
 // pauseFadeMs / resumeFadeMs: kurze Fades gegen Knackser beim Pausieren/Fortsetzen.
@@ -494,8 +601,20 @@ func (e *Engine) dispatchCue(ctx context.Context, cue *pb.Cue) {
 	}
 
 	e.mu.Lock()
-	e.removeRunning(cue.CueId)
+	_, isAudioTracked := e.audioTrackers.Load(cue.CueId)
+	if !isAudioTracked {
+		e.removeRunning(cue.CueId)
+	}
+	remainingIDs := e.runningCueIDsList()
 	e.mu.Unlock()
+
+	// Audio-Tracked: Lifecycle (removeRunning, CUE_DONE, AutoContinue) wird
+	// von der Background-Goroutine in dispatchAudio verwaltet.
+	// Dieser Pfad wird erreicht wenn execCtx durch ein neues GO gecancelt wurde;
+	// der Tracker läuft mit seinem eigenen Context unabhängig weiter.
+	if isAudioTracked {
+		return
+	}
 
 	// Abgebrochen (Stop/Pause hat den Context gecancelt) → KEIN DONE-Event.
 	// Sonst würde der Client die aktive Cue fälschlich reaktivieren und der
@@ -511,37 +630,19 @@ func (e *Engine) dispatchCue(ctx context.Context, cue *pb.Cue) {
 		errMsg = err.Error()
 	}
 	e.store.BroadcastExec(&pb.ShowExecutionEvent{
-		Type:        execEvType,
-		AffectedCue: cue,
-		OccurredAt:  nowProto(),
-		ErrorMsg:    errMsg,
+		Type:          execEvType,
+		AffectedCue:   cue,
+		OccurredAt:    nowProto(),
+		ErrorMsg:      errMsg,
+		RunningCueIds: remainingIDs,
 	})
 
-	// Auto-Continue: automatisch nächste Cue nach PostWait (oder Audio-Ende)
+	// Auto-Continue: automatisch nächste Cue nach optionalem PostWait auslösen.
+	// Für Audio-Cues übernimmt die Tracker-Goroutine Auto-Continue.
 	if err == nil && cue.AutoContinue {
-		waitMs := cue.PostWaitMs
-		// For audio cues: if PostWaitMs==0, wait for the audio to finish
-		// using declared_duration_ms (set by the client from asset metadata).
-		if waitMs == 0 {
-			if ap, ok := cue.Params.(*pb.Cue_Audio); ok && ap != nil {
-				dur := ap.Audio.DeclaredDurationMs
-				end := ap.Audio.EndTimeMs
-				start := ap.Audio.StartTimeMs
-				if end > 0 && end > start {
-					dur = end - start
-				}
-				if dur > 0 {
-					fade := ap.Audio.FadeOutMs
-					if fade > 0 && fade < dur {
-						dur -= fade / 2
-					}
-					waitMs = dur
-				}
-			}
-		}
-		if waitMs > 0 {
+		if cue.PostWaitMs > 0 {
 			select {
-			case <-time.After(time.Duration(waitMs) * time.Millisecond):
+			case <-time.After(time.Duration(cue.PostWaitMs) * time.Millisecond):
 			case <-ctx.Done():
 				return
 			}
@@ -620,7 +721,7 @@ func (e *Engine) dispatchAudio(ctx context.Context, cue *pb.Cue) error {
 		}
 	}
 
-	return dispatch(&pb.NodeCommandRequest{
+	if err := dispatch(&pb.NodeCommandRequest{
 		SessionId:    e.sessionID,
 		TargetNodeId: cue.TargetNodeId,
 		Command: &pb.NodeCommandRequest_AudioPlay{
@@ -635,7 +736,80 @@ func (e *Engine) dispatchAudio(ctx context.Context, cue *pb.Cue) error {
 				EndTimeMs:       params.Audio.EndTimeMs,
 			},
 		},
-	})
+	}); err != nil {
+		return err
+	}
+
+	// Nicht-loopende Cues: Hintergrund-Goroutine trackt die Audio-Dauer unabhängig
+	// vom execCtx (der durch ein neues GO gecancelt wird). So bleibt die Cue in
+	// runningCueIds sichtbar und Fade-Buttons funktionieren während andere Cues laufen.
+	if !params.Audio.Loop {
+		waitMs := params.Audio.DeclaredDurationMs
+		end := params.Audio.EndTimeMs
+		start := params.Audio.StartTimeMs
+		if end > 0 && end > start {
+			waitMs = end - start
+		} else if waitMs > 0 && effectiveStartMs > 0 {
+			// Silence-Skip: effektive Startzeit vom deklarierten Ende abziehen
+			if rem := waitMs - effectiveStartMs; rem > 0 {
+				waitMs = rem
+			}
+		}
+		if waitMs > 0 {
+			// Vorherigen Tracker für diese Cue abbrechen (Re-Trigger einer Cue).
+			if old, loaded := e.audioTrackers.LoadAndDelete(cue.CueId); loaded {
+				old.(*audioTrackerEntry).cancel()
+			}
+			trackCtx, trackCancel := context.WithCancel(context.Background())
+			entry := &audioTrackerEntry{cancel: trackCancel}
+			e.audioTrackers.Store(cue.CueId, entry)
+
+			autoContinue := cue.AutoContinue
+			postWaitMs := cue.PostWaitMs
+			cueSnapshot := cue
+
+			go func() {
+				// CompareAndDelete: nur OUR entry entfernen (nicht einen neueren Re-Trigger).
+				defer e.audioTrackers.CompareAndDelete(cueSnapshot.CueId, entry)
+				timer := time.NewTimer(time.Duration(waitMs) * time.Millisecond)
+				defer timer.Stop()
+				select {
+				case <-timer.C:
+					// Audio natürlich beendet
+				case <-trackCtx.Done():
+					// STOP oder StopCueTracker hat die Cue abgebrochen.
+					// Cleanup (removeRunning, CUE_DONE) wurde bereits vom Aufrufer erledigt.
+					return
+				}
+
+				e.mu.Lock()
+				e.removeRunning(cueSnapshot.CueId)
+				ids := e.runningCueIDsList()
+				e.mu.Unlock()
+
+				e.store.BroadcastExec(&pb.ShowExecutionEvent{
+					Type:          pb.ShowExecutionEvent_CUE_DONE,
+					AffectedCue:   cueSnapshot,
+					OccurredAt:    nowProto(),
+					RunningCueIds: ids,
+				})
+
+				if autoContinue {
+					if postWaitMs > 0 {
+						postTimer := time.NewTimer(time.Duration(postWaitMs) * time.Millisecond)
+						defer postTimer.Stop()
+						select {
+						case <-postTimer.C:
+						case <-trackCtx.Done():
+							return
+						}
+					}
+					_, _, _ = e.Go(context.Background(), "")
+				}
+			}()
+		}
+	}
+	return nil
 }
 
 // ArmAll sendet PRELOAD-Commands für alle Audio-Cues in der aktuellen CueList.
