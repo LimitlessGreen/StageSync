@@ -145,31 +145,41 @@ PlayheadState _buildPlayhead(ShowControlState state, CueList? cueList) {
     phase = CueListPhase.running;
   }
 
-  // runningCueIds: prefer server-authoritative set; fall back to {activeCueId}.
+  // runningCueIds: prefer server-authoritative set.
+  // Fallback to started-map keys (tracks parallel runners) before activeCueId.
   final runningCueIds = state.runningCueIds.isNotEmpty
       ? state.runningCueIds
-      : (activeCueId != null ? {activeCueId} : const <String>{});
+      : (state.runningCueStartedServerMs.isNotEmpty
+          ? state.runningCueStartedServerMs.keys.toSet()
+          : (activeCueId != null ? {activeCueId} : const <String>{}));
 
-  // Per-cue state: all running IDs get a CueRunState; active cue also tracks
-  // pause. This will be superseded by server-sent per-node states in Phase 4.
+  // Per-cue state: running IDs erhalten CueRunState mit korrektem Lifecycle.
+  // Priorität: per-Cue-pausiert > global-pausiert > running.
+  final perCuePaused = state.perCuePausedIds;
   final perCue = <String, CueRunState>{};
   for (final id in runningCueIds) {
-    perCue[id] = CueRunState(
-      lifecycle: (id == activeCueId && state.isPaused)
-          ? CueLifecycle.paused
-          : CueLifecycle.running,
-    );
+    final CueLifecycle lifecycle;
+    if (perCuePaused.contains(id)) {
+      lifecycle = CueLifecycle.paused;
+    } else if (id == activeCueId && state.isPaused) {
+      lifecycle = CueLifecycle.paused;
+    } else {
+      lifecycle = CueLifecycle.running;
+    }
+    perCue[id] = CueRunState(lifecycle: lifecycle);
   }
 
   return PlayheadState(
     cueListId: cueListId,
     activeCueId: activeCueId,
     runningCueIds: runningCueIds,
+    cueStartedServerMsByCueId: state.runningCueStartedServerMs,
     nextCueId: nextCueId,
     phase: phase,
     startedServerMs: state.activeCueStartedServerMs,
     pausedAtServerMs: state.pausedAtServerMs,
     doneServerMs: state.cueDoneServerMs,
     perCue: perCue,
+    perCuePausedIds: perCuePaused,
   );
 }

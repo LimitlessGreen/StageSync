@@ -102,6 +102,9 @@ class PlayheadState {
 
   /// All currently executing cue IDs (includes Group sub-cues running in parallel).
   final Set<String> runningCueIds;
+
+  /// Server start timestamps per running cue id.
+  final Map<String, int> cueStartedServerMsByCueId;
   final String? nextCueId;
   final CueListPhase phase;
 
@@ -118,16 +121,22 @@ class PlayheadState {
   /// Per-cue runtime state map. Key = cueId.
   final Map<String, CueRunState> perCue;
 
+  /// Cue-IDs die per-Cue pausiert sind (server-autoritativ).
+  /// Unabhängig von globaler CueList-Pause ([phase] == paused).
+  final Set<String> perCuePausedIds;
+
   const PlayheadState({
     required this.cueListId,
     this.activeCueId,
     this.runningCueIds = const {},
+    this.cueStartedServerMsByCueId = const {},
     this.nextCueId,
     this.phase = CueListPhase.idle,
     this.startedServerMs,
     this.pausedAtServerMs,
     this.doneServerMs,
     this.perCue = const {},
+    this.perCuePausedIds = const {},
   });
 
   static const PlayheadState empty = PlayheadState(cueListId: '');
@@ -140,27 +149,36 @@ class PlayheadState {
 
   CueRunState? runStateFor(String cueId) => perCue[cueId];
 
+  /// true wenn diese Cue per-Cue auf dem Audio-Node pausiert ist.
+  /// Unabhängig von der globalen CueList-Pause.
+  bool isCuePaused(String cueId) => perCuePausedIds.contains(cueId);
+
   PlayheadState copyWith({
     String? cueListId,
     String? activeCueId,
     Set<String>? runningCueIds,
+    Map<String, int>? cueStartedServerMsByCueId,
     String? nextCueId,
     CueListPhase? phase,
     int? startedServerMs,
     int? pausedAtServerMs,
     int? doneServerMs,
     Map<String, CueRunState>? perCue,
+    Set<String>? perCuePausedIds,
   }) =>
       PlayheadState(
         cueListId: cueListId ?? this.cueListId,
         activeCueId: activeCueId,
         runningCueIds: runningCueIds ?? this.runningCueIds,
+        cueStartedServerMsByCueId:
+            cueStartedServerMsByCueId ?? this.cueStartedServerMsByCueId,
         nextCueId: nextCueId,
         phase: phase ?? this.phase,
         startedServerMs: startedServerMs,
         pausedAtServerMs: pausedAtServerMs,
         doneServerMs: doneServerMs,
         perCue: perCue ?? this.perCue,
+        perCuePausedIds: perCuePausedIds ?? this.perCuePausedIds,
       );
 }
 
