@@ -68,6 +68,16 @@ abstract final class ScShortcuts {
     _key(LogicalKeyboardKey.backspace): const DeleteCueIntent(),
   };
 
+  /// Finds the intent registered for [key], or null if not registered.
+  /// Use this instead of direct map lookup since activators are wrapped in
+  /// [_TextFieldAwareActivator] and won't match plain [SingleActivator] keys.
+  static Intent? intentFor(LogicalKeyboardKey key) {
+    for (final e in all.entries) {
+      if (e.key.triggers?.contains(key) ?? false) return e.value;
+    }
+    return null;
+  }
+
   /// Builds the [Action] map bound to the current [WidgetRef].
   /// Delegates to [showControlProvider.notifier] — no UI logic here.
   static Map<Type, Action<Intent>> actions(WidgetRef ref) => {

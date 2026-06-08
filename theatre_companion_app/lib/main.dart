@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,8 +13,27 @@ import 'ui/screens/network_status_screen.dart';
 import 'ui/screens/showcontrol/session_screen.dart';
 
 void main() {
-  WidgetsFlutterBinding.ensureInitialized();
-  runApp(const ProviderScope(child: StageSyncApp()));
+  runZonedGuarded(
+    () {
+      WidgetsFlutterBinding.ensureInitialized();
+      runApp(const ProviderScope(child: StageSyncApp()));
+    },
+    _onUncaughtError,
+  );
+}
+
+void _onUncaughtError(Object error, StackTrace stack) {
+  // Known bug in the http2 package (dart-lang/http2#89): an AssertionError is
+  // thrown from ConnectionMessageQueueIn.onTerminated when a gRPC stream is
+  // cancelled while the connection queue still holds buffered messages.
+  // This is functionally harmless — the stream is already being replaced —
+  // but the assert fires before the library can clean up gracefully.
+  if (error is AssertionError &&
+      stack.toString().contains('connection_queues')) {
+    return;
+  }
+  FlutterError.reportError(
+      FlutterErrorDetails(exception: error, stack: stack));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
