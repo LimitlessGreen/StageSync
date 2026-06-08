@@ -55,7 +55,8 @@ jobs:
         env:
           CGO_ENABLED: '1'
         run: |
-          go build -buildmode=c-shared -ldflags="-s -w" `
+          go build -buildmode=c-shared `
+            -ldflags="-s -w -extldflags=-static-libgcc" `
             -o "..\theatre_companion_app\build\windows\x64\runner\Release\stagesync_core.dll" `
             .\cmd\corelib\
 
@@ -71,6 +72,12 @@ jobs:
       - name: Install NSIS
         shell: pwsh
         run: choco install nsis --no-progress -y
+
+      - name: Download VC++ Redistributable
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" `
+            -OutFile "build\windows\x64\runner\Release\vc_redist.x64.exe"
 
       - name: Write NSIS script
         shell: pwsh
@@ -106,6 +113,9 @@ jobs:
           Section "StageSync" SecMain
             SetOutPath "`$INSTDIR"
             File /r "`${SRC_DIR}\*.*"
+            ; Install VC++ Redistributable silently if not already present
+            ExecWait '"`$INSTDIR\vc_redist.x64.exe" /install /quiet /norestart'
+            Delete "`$INSTDIR\vc_redist.x64.exe"
             WriteRegStr HKLM "Software\StageSync" "Install_Dir" "`$INSTDIR"
             WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\StageSync" "DisplayName" "StageSync"
             WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\StageSync" "UninstallString" "`$INSTDIR\uninstall.exe"
