@@ -9,8 +9,8 @@ class LinuxMidiDevice extends MidiDevice {
   int deviceId;
   AlsaMidiDevice _device;
 
-  LinuxMidiDevice(this._device, this.cardId, this.deviceId, String name, String type,
-      this._rxStreamCtrl, bool connected)
+  LinuxMidiDevice(this._device, this.cardId, this.deviceId, String name,
+      String type, this._rxStreamCtrl, bool connected)
       : super(
           AlsaMidiDevice.hardwareId(cardId, deviceId),
           name,
@@ -50,12 +50,15 @@ class LinuxMidiDevice extends MidiDevice {
 }
 
 class FlutterMidiCommandLinux extends MidiCommandPlatform {
-  StreamController<MidiPacket> _rxStreamController = StreamController<MidiPacket>.broadcast();
+  StreamController<MidiPacket> _rxStreamController =
+      StreamController<MidiPacket>.broadcast();
   late Stream<MidiPacket> _rxStream;
-  StreamController<String> _setupStreamController = StreamController<String>.broadcast();
+  StreamController<String> _setupStreamController =
+      StreamController<String>.broadcast();
   late Stream<String> _setupStream;
 
-  Map<String, LinuxMidiDevice> _connectedDevices = Map<String, LinuxMidiDevice>();
+  Map<String, LinuxMidiDevice> _connectedDevices =
+      Map<String, LinuxMidiDevice>();
 
   final List<AlsaMidiDevice> _allAlsaDevices = [];
 
@@ -87,16 +90,16 @@ class FlutterMidiCommandLinux extends MidiCommandPlatform {
             alsMidiDevice.name,
             "native",
             _rxStreamController,
-            _connectedDevices.containsKey(
-                AlsaMidiDevice.hardwareId(alsMidiDevice.cardId, alsMidiDevice.deviceId)),
+            _connectedDevices.containsKey(AlsaMidiDevice.hardwareId(
+                alsMidiDevice.cardId, alsMidiDevice.deviceId)),
           ),
         )
         .toList();
   }
 
-
   /// Prepares Bluetooth system
-  @override Future<void> startBluetoothCentral() async {
+  @override
+  Future<void> startBluetoothCentral() async {
     return Future.error("Not available on linux");
   }
 
@@ -112,7 +115,8 @@ class FlutterMidiCommandLinux extends MidiCommandPlatform {
 
   /// Connects to the device.
   @override
-  Future<void> connectToDevice(MidiDevice device, {List<MidiPort>? ports}) async {
+  Future<void> connectToDevice(MidiDevice device,
+      {List<MidiPort>? ports}) async {
     print('connect to $device');
 
     var linuxDevice = device as LinuxMidiDevice;
