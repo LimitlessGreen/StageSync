@@ -25,31 +25,38 @@ void main() {
     });
 
     test('Escape → StopIntent', () {
-      expect(ScShortcuts.intentFor(LogicalKeyboardKey.escape), isA<StopIntent>());
+      expect(
+          ScShortcuts.intentFor(LogicalKeyboardKey.escape), isA<StopIntent>());
     });
 
     test('P → PauseIntent', () {
-      expect(ScShortcuts.intentFor(LogicalKeyboardKey.keyP), isA<PauseIntent>());
+      expect(
+          ScShortcuts.intentFor(LogicalKeyboardKey.keyP), isA<PauseIntent>());
     });
 
     test('ArrowUp → PrevCueIntent', () {
-      expect(ScShortcuts.intentFor(LogicalKeyboardKey.arrowUp), isA<PrevCueIntent>());
+      expect(ScShortcuts.intentFor(LogicalKeyboardKey.arrowUp),
+          isA<PrevCueIntent>());
     });
 
     test('ArrowDown → NextCueIntent', () {
-      expect(ScShortcuts.intentFor(LogicalKeyboardKey.arrowDown), isA<NextCueIntent>());
+      expect(ScShortcuts.intentFor(LogicalKeyboardKey.arrowDown),
+          isA<NextCueIntent>());
     });
 
     test('Enter → SelectCueIntent', () {
-      expect(ScShortcuts.intentFor(LogicalKeyboardKey.enter), isA<SelectCueIntent>());
+      expect(ScShortcuts.intentFor(LogicalKeyboardKey.enter),
+          isA<SelectCueIntent>());
     });
 
     test('Delete → DeleteCueIntent', () {
-      expect(ScShortcuts.intentFor(LogicalKeyboardKey.delete), isA<DeleteCueIntent>());
+      expect(ScShortcuts.intentFor(LogicalKeyboardKey.delete),
+          isA<DeleteCueIntent>());
     });
 
     test('Backspace → DeleteCueIntent', () {
-      expect(ScShortcuts.intentFor(LogicalKeyboardKey.backspace), isA<DeleteCueIntent>());
+      expect(ScShortcuts.intentFor(LogicalKeyboardKey.backspace),
+          isA<DeleteCueIntent>());
     });
 
     test('all 8 shortcuts are registered', () {
@@ -73,22 +80,28 @@ void main() {
             shortcuts: ScShortcuts.all,
             child: Actions(
               actions: {
-                GoIntent: CallbackAction<GoIntent>(
-                    onInvoke: (_) { onGo(); return null; }),
-                StopIntent: CallbackAction<StopIntent>(
-                    onInvoke: (_) { onStop(); return null; }),
-                PauseIntent: CallbackAction<PauseIntent>(
-                    onInvoke: (_) { onPause(); return null; }),
+                GoIntent: CallbackAction<GoIntent>(onInvoke: (_) {
+                  onGo();
+                  return null;
+                }),
+                StopIntent: CallbackAction<StopIntent>(onInvoke: (_) {
+                  onStop();
+                  return null;
+                }),
+                PauseIntent: CallbackAction<PauseIntent>(onInvoke: (_) {
+                  onPause();
+                  return null;
+                }),
                 // Navigation intents — NoopAction already in sc_shortcuts;
                 // for the test we only need the transport intents wired.
-                PrevCueIntent: CallbackAction<PrevCueIntent>(
-                    onInvoke: (_) => null),
-                NextCueIntent: CallbackAction<NextCueIntent>(
-                    onInvoke: (_) => null),
-                SelectCueIntent: CallbackAction<SelectCueIntent>(
-                    onInvoke: (_) => null),
-                DeleteCueIntent: CallbackAction<DeleteCueIntent>(
-                    onInvoke: (_) => null),
+                PrevCueIntent:
+                    CallbackAction<PrevCueIntent>(onInvoke: (_) => null),
+                NextCueIntent:
+                    CallbackAction<NextCueIntent>(onInvoke: (_) => null),
+                SelectCueIntent:
+                    CallbackAction<SelectCueIntent>(onInvoke: (_) => null),
+                DeleteCueIntent:
+                    CallbackAction<DeleteCueIntent>(onInvoke: (_) => null),
               },
               child: const Focus(autofocus: true, child: SizedBox.expand()),
             ),
@@ -136,7 +149,8 @@ void main() {
       expect(count, 1);
     });
 
-    testWidgets('each shortcut fires exactly once per keypress', (tester) async {
+    testWidgets('each shortcut fires exactly once per keypress',
+        (tester) async {
       var goCalls = 0;
       await tester.pumpWidget(_harness(
         onGo: () => goCalls++,
@@ -158,7 +172,8 @@ void main() {
         ProviderScope(
           overrides: [
             sessionProvider.overrideWith((ref) => _TestSessionNotifier()),
-            audioNodeProvider.overrideWith((ref) => AudioNodeNotifier.forTest()),
+            audioNodeProvider
+                .overrideWith((ref) => AudioNodeNotifier.forTest()),
           ],
           child: const MaterialApp(
             home: MediaQuery(

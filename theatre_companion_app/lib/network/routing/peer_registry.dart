@@ -143,9 +143,7 @@ class PeerRegistry {
   /// Returns up to [count] random alive peers, excluding [excludeId].
   /// Used by the Gossip engine to select relay targets.
   List<PeerInfo> randomSubset({required int count, String? excludeId}) {
-    final candidates = alivePeers
-        .where((p) => p.deviceId != excludeId)
-        .toList()
+    final candidates = alivePeers.where((p) => p.deviceId != excludeId).toList()
       ..shuffle();
     return candidates.take(count).toList();
   }
@@ -161,4 +159,3 @@ class PeerRegistry {
     }
   }
 }
-

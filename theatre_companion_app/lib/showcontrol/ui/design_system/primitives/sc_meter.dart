@@ -4,11 +4,12 @@ import '../sc_colors.dart';
 /// Primitive level meter bar — no domain knowledge.
 /// Horizontal or vertical orientation with peak-hold marker.
 class ScMeter extends StatelessWidget {
-  final double level;       // 0.0–1.0
-  final double peak;        // 0.0–1.0 peak hold
+  final double level; // 0.0–1.0
+  final double peak; // 0.0–1.0 peak hold
   final bool vertical;
   final double thickness;
-  final double clipThreshold; // level above which the bar turns red (default 0.9)
+  final double
+      clipThreshold; // level above which the bar turns red (default 0.9)
 
   const ScMeter({
     super.key,
@@ -21,7 +22,7 @@ class ScMeter extends StatelessWidget {
 
   Color _levelColor(double v) {
     if (v >= clipThreshold) return ScColors.meterHigh;
-    if (v >= 0.65)          return ScColors.meterMid;
+    if (v >= 0.65) return ScColors.meterMid;
     return ScColors.meterLow;
   }
 

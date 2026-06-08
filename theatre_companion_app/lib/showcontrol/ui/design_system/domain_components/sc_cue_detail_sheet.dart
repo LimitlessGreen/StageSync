@@ -45,7 +45,7 @@ class _CueDetailSheet extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final typeColor = CueListRow.typeColor(cue.params);
-    final typeIcon  = CueListRow.typeIcon(cue.params);
+    final typeIcon = CueListRow.typeIcon(cue.params);
 
     return DraggableScrollableSheet(
       initialChildSize: 0.75,
@@ -63,7 +63,8 @@ class _CueDetailSheet extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 10),
               child: Container(
-                width: 40, height: 4,
+                width: 40,
+                height: 4,
                 decoration: BoxDecoration(
                   color: ScColors.divider,
                   borderRadius: BorderRadius.circular(2),
@@ -73,12 +74,16 @@ class _CueDetailSheet extends ConsumerWidget {
             // ── Cue type badge + label ───────────────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(
-                ScSpacing.panelPad, 0, ScSpacing.panelPad, 10,
+                ScSpacing.panelPad,
+                0,
+                ScSpacing.panelPad,
+                10,
               ),
               child: Row(
                 children: [
                   Container(
-                    width: 32, height: 32,
+                    width: 32,
+                    height: 32,
                     decoration: BoxDecoration(
                       color: typeColor.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(8),
@@ -117,12 +122,16 @@ class _CueDetailSheet extends ConsumerWidget {
             SafeArea(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(
-                  ScSpacing.panelPad, 8, ScSpacing.panelPad, 12,
+                  ScSpacing.panelPad,
+                  8,
+                  ScSpacing.panelPad,
+                  12,
                 ),
                 child: Row(
                   children: [
                     SizedBox(
-                      width: 48, height: 48,
+                      width: 48,
+                      height: 48,
                       child: IconButton(
                         icon: const Icon(Icons.delete_outline),
                         color: ScColors.error,

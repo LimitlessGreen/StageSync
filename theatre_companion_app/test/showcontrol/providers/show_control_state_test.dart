@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:theatre_companion_app/showcontrol/grpc/generated/stagesync/v1/showcontrol.pb.dart';
-import 'package:theatre_companion_app/showcontrol/grpc/generated/stagesync/v1/node.pb.dart' as pb_node;
+import 'package:theatre_companion_app/showcontrol/grpc/generated/stagesync/v1/node.pb.dart'
+    as pb_node;
 import 'package:theatre_companion_app/showcontrol/domain/node_status.dart';
 import 'package:theatre_companion_app/showcontrol/providers/show_control_provider.dart';
 
@@ -44,7 +45,8 @@ void main() {
     });
 
     test('updates runningCueIds', () {
-      final updated = baseState.copyWith(runningCueIds: const {'cue-1', 'cue-2'});
+      final updated =
+          baseState.copyWith(runningCueIds: const {'cue-1', 'cue-2'});
       expect(updated.runningCueIds, {'cue-1', 'cue-2'});
     });
 
@@ -72,7 +74,8 @@ void main() {
     test('starts with no cueList', () => expect(empty.cueList, isNull));
     test('starts not loading', () => expect(empty.isLoading, isFalse));
     test('starts not paused', () => expect(empty.isPaused, isFalse));
-    test('starts with empty runningCueIds', () => expect(empty.runningCueIds, isEmpty));
+    test('starts with empty runningCueIds',
+        () => expect(empty.runningCueIds, isEmpty));
     test('starts with no error', () => expect(empty.error, isNull));
   });
 
@@ -138,7 +141,8 @@ void main() {
 
   group('ShowDefinitionEvent type mapping', () {
     test('DEFINITION_SNAPSHOT has int value 0', () {
-      expect(ShowDefinitionEvent_DefinitionEventType.DEFINITION_SNAPSHOT.value, 0);
+      expect(
+          ShowDefinitionEvent_DefinitionEventType.DEFINITION_SNAPSHOT.value, 0);
     });
 
     test('CUE_LIST_CHANGED has int value 1', () {
@@ -179,7 +183,8 @@ void main() {
     });
 
     test('can hold multiple nodes', () {
-      final s = const ShowControlState().copyWith(nodeStatuses: [online, offline]);
+      final s =
+          const ShowControlState().copyWith(nodeStatuses: [online, offline]);
       expect(s.nodeStatuses, hasLength(2));
       expect(s.nodeStatuses.map((n) => n.health),
           containsAll([NodeHealthPhase.online, NodeHealthPhase.offline]));
@@ -212,8 +217,10 @@ void main() {
     // This mirrors the switch logic in _handleNodeHealthEvent.
     NodeHealthPhase phaseFromEventType(NodeHealthEvent_HealthEventType type) =>
         switch (type) {
-          NodeHealthEvent_HealthEventType.NODE_OFFLINE => NodeHealthPhase.offline,
-          NodeHealthEvent_HealthEventType.NODE_DEGRADED => NodeHealthPhase.degraded,
+          NodeHealthEvent_HealthEventType.NODE_OFFLINE =>
+            NodeHealthPhase.offline,
+          NodeHealthEvent_HealthEventType.NODE_DEGRADED =>
+            NodeHealthPhase.degraded,
           _ => NodeHealthPhase.online,
         };
 
@@ -281,8 +288,7 @@ void main() {
     test('audition_supported=true with empty device → deviceName is null', () {
       final event = NodeHealthEvent()
         ..type = NodeHealthEvent_HealthEventType.NODE_ONLINE
-        ..capabilities = (pb_node.NodeCapabilities()
-          ..auditionSupported = true);
+        ..capabilities = (pb_node.NodeCapabilities()..auditionSupported = true);
       final result = auditionFromEvent(event);
       expect(result.supported, isTrue);
       expect(result.deviceName, isNull);
@@ -291,8 +297,8 @@ void main() {
     test('audition_supported=false → none', () {
       final event = NodeHealthEvent()
         ..type = NodeHealthEvent_HealthEventType.HEALTH_SNAPSHOT
-        ..capabilities = (pb_node.NodeCapabilities()
-          ..auditionSupported = false);
+        ..capabilities =
+            (pb_node.NodeCapabilities()..auditionSupported = false);
       expect(auditionFromEvent(event).supported, isFalse);
     });
   });

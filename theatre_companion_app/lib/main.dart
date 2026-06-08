@@ -34,8 +34,7 @@ void _onUncaughtError(Object error, StackTrace stack) {
       stack.toString().contains('connection_queues')) {
     return;
   }
-  FlutterError.reportError(
-      FlutterErrorDetails(exception: error, stack: stack));
+  FlutterError.reportError(FlutterErrorDetails(exception: error, stack: stack));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -124,7 +123,10 @@ class _BootstrapErrorScreen extends ConsumerWidget {
             children: [
               Icon(Icons.theater_comedy,
                   size: 64,
-                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.6)),
+                  color: Theme.of(context)
+                      .colorScheme
+                      .primary
+                      .withValues(alpha: 0.6)),
               const SizedBox(height: 24),
               const Text('StageSync',
                   style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
@@ -258,7 +260,6 @@ class _AppShell extends ConsumerStatefulWidget {
 final selectedTabProvider = StateProvider<int>((ref) => 0);
 
 class _AppShellState extends ConsumerState<_AppShell> {
-
   static const _screens = [
     HomeScreen(),
     NetworkStatusScreen(),

@@ -31,7 +31,8 @@ class LevelMeter extends StatelessWidget {
         ),
         if (channelLabel != null) ...[
           const SizedBox(height: 4),
-          Text(channelLabel!, style: ScText.labelBold, textAlign: TextAlign.center),
+          Text(channelLabel!,
+              style: ScText.labelBold, textAlign: TextAlign.center),
         ],
       ],
     );
@@ -61,9 +62,11 @@ class StereoLevelMeter extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        LevelMeter(level: levelL, peak: peakL, channelLabel: 'L', height: height),
+        LevelMeter(
+            level: levelL, peak: peakL, channelLabel: 'L', height: height),
         const SizedBox(width: 4),
-        LevelMeter(level: levelR, peak: peakR, channelLabel: 'R', height: height),
+        LevelMeter(
+            level: levelR, peak: peakR, channelLabel: 'R', height: height),
       ],
     );
   }

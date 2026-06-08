@@ -8,6 +8,7 @@ class EmbeddedServer {
 
   static bool get isSupported => false;
 
-  Future<bool> start({required int port, required String dataDir}) async => false;
+  Future<bool> start({required int port, required String dataDir}) async =>
+      false;
   void stop() {}
 }

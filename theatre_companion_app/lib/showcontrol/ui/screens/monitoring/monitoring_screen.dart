@@ -43,7 +43,7 @@ class MonitoringScreen extends ConsumerWidget {
             title: 'AKTIVER CUE',
             child: ActiveCueMonitor(
               playhead: domain.playhead,
-              cueList:  domain.cueList,
+              cueList: domain.cueList,
             ),
           ),
         ),
@@ -73,7 +73,8 @@ class _ClockStrip extends StatelessWidget {
           for (final n in withClock) ...[
             Text(
               '${n.name}: ${(n.clockDeltaMs! > 0 ? '+' : '')}${n.clockDeltaMs} ms',
-              style: ScText.label.copyWith(fontSize: 10, color: ScColors.textDim),
+              style:
+                  ScText.label.copyWith(fontSize: 10, color: ScColors.textDim),
             ),
             const SizedBox(width: 12),
           ],

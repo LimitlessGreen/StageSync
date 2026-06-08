@@ -42,7 +42,7 @@ class ShowControlDomainState {
 /// UI layers import only this provider — never the proto-based one directly.
 final showControlDomainProvider = Provider<ShowControlDomainState>((ref) {
   final showState = ref.watch(showControlProvider);
-  final session   = ref.watch(sessionProvider);
+  final session = ref.watch(sessionProvider);
 
   // ── Map CueList ──────────────────────────────────────────────────────────
   final cueList = showState.cueList != null
@@ -96,8 +96,8 @@ final nodeStatusListProvider = Provider<List<NodeStatus>>((ref) {
 final patchedAssetIdsProvider = Provider<Set<String>>((ref) {
   final domain = ref.watch(showControlDomainProvider);
   final cueList = domain.cueList;
-  final patch   = domain.patchConfig;
-  final nodes   = domain.nodes;
+  final patch = domain.patchConfig;
+  final nodes = domain.nodes;
 
   if (cueList == null || patch.nodePatches.isEmpty) return const {};
 
@@ -124,7 +124,7 @@ final patchedAssetIdsProvider = Provider<Set<String>>((ref) {
 // ── Private helpers ────────────────────────────────────────────────────────────
 
 PlayheadState _buildPlayhead(ShowControlState state, CueList? cueList) {
-  final cueListId   = state.cueList?.cueListId ?? '';
+  final cueListId = state.cueList?.cueListId ?? '';
   final activeCueId = state.activeCue?.cueId;
 
   // Derive next cue from domain CueList

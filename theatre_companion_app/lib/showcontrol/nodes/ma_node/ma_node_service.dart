@@ -22,7 +22,8 @@ class MaNodeStatus {
     this.maHost,
   });
 
-  MaNodeStatus copyWith({MaNodeState? state, String? errorMessage, String? maHost}) =>
+  MaNodeStatus copyWith(
+          {MaNodeState? state, String? errorMessage, String? maHost}) =>
       MaNodeStatus(
         state: state ?? this.state,
         errorMessage: errorMessage,
@@ -83,15 +84,17 @@ class MaNodeService {
         ..token = session.token!;
 
       _commandSub = client.node.streamNodeCommands(streamReq).listen(
-        _handleCommand,
-        onError: (e) => _updateStatus(MaNodeStatus(
-          state: MaNodeState.error,
-          errorMessage: e.toString(),
-        )),
-        onDone: () => _updateStatus(const MaNodeStatus(state: MaNodeState.idle)),
-      );
+            _handleCommand,
+            onError: (e) => _updateStatus(MaNodeStatus(
+              state: MaNodeState.error,
+              errorMessage: e.toString(),
+            )),
+            onDone: () =>
+                _updateStatus(const MaNodeStatus(state: MaNodeState.idle)),
+          );
 
-      _updateStatus(_status.copyWith(state: MaNodeState.connected, maHost: maHost));
+      _updateStatus(
+          _status.copyWith(state: MaNodeState.connected, maHost: maHost));
     } catch (e) {
       _updateStatus(MaNodeStatus(
         state: MaNodeState.error,
@@ -117,7 +120,9 @@ class MaNodeService {
 
   void _handleMaOsc(MaOscCommand cmd) {
     if (cmd.oscAddress.isNotEmpty) {
-      _bridge.sendRaw(address: cmd.oscAddress, argument: cmd.oscArgument).ignore();
+      _bridge
+          .sendRaw(address: cmd.oscAddress, argument: cmd.oscArgument)
+          .ignore();
     }
   }
 

@@ -45,7 +45,8 @@ class _BleLogNotifier extends StateNotifier<List<_BleLogEntry>> {
             final count = event.connectedPeerCount;
             if (count != _lastPeerCount) {
               _lastPeerCount = count;
-              _add('Peer-Anzahl: $count (${event.peers.map((p) => p.shortId).join(', ')})');
+              _add(
+                  'Peer-Anzahl: $count (${event.peers.map((p) => p.shortId).join(', ')})');
             }
           }
         });
@@ -57,11 +58,16 @@ class _BleLogNotifier extends StateNotifier<List<_BleLogEntry>> {
       (_, next) {
         next.whenData((e) {
           // Vollständige Status-Info als Log-Zeile
-          final adv  = e.isAdvertising ? '📡adv' : '○adv';
-          final scan = e.isScanning    ? (e.isFallbackScanMode ? '🔍fb' : '🔍scan') : '○scan';
+          final adv = e.isAdvertising ? '📡adv' : '○adv';
+          final scan = e.isScanning
+              ? (e.isFallbackScanMode ? '🔍fb' : '🔍scan')
+              : '○scan';
           final conn = '🔗${e.activeConnectionCount}';
-          final msg  = e.errorMessage ?? '';
-          _add('[$adv $scan $conn] $msg', isError: msg.contains('fehlgeschlagen') || msg.contains('Error') || msg.contains('timeout'));
+          final msg = e.errorMessage ?? '';
+          _add('[$adv $scan $conn] $msg',
+              isError: msg.contains('fehlgeschlagen') ||
+                  msg.contains('Error') ||
+                  msg.contains('timeout'));
         });
       },
     );
@@ -115,13 +121,13 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bleStatus    = ref.watch(bleStatusProvider);
-    final netStatus    = ref.watch(networkStatusProvider);
-    final peers        = ref.watch(peerListProvider);
-    final isCloud      = ref.watch(isCloudConnectedProvider);
-    final isLeader     = ref.watch(isLeaderProvider);
-    final logEntries   = ref.watch(_bleLogProvider);
-    final score        = ref.watch(scoreBreakdownProvider);
+    final bleStatus = ref.watch(bleStatusProvider);
+    final netStatus = ref.watch(networkStatusProvider);
+    final peers = ref.watch(peerListProvider);
+    final isCloud = ref.watch(isCloudConnectedProvider);
+    final isLeader = ref.watch(isLeaderProvider);
+    final logEntries = ref.watch(_bleLogProvider);
+    final score = ref.watch(scoreBreakdownProvider);
 
     // BLE-Ereignisse aus BleStatusEvent in den Log übernehmen
     ref.listen<BleStatusEvent?>(bleStatusProvider, (prev, next) {
@@ -225,8 +231,8 @@ class _BleDebugScreenState extends ConsumerState<BleDebugScreen> {
                   )
                 : ListView.builder(
                     controller: _logScrollCtrl,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                     itemCount: logEntries.length,
                     itemBuilder: (_, i) => _LogEntryTile(logEntries[i]),
                   ),
@@ -256,8 +262,8 @@ class _StatusRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final adv  = bleStatus?.isAdvertising ?? false;
-    final scan = bleStatus?.isScanning    ?? false;
+    final adv = bleStatus?.isAdvertising ?? false;
+    final scan = bleStatus?.isScanning ?? false;
     final fallb = bleStatus?.isFallbackScanMode ?? false;
     final conns = bleStatus?.activeConnectionCount ?? 0;
     final peers = netStatus?.connectedPeerCount ?? 0;
@@ -349,9 +355,8 @@ class _Chip extends StatelessWidget {
           fontWeight: active ? FontWeight.bold : FontWeight.normal,
         ),
       ),
-      backgroundColor: active
-          ? activeColor.withAlpha(26)
-          : Colors.grey.shade100,
+      backgroundColor:
+          active ? activeColor.withAlpha(26) : Colors.grey.shade100,
       side: BorderSide(color: color.withAlpha(77), width: 1),
       padding: const EdgeInsets.symmetric(horizontal: 2),
       visualDensity: VisualDensity.compact,
@@ -368,7 +373,7 @@ class _PeerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final bars  = peer.signalBars;
+    final bars = peer.signalBars;
     final barColor = bars >= 3
         ? Colors.green
         : bars >= 2
@@ -486,6 +491,3 @@ class _LogEntryTile extends StatelessWidget {
     );
   }
 }
-
-
-

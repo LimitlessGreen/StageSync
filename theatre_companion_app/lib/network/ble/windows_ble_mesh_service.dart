@@ -7,7 +7,6 @@
 /// Android, iOS, Windows und macOS bereitstellt.
 ///
 /// Bitte [ble_mesh_service.dart] verwenden.
-library;
 ///
 /// ## Dual-Role-Architektur
 ///
@@ -618,11 +617,3 @@ class WindowsBleMeshService implements AbstractBleService {
     if (!_errorController.isClosed) _errorController.add(message);
   }
 }
-
-
-
-
-
-
-
-

@@ -106,7 +106,8 @@ class _WaveformPainter extends CustomPainter {
         ),
         textDirection: TextDirection.ltr,
       )..layout();
-      tp.paint(canvas, Offset((size.width - tp.width) / 2, mid - tp.height / 2));
+      tp.paint(
+          canvas, Offset((size.width - tp.width) / 2, mid - tp.height / 2));
       return;
     }
 
@@ -114,7 +115,8 @@ class _WaveformPainter extends CustomPainter {
     final dx = size.width / n;
 
     // Außerhalb [start,end] gedimmt, innerhalb aktiv.
-    final activePaint = Paint()..color = ScColors.active.withValues(alpha: 0.85);
+    final activePaint = Paint()
+      ..color = ScColors.active.withValues(alpha: 0.85);
     final dimPaint = Paint()..color = ScColors.textDim.withValues(alpha: 0.5);
 
     for (var i = 0; i < n; i++) {
@@ -123,7 +125,8 @@ class _WaveformPainter extends CustomPainter {
       final top = mid - data.maxs[i] * mid;
       final bot = mid - data.mins[i] * mid;
       final inRange = frac >= startFraction && frac <= endFraction;
-      canvas.drawLine(Offset(x, top), Offset(x, bot), inRange ? activePaint : dimPaint);
+      canvas.drawLine(
+          Offset(x, top), Offset(x, bot), inRange ? activePaint : dimPaint);
     }
 
     // Mittellinie

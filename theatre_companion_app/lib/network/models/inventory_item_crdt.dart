@@ -77,7 +77,8 @@ class LwwField<T> {
       };
 
   /// Deserialise from a JSON-compatible map.
-  static LwwField<T> fromJson<T>(Map<String, dynamic> json, T Function(dynamic) decode) {
+  static LwwField<T> fromJson<T>(
+      Map<String, dynamic> json, T Function(dynamic) decode) {
     return LwwField<T>(
       value: decode(json['value']),
       clock: VectorClock.fromJson(json['clock'] as Map<String, dynamic>),
@@ -224,8 +225,9 @@ class InventoryItemCrdt {
     // clock for the same field (i.e. it carries new information).
     final includeStatus = !status.clock.happensBefore(baseline.status.clock) ||
         !baseline.status.clock.happensBefore(status.clock);
-    final includeLocation = !location.clock.happensBefore(baseline.location.clock) ||
-        !baseline.location.clock.happensBefore(location.clock);
+    final includeLocation =
+        !location.clock.happensBefore(baseline.location.clock) ||
+            !baseline.location.clock.happensBefore(location.clock);
 
     return InventoryItemCrdt(
       itemId: itemId,
@@ -262,7 +264,8 @@ class InventoryItemCrdt {
   }
 
   factory InventoryItemCrdt.fromJsonString(String jsonString) =>
-      InventoryItemCrdt.fromJson(jsonDecode(jsonString) as Map<String, dynamic>);
+      InventoryItemCrdt.fromJson(
+          jsonDecode(jsonString) as Map<String, dynamic>);
 
   // ─── Equality ─────────────────────────────────────────────────────────────
 
@@ -281,4 +284,3 @@ class InventoryItemCrdt {
   String toString() =>
       'InventoryItemCrdt(id=$itemId, status=${status.value}, location=${location.value})';
 }
-

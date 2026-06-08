@@ -42,9 +42,8 @@ class _ActiveCueMonitorState extends State<ActiveCueMonitor> {
 
     // Zeige alle parallel laufenden Cues an (von Group oder Audio-Loop)
     // inklusive derer, die nicht die aktiveCueId sind
-    final otherRunningIds = widget.playhead.runningCueIds
-        .where((id) => id != activeId)
-        .toList();
+    final otherRunningIds =
+        widget.playhead.runningCueIds.where((id) => id != activeId).toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -84,7 +83,8 @@ class _ActiveCueMonitorState extends State<ActiveCueMonitor> {
           const SizedBox(height: 8),
           Row(
             children: [
-              const Icon(Icons.arrow_downward, size: 12, color: ScColors.textDim),
+              const Icon(Icons.arrow_downward,
+                  size: 12, color: ScColors.textDim),
               const SizedBox(width: 6),
               Text('Nächster:', style: ScText.label),
               const SizedBox(width: 8),
@@ -182,7 +182,8 @@ class _ElapsedTimer extends StatelessWidget {
     if (start == null) return Text('0:00', style: ScText.timer);
 
     final cueId = playhead.activeCueId ?? '';
-    final ms = (playhead.effectiveNowMsForCue(cueId) - start).clamp(0, 99 * 60 * 1000);
+    final ms =
+        (playhead.effectiveNowMsForCue(cueId) - start).clamp(0, 99 * 60 * 1000);
 
     return Text(
       _format(ms),
@@ -209,7 +210,8 @@ class _ProgressBar extends StatelessWidget {
     final start = playhead.startedServerMs;
     final duration = cue.displayDurationMs;
     if (start == null || duration == null || duration == 0) return 0.0;
-    return ((playhead.effectiveNowMsForCue(cue.id) - start) / duration).clamp(0.0, 1.0);
+    return ((playhead.effectiveNowMsForCue(cue.id) - start) / duration)
+        .clamp(0.0, 1.0);
   }
 
   @override
@@ -265,7 +267,9 @@ class _ProgressBar extends StatelessWidget {
   String get _elapsedText {
     final start = playhead.startedServerMs;
     if (start == null) return '';
-    return _fmtMs((playhead.effectiveNowMs() - start).clamp(0, 99 * 60 * 1000).toDouble());
+    return _fmtMs((playhead.effectiveNowMs() - start)
+        .clamp(0, 99 * 60 * 1000)
+        .toDouble());
   }
 
   String get _totalText {
@@ -301,9 +305,9 @@ class _ChildCueRow extends StatelessWidget {
 
   Color get _color => switch (runState?.lifecycle) {
         CueLifecycle.running => ScColors.active,
-        CueLifecycle.paused  => ScColors.warn,
-        CueLifecycle.error   => ScColors.error,
-        _                    => ScColors.textDim,
+        CueLifecycle.paused => ScColors.warn,
+        CueLifecycle.error => ScColors.error,
+        _ => ScColors.textDim,
       };
 
   @override
@@ -313,7 +317,9 @@ class _ChildCueRow extends StatelessWidget {
         : childId.substring(0, childId.length.clamp(0, 8));
     final startMs = playhead.cueStartedServerMsByCueId[childId];
     final elapsedMs = startMs != null
-        ? (playhead.effectiveNowMsForCue(childId) - startMs).clamp(0, 99 * 60 * 1000).toDouble()
+        ? (playhead.effectiveNowMsForCue(childId) - startMs)
+            .clamp(0, 99 * 60 * 1000)
+            .toDouble()
         : null;
     final durationMs = cue?.displayDurationMs;
     final fraction = (elapsedMs != null && durationMs != null && durationMs > 0)
@@ -328,7 +334,8 @@ class _ChildCueRow extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 6, height: 6,
+                width: 6,
+                height: 6,
                 decoration:
                     BoxDecoration(color: _color, shape: BoxShape.circle),
               ),
@@ -340,8 +347,8 @@ class _ChildCueRow extends StatelessWidget {
               ),
               Text(
                 runState?.lifecycle.name ?? '',
-                style: ScText.label.copyWith(
-                    color: ScColors.textDim, fontSize: 10),
+                style: ScText.label
+                    .copyWith(color: ScColors.textDim, fontSize: 10),
               ),
               if (elapsedMs != null) ...[
                 const SizedBox(width: 8),
@@ -389,25 +396,25 @@ class _NodeRow extends StatelessWidget {
   const _NodeRow({required this.nodeId, required this.state});
 
   Color get _color => switch (state.phase) {
-        NodeExecPhase.error        => ScColors.error,
-        NodeExecPhase.degraded     => ScColors.warn,
-        NodeExecPhase.playing      => ScColors.active,
-        NodeExecPhase.buffering    => ScColors.warn,
+        NodeExecPhase.error => ScColors.error,
+        NodeExecPhase.degraded => ScColors.warn,
+        NodeExecPhase.playing => ScColors.active,
+        NodeExecPhase.buffering => ScColors.warn,
         NodeExecPhase.awaitingAsset => Colors.orange,
-        _                         => ScColors.textDim,
+        _ => ScColors.textDim,
       };
 
   String get _phaseLabel => switch (state.phase) {
-        NodeExecPhase.idle          => 'idle',
+        NodeExecPhase.idle => 'idle',
         NodeExecPhase.awaitingAsset => '⏳ Datei wird geladen',
-        NodeExecPhase.preloading    => 'Preloading…',
-        NodeExecPhase.buffering     => 'Buffering…',
-        NodeExecPhase.ready         => 'Bereit',
-        NodeExecPhase.playing       => '▶ Playing',
-        NodeExecPhase.paused        => '⏸ Paused',
-        NodeExecPhase.done          => '✓ Done',
-        NodeExecPhase.degraded      => '⚠ Degraded',
-        NodeExecPhase.error         => '✗ ${state.errorMessage ?? "Fehler"}',
+        NodeExecPhase.preloading => 'Preloading…',
+        NodeExecPhase.buffering => 'Buffering…',
+        NodeExecPhase.ready => 'Bereit',
+        NodeExecPhase.playing => '▶ Playing',
+        NodeExecPhase.paused => '⏸ Paused',
+        NodeExecPhase.done => '✓ Done',
+        NodeExecPhase.degraded => '⚠ Degraded',
+        NodeExecPhase.error => '✗ ${state.errorMessage ?? "Fehler"}',
       };
 
   @override
@@ -417,9 +424,9 @@ class _NodeRow extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            width: 6, height: 6,
-            decoration:
-                BoxDecoration(color: _color, shape: BoxShape.circle),
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: _color, shape: BoxShape.circle),
           ),
           const SizedBox(width: 8),
           Expanded(

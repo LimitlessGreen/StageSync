@@ -26,7 +26,8 @@ void main() {
       expect(tapped, isTrue);
     });
 
-    testWidgets('disabled (null onPressed) — no callback on tap', (tester) async {
+    testWidgets('disabled (null onPressed) — no callback on tap',
+        (tester) async {
       var tapped = false;
       await tester.pumpWidget(_wrap(
         ScButton(label: 'GO', onPressed: null),
@@ -35,7 +36,8 @@ void main() {
       expect(tapped, isFalse);
     });
 
-    testWidgets('isLoading shows CircularProgressIndicator, not label', (tester) async {
+    testWidgets('isLoading shows CircularProgressIndicator, not label',
+        (tester) async {
       await tester.pumpWidget(_wrap(
         const ScButton(label: 'GO', isLoading: true),
       ));

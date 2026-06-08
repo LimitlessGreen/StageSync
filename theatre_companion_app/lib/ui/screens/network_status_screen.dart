@@ -15,6 +15,7 @@ import '../../network/isolate/isolate_messages.dart';
 import '../../network/platform/platform_capabilities.dart';
 import '../providers/network_state_provider.dart';
 import 'ble_debug_screen.dart';
+
 class NetworkStatusScreen extends ConsumerWidget {
   const NetworkStatusScreen({super.key});
 
@@ -22,8 +23,8 @@ class NetworkStatusScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final status = ref.watch(networkStatusProvider);
     final isLeader = ref.watch(isLeaderProvider);
-    final deviceId = ref.watch(deviceIdProvider).whenData((id) => id).value
-        ?? '…';
+    final deviceId =
+        ref.watch(deviceIdProvider).whenData((id) => id).value ?? '…';
     final peers = ref.watch(peerListProvider);
     final breakdown = ref.watch(scoreBreakdownProvider);
     final capabilities = ref.watch(platformCapabilitiesProvider);
@@ -126,9 +127,11 @@ class NetworkStatusScreen extends ConsumerWidget {
                   if (!isCloudConnected)
                     Card(
                       child: ListTile(
-                        leading: const Icon(Icons.cloud_off, color: Colors.grey),
+                        leading:
+                            const Icon(Icons.cloud_off, color: Colors.grey),
                         title: const Text('Keine Cloud-Verbindung'),
-                        subtitle: const Text('Unter "Cloud-Verbindung" verbinden'),
+                        subtitle:
+                            const Text('Unter "Cloud-Verbindung" verbinden'),
                         trailing: TextButton(
                           onPressed: () {},
                           child: const Text('Einrichten'),
@@ -470,13 +473,26 @@ class _QueueCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, color, icon) = switch (syncStatus) {
-      NetworkSyncStatus.syncing =>
-        ('Synchronisiere mit Server…', Colors.green, Icons.cloud_sync),
-      NetworkSyncStatus.upToDate =>
-        ('Vollständig synchronisiert', Colors.green, Icons.cloud_done),
-      NetworkSyncStatus.meshOnly =>
-        ('BLE-Mesh Only – Leader sendet', Colors.blue, Icons.hub),
-      NetworkSyncStatus.offline => ('Fully Offline', Colors.red, Icons.cloud_off),
+      NetworkSyncStatus.syncing => (
+          'Synchronisiere mit Server…',
+          Colors.green,
+          Icons.cloud_sync
+        ),
+      NetworkSyncStatus.upToDate => (
+          'Vollständig synchronisiert',
+          Colors.green,
+          Icons.cloud_done
+        ),
+      NetworkSyncStatus.meshOnly => (
+          'BLE-Mesh Only – Leader sendet',
+          Colors.blue,
+          Icons.hub
+        ),
+      NetworkSyncStatus.offline => (
+          'Fully Offline',
+          Colors.red,
+          Icons.cloud_off
+        ),
     };
 
     return Card(
@@ -540,15 +556,13 @@ class _PeerCard extends StatelessWidget {
             if (peer.isLeader) ...[
               const SizedBox(width: 6),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: Colors.amber.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(4),
+                ),
                 child: const Text('Leader',
-                    style:
-                        TextStyle(fontSize: 10, color: Colors.amber)),
+                    style: TextStyle(fontSize: 10, color: Colors.amber)),
               ),
             ],
           ],
@@ -576,8 +590,8 @@ class _SignalIcon extends StatelessWidget {
             : Colors.red;
     return Container(
       padding: const EdgeInsets.all(2),
-      decoration: const BoxDecoration(
-          color: Colors.black54, shape: BoxShape.circle),
+      decoration:
+          const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
       child: Icon(
         _iconForBars(bars),
         size: 10,
@@ -712,8 +726,7 @@ class _CloudPeerCard extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor:
-              Theme.of(context).colorScheme.primaryContainer,
+          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
           child: Text(
             peer.userName.isNotEmpty ? peer.userName[0].toUpperCase() : '?',
             style: TextStyle(
@@ -763,16 +776,13 @@ class _PlatformCapabilitiesCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 12),
-            _CapabilityRow(
-                label: 'BLE Mesh', support: capabilities.bleMesh),
-            _CapabilityRow(
-                label: 'WebSocket', support: capabilities.webSocket),
+            _CapabilityRow(label: 'BLE Mesh', support: capabilities.bleMesh),
+            _CapabilityRow(label: 'WebSocket', support: capabilities.webSocket),
             _CapabilityRow(
                 label: 'Hintergrund-Isolate',
                 support: capabilities.backgroundIsolate),
             _CapabilityRow(
-                label: 'Lokale Persistenz',
-                support: capabilities.localStorage),
+                label: 'Lokale Persistenz', support: capabilities.localStorage),
             if (capabilities.hint != null) ...[
               const SizedBox(height: 10),
               Container(
@@ -780,17 +790,20 @@ class _PlatformCapabilitiesCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: Colors.amber.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                  border:
+                      Border.all(color: Colors.amber.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.warning_amber, size: 14, color: Colors.amber),
+                    const Icon(Icons.warning_amber,
+                        size: 14, color: Colors.amber),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
                         capabilities.hint!,
-                        style: const TextStyle(fontSize: 11, color: Colors.amber),
+                        style:
+                            const TextStyle(fontSize: 11, color: Colors.amber),
                       ),
                     ),
                   ],
@@ -815,7 +828,11 @@ class _CapabilityRow extends StatelessWidget {
     final (icon, color, text) = switch (support) {
       FeatureSupport.full => (Icons.check_circle, Colors.green, 'Vollständig'),
       FeatureSupport.partial => (Icons.warning, Colors.amber, 'Eingeschränkt'),
-      FeatureSupport.unavailable => (Icons.cancel, Colors.red, 'Nicht verfügbar'),
+      FeatureSupport.unavailable => (
+          Icons.cancel,
+          Colors.red,
+          'Nicht verfügbar'
+        ),
     };
 
     return Padding(
@@ -832,8 +849,3 @@ class _CapabilityRow extends StatelessWidget {
     );
   }
 }
-
-
-
-
-

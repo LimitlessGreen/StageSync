@@ -7,7 +7,8 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../showcontrol/grpc/stage_sync_client.dart';
-import '../showcontrol/grpc/generated/stagesync/v1/talkback.pb.dart' as tb_proto;
+import '../showcontrol/grpc/generated/stagesync/v1/talkback.pb.dart'
+    as tb_proto;
 import 'mic_capture.dart';
 import 'opus_encoder.dart';
 
@@ -24,6 +25,7 @@ class TalkbackState {
   final String? errorMessage;
   final List<String> targetBusIds;
   final TalkbackMode mode;
+
   /// Eigene Client-ID — wird in der UI herausgefiltert damit man sich nicht
   /// selbst als aktiven Sprecher sieht.
   final String? ownClientId;
@@ -57,9 +59,8 @@ class TalkbackState {
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 
-final talkbackProvider =
-    AsyncNotifierProvider<TalkbackNotifier, TalkbackState>(
-        TalkbackNotifier.new);
+final talkbackProvider = AsyncNotifierProvider<TalkbackNotifier, TalkbackState>(
+    TalkbackNotifier.new);
 
 class TalkbackNotifier extends AsyncNotifier<TalkbackState> {
   StreamController<tb_proto.TalkbackFrame>? _outgoing;
@@ -161,7 +162,8 @@ class TalkbackNotifier extends AsyncNotifier<TalkbackState> {
       } catch (_) {}
     }
     final clientId = _cachedClientId ?? sessionId;
-    final displayName = _cachedDisplayName ?? clientId; // Client-ID statt "Unbekannt"
+    final displayName =
+        _cachedDisplayName ?? clientId; // Client-ID statt "Unbekannt"
 
     _outgoing = StreamController<tb_proto.TalkbackFrame>();
 
@@ -180,8 +182,7 @@ class TalkbackNotifier extends AsyncNotifier<TalkbackState> {
 
     // gRPC-Stream öffnen
     try {
-      final responseStream =
-          client.talkback.streamTalkback(_outgoing!.stream);
+      final responseStream = client.talkback.streamTalkback(_outgoing!.stream);
 
       _statusSub = responseStream.listen(
         (status) {
@@ -227,14 +228,16 @@ class TalkbackNotifier extends AsyncNotifier<TalkbackState> {
         // Delayed-Modus: nur aufnehmen, noch nicht senden
         _recordedFrames.clear();
         await mic.start(
-          onFrame: (Int16List pcm) => _recordedFrames.add(Int16List.fromList(pcm)),
+          onFrame: (Int16List pcm) =>
+              _recordedFrames.add(Int16List.fromList(pcm)),
         );
       } else {
         // Live-Modus: sofort senden
         await mic.start(
           onFrame: (Int16List pcm) {
             final opusData = enc.encode(pcm);
-            if (opusData == null || _outgoing == null || _outgoing!.isClosed) return;
+            if (opusData == null || _outgoing == null || _outgoing!.isClosed)
+              return;
             _outgoing!.add(tb_proto.TalkbackFrame(
               audio: tb_proto.AudioChunk(
                 opusData: opusData,

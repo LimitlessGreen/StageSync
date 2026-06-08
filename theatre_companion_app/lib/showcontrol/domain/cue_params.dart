@@ -11,14 +11,14 @@ sealed class CueParams {
 // ── Audio Pause / Resume behavior enums ──────────────────────────────────────
 
 enum PauseBehavior {
-  hard,     // sofort stoppen (default)
-  fadeOut,  // ausblenden, dann pausieren
+  hard, // sofort stoppen (default)
+  fadeOut, // ausblenden, dann pausieren
 }
 
 enum ResumeBehavior {
   continuePlaying, // nahtlos weitermachen (default)
-  fadeIn,          // einblenden beim Weiterspielen
-  fromStart,       // von vorne beginnen
+  fadeIn, // einblenden beim Weiterspielen
+  fromStart, // von vorne beginnen
 }
 
 @immutable
@@ -37,9 +37,9 @@ final class AudioParams extends CueParams {
 
   // ── Pause / Resume ──────────────────────────────────────────────────────
   final PauseBehavior pauseBehavior;
-  final double pauseFadeMs;     // Fade-Dauer bei pauseBehavior.fadeOut
+  final double pauseFadeMs; // Fade-Dauer bei pauseBehavior.fadeOut
   final ResumeBehavior resumeBehavior;
-  final double resumeFadeMs;    // Fade-Dauer bei resumeBehavior.fadeIn
+  final double resumeFadeMs; // Fade-Dauer bei resumeBehavior.fadeIn
 
   /// Stille am Anfang der Aufnahme automatisch überspringen.
   ///
@@ -97,7 +97,8 @@ final class AudioParams extends CueParams {
       );
 
   double? get effectiveDurationMs {
-    if (endTimeMs > startTimeMs && endTimeMs > 0) return endTimeMs - startTimeMs;
+    if (endTimeMs > startTimeMs && endTimeMs > 0)
+      return endTimeMs - startTimeMs;
     return null;
   }
 }
@@ -225,22 +226,25 @@ final class ScriptParams extends CueParams {
 @immutable
 final class NoteParams extends CueParams {
   final String text;
-  final Color? color;   // null = Standard-Grau
-  final bool landable;  // false = GO überspringt, true = GO landet hier
+  final Color? color; // null = Standard-Grau
+  final bool landable; // false = GO überspringt, true = GO landet hier
 
   const NoteParams({this.text = '', this.color, this.landable = false});
 
   NoteParams copyWith({String? text, Color? color, bool? landable}) =>
-      NoteParams(text: text ?? this.text, color: color ?? this.color, landable: landable ?? this.landable);
+      NoteParams(
+          text: text ?? this.text,
+          color: color ?? this.color,
+          landable: landable ?? this.landable);
 }
 
 // ── Fade / Control cue ────────────────────────────────────────────────────────
 
 enum FadeAction {
-  volume,  // nur Lautstärke anpassen
-  stop,    // mit Fade stoppen
-  pause,   // mit Fade pausieren
-  resume,  // mit Fade-In fortsetzen
+  volume, // nur Lautstärke anpassen
+  stop, // mit Fade stoppen
+  pause, // mit Fade pausieren
+  resume, // mit Fade-In fortsetzen
 }
 
 /// Steuert eine andere laufende Cue (entspricht QLab Fade-Cue).
@@ -279,4 +283,3 @@ final class FadeParams extends CueParams {
         stopWhenDone: stopWhenDone ?? this.stopWhenDone,
       );
 }
-

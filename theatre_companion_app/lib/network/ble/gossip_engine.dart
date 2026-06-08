@@ -123,7 +123,8 @@ class GossipEngine {
 
     await Future.wait([
       for (final peer in alivePeers)
-        _sendToPeer(peer, plainBytes).catchError((_) {/* Ignore individual send failures */}),
+        _sendToPeer(peer, plainBytes)
+            .catchError((_) {/* Ignore individual send failures */}),
     ]);
   }
 
@@ -134,7 +135,8 @@ class GossipEngine {
     String? excludeId,
   }) async {
     final plainBytes = packet.toBytes();
-    final targets = _peers.randomSubset(count: kGossipFanout, excludeId: excludeId);
+    final targets =
+        _peers.randomSubset(count: kGossipFanout, excludeId: excludeId);
 
     if (targets.isEmpty) {
       final encrypted = await _crypto.encrypt(plainBytes);
@@ -172,7 +174,8 @@ class GossipEngine {
     String? excludeId,
   }) async {
     final plainBytes = packet.toBytes();
-    final targets = _peers.randomSubset(count: kGossipFanout, excludeId: excludeId);
+    final targets =
+        _peers.randomSubset(count: kGossipFanout, excludeId: excludeId);
 
     if (targets.isEmpty) {
       final encrypted = await _crypto.encrypt(plainBytes);
@@ -259,11 +262,3 @@ class GossipEngine {
     }
   }
 }
-
-
-
-
-
-
-
-

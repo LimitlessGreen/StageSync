@@ -98,10 +98,10 @@ class AuditionBus {
 @immutable
 class PatchConfig {
   final List<LogicalOutput> logicalOutputs; // Legacy Layer 1 definitions
-  final List<NodePatch> nodePatches;         // Legacy Layer 2: bus → nodes
-  final List<DevicePatch> devicePatches;     // Legacy Layer 3: bus → device on node
-  final List<AuditionBus> auditionBuses;     // Layer 4: per-node preview
-  final List<AudioBus> buses;               // Audio Bus System (neues Modell)
+  final List<NodePatch> nodePatches; // Legacy Layer 2: bus → nodes
+  final List<DevicePatch> devicePatches; // Legacy Layer 3: bus → device on node
+  final List<AuditionBus> auditionBuses; // Layer 4: per-node preview
+  final List<AudioBus> buses; // Audio Bus System (neues Modell)
 
   const PatchConfig({
     this.logicalOutputs = const [],

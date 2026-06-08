@@ -26,10 +26,14 @@ class _StubNotifier extends ShowControlNotifier {
   Future<void> reorderCue({required List<String> orderedIds}) async {}
 
   @override
-  Future<Cue?> addCue({CueParams params = const AudioParams(assetId: '')}) async => null;
+  Future<Cue?> addCue(
+          {CueParams params = const AudioParams(assetId: '')}) async =>
+      null;
 
   @override
-  Future<String?> insertDomainCue(CueParams params, {String? afterId, String label = 'Neue Cue'}) async => null;
+  Future<String?> insertDomainCue(CueParams params,
+          {String? afterId, String label = 'Neue Cue'}) async =>
+      null;
 
   @override
   Future<void> duplicateDomainCue(String cueId) async {}
@@ -55,9 +59,11 @@ class _StubNotifier extends ShowControlNotifier {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-Widget _wrap(Widget child) => MaterialApp(
-      theme: ThemeData.dark(useMaterial3: true),
-      home: Scaffold(body: SizedBox(width: 400, height: 600, child: child)),
+Widget _wrap(Widget child) => ProviderScope(
+      child: MaterialApp(
+        theme: ThemeData.dark(useMaterial3: true),
+        home: Scaffold(body: SizedBox(width: 400, height: 600, child: child)),
+      ),
     );
 
 const _audioCue = Cue(
@@ -80,7 +86,7 @@ bool _isCuePast(Cue cue, CueList list, PlayheadState playhead) {
   final activeId = playhead.activeCueId;
   if (activeId == null) return false;
   final activeIdx = list.cues.indexWhere((c) => c.id == activeId);
-  final thisIdx   = list.cues.indexWhere((c) => c.id == cue.id);
+  final thisIdx = list.cues.indexWhere((c) => c.id == cue.id);
   return thisIdx < activeIdx;
 }
 
@@ -102,9 +108,21 @@ void main() {
       id: 'l',
       name: 'Main',
       cues: const [
-        Cue(id: 'a', number: '1', label: 'A', params: AudioParams(assetId: 'x')),
-        Cue(id: 'b', number: '2', label: 'B', params: WaitParams(durationMs: 1000)),
-        Cue(id: 'c', number: '3', label: 'C', params: AudioParams(assetId: 'y')),
+        Cue(
+            id: 'a',
+            number: '1',
+            label: 'A',
+            params: AudioParams(assetId: 'x')),
+        Cue(
+            id: 'b',
+            number: '2',
+            label: 'B',
+            params: WaitParams(durationMs: 1000)),
+        Cue(
+            id: 'c',
+            number: '3',
+            label: 'C',
+            params: AudioParams(assetId: 'y')),
       ],
     );
 
@@ -131,7 +149,7 @@ void main() {
       // -1 < any valid activeIdx → isCuePast returns true for unknown cue IDs.
       final playhead = PlayheadState(cueListId: 'l', activeCueId: 'b');
       final unknown = const Cue(
-        id: 'z', number: '9', label: 'Z', params: AudioParams(assetId: 'z'));
+          id: 'z', number: '9', label: 'Z', params: AudioParams(assetId: 'z'));
       expect(_isCuePast(unknown, list, playhead), isTrue);
     });
   });
@@ -145,7 +163,9 @@ void main() {
 
     test('collects child ids from group cue', () {
       const group = Cue(
-        id: 'g1', number: '3', label: 'Group',
+        id: 'g1',
+        number: '3',
+        label: 'Group',
         params: GroupParams(childCueIds: ['cue-1', 'cue-2']),
       );
       final ids = _childIds([_audioCue, _waitCue, group]);
@@ -155,11 +175,15 @@ void main() {
 
     test('merges children from multiple groups', () {
       const g1 = Cue(
-        id: 'g1', number: '3', label: 'G1',
+        id: 'g1',
+        number: '3',
+        label: 'G1',
         params: GroupParams(childCueIds: ['a', 'b']),
       );
       const g2 = Cue(
-        id: 'g2', number: '4', label: 'G2',
+        id: 'g2',
+        number: '4',
+        label: 'G2',
         params: GroupParams(childCueIds: ['c']),
       );
       expect(_childIds([g1, g2]), containsAll(['a', 'b', 'c']));
@@ -247,14 +271,26 @@ void main() {
       expect(find.byType(CueListPanel), findsOneWidget);
     });
 
-    testWidgets('group cue children are not shown as top-level', (tester) async {
-      const child1 = Cue(id: 'c1', number: '1.1', label: 'Child A', params: AudioParams(assetId: 'x'));
-      const child2 = Cue(id: 'c2', number: '1.2', label: 'Child B', params: AudioParams(assetId: 'y'));
-      const group  = Cue(
-        id: 'g1', number: '1', label: 'Group',
+    testWidgets('group cue children are not shown as top-level',
+        (tester) async {
+      const child1 = Cue(
+          id: 'c1',
+          number: '1.1',
+          label: 'Child A',
+          params: AudioParams(assetId: 'x'));
+      const child2 = Cue(
+          id: 'c2',
+          number: '1.2',
+          label: 'Child B',
+          params: AudioParams(assetId: 'y'));
+      const group = Cue(
+        id: 'g1',
+        number: '1',
+        label: 'Group',
         params: GroupParams(childCueIds: ['c1', 'c2']),
       );
-      final list = CueList(id: 'main', name: 'Main', cues: const [group, child1, child2]);
+      final list = CueList(
+          id: 'main', name: 'Main', cues: const [group, child1, child2]);
 
       await tester.pumpWidget(_wrap(CueListPanel(
         cueList: list,

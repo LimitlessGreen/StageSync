@@ -57,15 +57,18 @@ class _ScButtonState extends State<ScButton> with TickerProviderStateMixin {
     );
     _scaleAnim = TweenSequence<double>([
       TweenSequenceItem(
-        tween: Tween(begin: 1.0, end: 0.93).chain(CurveTween(curve: Curves.easeIn)),
+        tween: Tween(begin: 1.0, end: 0.93)
+            .chain(CurveTween(curve: Curves.easeIn)),
         weight: 25,
       ),
       TweenSequenceItem(
-        tween: Tween(begin: 0.93, end: 1.06).chain(CurveTween(curve: Curves.easeOut)),
+        tween: Tween(begin: 0.93, end: 1.06)
+            .chain(CurveTween(curve: Curves.easeOut)),
         weight: 45,
       ),
       TweenSequenceItem(
-        tween: Tween(begin: 1.06, end: 1.0).chain(CurveTween(curve: Curves.elasticOut)),
+        tween: Tween(begin: 1.06, end: 1.0)
+            .chain(CurveTween(curve: Curves.elasticOut)),
         weight: 30,
       ),
     ]).animate(_bounceCtrl);
@@ -90,17 +93,17 @@ class _ScButtonState extends State<ScButton> with TickerProviderStateMixin {
     final enabled = widget.onPressed != null && !widget.isLoading;
 
     final (color, onColor, isFilled) = switch (widget.variant) {
-      ScButtonVariant.primary   => (ScColors.active, Colors.black, true),
-      ScButtonVariant.danger    => (ScColors.error, Colors.white, false),
+      ScButtonVariant.primary => (ScColors.active, Colors.black, true),
+      ScButtonVariant.danger => (ScColors.error, Colors.white, false),
       ScButtonVariant.secondary => (ScColors.warn, Colors.black, false),
-      ScButtonVariant.ghost     => (ScColors.textDim, Colors.white, false),
+      ScButtonVariant.ghost => (ScColors.textDim, Colors.white, false),
     };
 
     final height = switch (widget.size) {
-      ScButtonSize.large     => ScSpacing.buttonHeightLarge,
+      ScButtonSize.large => ScSpacing.buttonHeightLarge,
       ScButtonSize.transport => 44.0,
-      ScButtonSize.normal    => ScSpacing.buttonHeightDefault,
-      ScButtonSize.compact   => ScSpacing.buttonHeightCompact,
+      ScButtonSize.normal => ScSpacing.buttonHeightDefault,
+      ScButtonSize.compact => ScSpacing.buttonHeightCompact,
     };
 
     // Visual states — withValues(alpha:) is the correct way to tint;
@@ -120,7 +123,8 @@ class _ScButtonState extends State<ScButton> with TickerProviderStateMixin {
         : Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (widget.size == ScButtonSize.large || widget.size == ScButtonSize.transport)
+              if (widget.size == ScButtonSize.large ||
+                  widget.size == ScButtonSize.transport)
                 _buildLargeContent(effectiveColor, onColor, enabled)
               else
                 _buildNormalContent(effectiveColor, onColor, enabled, isFilled),
@@ -135,10 +139,10 @@ class _ScButtonState extends State<ScButton> with TickerProviderStateMixin {
 
     BoxDecoration buildDeco(double glowT) {
       final blurRadius = isPrimaryEnabled && !_pressed
-          ? 12.0 + glowT * 14.0  // 12 → 26
+          ? 12.0 + glowT * 14.0 // 12 → 26
           : 0.0;
       final glowAlpha = isPrimaryEnabled && !_pressed
-          ? 0.22 + glowT * 0.22  // 0.22 → 0.44
+          ? 0.22 + glowT * 0.22 // 0.22 → 0.44
           : 0.0;
       return BoxDecoration(
         color: isFilled
@@ -146,8 +150,10 @@ class _ScButtonState extends State<ScButton> with TickerProviderStateMixin {
             : (_pressed && enabled ? color.withValues(alpha: 0.12) : null),
         border: isFilled
             ? null
-            : Border.all(color: effectiveColor.withValues(alpha: enabled ? 0.7 : 0.3)),
-        borderRadius: BorderRadius.circular(widget.size == ScButtonSize.large ? 16 : 8),
+            : Border.all(
+                color: effectiveColor.withValues(alpha: enabled ? 0.7 : 0.3)),
+        borderRadius:
+            BorderRadius.circular(widget.size == ScButtonSize.large ? 16 : 8),
         boxShadow: blurRadius > 0
             ? [
                 BoxShadow(
@@ -206,13 +212,17 @@ class _ScButtonState extends State<ScButton> with TickerProviderStateMixin {
     final isTransport = widget.size == ScButtonSize.transport;
     return Text(
       widget.label,
-      style: (isTransport ? ScText.goButton.copyWith(fontSize: 18, letterSpacing: 4) : ScText.goButton).copyWith(
+      style: (isTransport
+              ? ScText.goButton.copyWith(fontSize: 18, letterSpacing: 4)
+              : ScText.goButton)
+          .copyWith(
         color: enabled ? onColor : ScColors.textDim,
       ),
     );
   }
 
-  Widget _buildNormalContent(Color color, Color onColor, bool enabled, bool isFilled) {
+  Widget _buildNormalContent(
+      Color color, Color onColor, bool enabled, bool isFilled) {
     // Filled buttons (primary): use onColor so text is readable on the fill.
     // Outlined/ghost buttons: use color (the accent) as text color.
     final textColor = enabled ? (isFilled ? onColor : color) : ScColors.textDim;

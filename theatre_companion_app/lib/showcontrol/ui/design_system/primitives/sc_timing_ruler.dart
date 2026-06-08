@@ -19,7 +19,7 @@ import '../sc_typography.dart';
 class ScTimingRuler extends StatefulWidget {
   final double? totalDurationMs;
   final double startMs;
-  final double endMs;       // 0 = use totalDurationMs
+  final double endMs; // 0 = use totalDurationMs
   final double fadeInMs;
   final double fadeOutMs;
 
@@ -63,9 +63,8 @@ class _ScTimingRulerState extends State<ScTimingRuler> {
       return _placeholder();
     }
 
-    final effectiveEnd = widget.endMs > 0 && widget.endMs <= total
-        ? widget.endMs
-        : total;
+    final effectiveEnd =
+        widget.endMs > 0 && widget.endMs <= total ? widget.endMs : total;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -76,17 +75,24 @@ class _ScTimingRulerState extends State<ScTimingRuler> {
             final w = constraints.maxWidth;
 
             // Normalized positions (0.0 – 1.0)
-            final startF      = (widget.startMs / total).clamp(0.0, 1.0);
-            final endF        = (effectiveEnd   / total).clamp(0.0, 1.0);
-            final fadeInEndF  = ((widget.startMs + widget.fadeInMs) / total).clamp(startF, endF);
-            final fadeOutStF  = ((effectiveEnd  - widget.fadeOutMs) / total).clamp(startF, endF);
+            final startF = (widget.startMs / total).clamp(0.0, 1.0);
+            final endF = (effectiveEnd / total).clamp(0.0, 1.0);
+            final fadeInEndF = ((widget.startMs + widget.fadeInMs) / total)
+                .clamp(startF, endF);
+            final fadeOutStF =
+                ((effectiveEnd - widget.fadeOutMs) / total).clamp(startF, endF);
 
             return GestureDetector(
               onPanStart: _interactive ? (d) => _onPanStart(d, w, total) : null,
-              onPanUpdate: _interactive ? (d) => _onPanUpdate(d, w, total, effectiveEnd) : null,
-              onPanEnd: _interactive ? (_) => setState(() => _dragging = null) : null,
+              onPanUpdate: _interactive
+                  ? (d) => _onPanUpdate(d, w, total, effectiveEnd)
+                  : null,
+              onPanEnd:
+                  _interactive ? (_) => setState(() => _dragging = null) : null,
               child: MouseRegion(
-                cursor: _interactive ? SystemMouseCursors.resizeColumn : MouseCursor.defer,
+                cursor: _interactive
+                    ? SystemMouseCursors.resizeColumn
+                    : MouseCursor.defer,
                 child: SizedBox(
                   height: 36,
                   child: CustomPaint(
@@ -129,49 +135,62 @@ class _ScTimingRulerState extends State<ScTimingRuler> {
         borderRadius: BorderRadius.circular(4),
       ),
       child: const Center(
-        child: Text('Keine Audiodatei', style: TextStyle(color: ScColors.textDim, fontSize: 11)),
+        child: Text('Keine Audiodatei',
+            style: TextStyle(color: ScColors.textDim, fontSize: 11)),
       ),
     );
   }
 
   void _onPanStart(DragStartDetails d, double w, double total) {
     final x = d.localPosition.dx;
-    final effectiveEnd = widget.endMs > 0 && widget.endMs <= total ? widget.endMs : total;
+    final effectiveEnd =
+        widget.endMs > 0 && widget.endMs <= total ? widget.endMs : total;
 
     // Determine which handle is closest (within 16px)
     final handles = <_Handle, double>{
-      if (widget.onStartChanged != null)   _Handle.start:   (widget.startMs / total) * w,
-      if (widget.onFadeInChanged != null)  _Handle.fadeIn:  ((widget.startMs + widget.fadeInMs) / total) * w,
-      if (widget.onFadeOutChanged != null) _Handle.fadeOut: ((effectiveEnd - widget.fadeOutMs) / total) * w,
-      if (widget.onEndChanged != null)     _Handle.end:     (effectiveEnd / total) * w,
+      if (widget.onStartChanged != null)
+        _Handle.start: (widget.startMs / total) * w,
+      if (widget.onFadeInChanged != null)
+        _Handle.fadeIn: ((widget.startMs + widget.fadeInMs) / total) * w,
+      if (widget.onFadeOutChanged != null)
+        _Handle.fadeOut: ((effectiveEnd - widget.fadeOutMs) / total) * w,
+      if (widget.onEndChanged != null) _Handle.end: (effectiveEnd / total) * w,
     };
 
     _Handle? nearest;
     double minDist = 20;
     for (final e in handles.entries) {
       final dist = (e.value - x).abs();
-      if (dist < minDist) { minDist = dist; nearest = e.key; }
+      if (dist < minDist) {
+        minDist = dist;
+        nearest = e.key;
+      }
     }
     setState(() => _dragging = nearest);
   }
 
-  void _onPanUpdate(DragUpdateDetails d, double w, double total, double effectiveEnd) {
+  void _onPanUpdate(
+      DragUpdateDetails d, double w, double total, double effectiveEnd) {
     if (_dragging == null) return;
     final dx = d.delta.dx;
     final dms = (dx / w) * total;
 
     switch (_dragging!) {
       case _Handle.start:
-        final newStart = (widget.startMs + dms).clamp(0.0, effectiveEnd - widget.fadeInMs);
+        final newStart =
+            (widget.startMs + dms).clamp(0.0, effectiveEnd - widget.fadeInMs);
         widget.onStartChanged?.call(newStart);
       case _Handle.fadeIn:
-        final newFi = (widget.fadeInMs + dms).clamp(0.0, effectiveEnd - widget.startMs);
+        final newFi =
+            (widget.fadeInMs + dms).clamp(0.0, effectiveEnd - widget.startMs);
         widget.onFadeInChanged?.call(newFi);
       case _Handle.fadeOut:
-        final newFo = (widget.fadeOutMs - dms).clamp(0.0, effectiveEnd - widget.startMs);
+        final newFo =
+            (widget.fadeOutMs - dms).clamp(0.0, effectiveEnd - widget.startMs);
         widget.onFadeOutChanged?.call(newFo);
       case _Handle.end:
-        final newEnd = (effectiveEnd + dms).clamp(widget.startMs + widget.fadeOutMs, total);
+        final newEnd = (effectiveEnd + dms)
+            .clamp(widget.startMs + widget.fadeOutMs, total);
         widget.onEndChanged?.call(newEnd);
     }
   }
@@ -201,10 +220,10 @@ class _RulerPainter extends CustomPainter {
     final h = size.height;
     final rr = const Radius.circular(4);
 
-    final startX    = startF   * w;
-    final endX      = endF     * w;
-    final fadeInX   = fadeInEndF * w;
-    final fadeOutX  = fadeOutStF * w;
+    final startX = startF * w;
+    final endX = endF * w;
+    final fadeInX = fadeInEndF * w;
+    final fadeOutX = fadeOutStF * w;
 
     // Background
     canvas.drawRRect(
@@ -260,9 +279,14 @@ class _RulerPainter extends CustomPainter {
 
     // Handle lines
     if (interactive) {
-      _drawHandle(canvas, startX, h, ScColors.active, dragging == _Handle.start);
-      if (fadeInX > startX) _drawHandle(canvas, fadeInX, h, ScColors.active.withValues(alpha: 0.6), dragging == _Handle.fadeIn);
-      if (endX > fadeOutX) _drawHandle(canvas, fadeOutX, h, ScColors.warn.withValues(alpha: 0.6), dragging == _Handle.fadeOut);
+      _drawHandle(
+          canvas, startX, h, ScColors.active, dragging == _Handle.start);
+      if (fadeInX > startX)
+        _drawHandle(canvas, fadeInX, h, ScColors.active.withValues(alpha: 0.6),
+            dragging == _Handle.fadeIn);
+      if (endX > fadeOutX)
+        _drawHandle(canvas, fadeOutX, h, ScColors.warn.withValues(alpha: 0.6),
+            dragging == _Handle.fadeOut);
       _drawHandle(canvas, endX, h, ScColors.textDim, dragging == _Handle.end);
     }
 
@@ -276,9 +300,11 @@ class _RulerPainter extends CustomPainter {
     );
   }
 
-  void _drawHandle(Canvas canvas, double x, double h, Color color, bool active) {
+  void _drawHandle(
+      Canvas canvas, double x, double h, Color color, bool active) {
     canvas.drawLine(
-      Offset(x, 0), Offset(x, h),
+      Offset(x, 0),
+      Offset(x, h),
       Paint()
         ..color = active ? color : color.withValues(alpha: 0.7)
         ..strokeWidth = active ? 2 : 1,
@@ -290,8 +316,10 @@ class _RulerPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_RulerPainter old) =>
-      old.startF != startF || old.endF != endF ||
-      old.fadeInEndF != fadeInEndF || old.fadeOutStF != fadeOutStF ||
+      old.startF != startF ||
+      old.endF != endF ||
+      old.fadeInEndF != fadeInEndF ||
+      old.fadeOutStF != fadeOutStF ||
       old.dragging != dragging;
 }
 
@@ -319,24 +347,31 @@ class _TimeLabels extends StatelessWidget {
       children: [
         // Start
         if (startMs > 0) ...[
-          Text('IN ${_fmt(startMs)}', style: ScText.statusSmall.copyWith(color: ScColors.textDim, fontSize: 9)),
+          Text('IN ${_fmt(startMs)}',
+              style: ScText.statusSmall
+                  .copyWith(color: ScColors.textDim, fontSize: 9)),
           const SizedBox(width: 6),
         ],
         // Fade in
         if (fadeInMs > 0) ...[
-          Text('FI ${_fmt(fadeInMs)}', style: ScText.statusSmall.copyWith(color: ScColors.active, fontSize: 9)),
+          Text('FI ${_fmt(fadeInMs)}',
+              style: ScText.statusSmall
+                  .copyWith(color: ScColors.active, fontSize: 9)),
           const SizedBox(width: 6),
         ],
         const Spacer(),
         // Fade out
         if (fadeOutMs > 0) ...[
-          Text('FO ${_fmt(fadeOutMs)}', style: ScText.statusSmall.copyWith(color: ScColors.warn, fontSize: 9)),
+          Text('FO ${_fmt(fadeOutMs)}',
+              style: ScText.statusSmall
+                  .copyWith(color: ScColors.warn, fontSize: 9)),
           const SizedBox(width: 6),
         ],
         // End
         Text(
           _fmt(endMs),
-          style: ScText.statusSmall.copyWith(color: ScColors.textDim, fontSize: 9),
+          style:
+              ScText.statusSmall.copyWith(color: ScColors.textDim, fontSize: 9),
         ),
       ],
     );

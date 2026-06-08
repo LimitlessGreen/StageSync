@@ -1,4 +1,4 @@
-﻿/// leader_election_engine_test.dart
+/// leader_election_engine_test.dart
 /// ────────────────────────────────────
 /// Unit-Tests fuer den LeaderElectionEngine.
 ///
@@ -13,6 +13,7 @@
 ///   4. onHeartbeatReceived setzt Watchdog nur fuer bekannten Leader zurueck.
 ///   5. startElectionRound broadcastet ein Bid-Paket.
 library leader_election_engine_test;
+
 import 'dart:async';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -20,6 +21,7 @@ import 'package:theatre_companion_app/network/isolate/isolate_messages.dart';
 import 'package:theatre_companion_app/network/models/ble_packet.dart';
 import 'package:theatre_companion_app/network/routing/leader_election_engine.dart';
 import 'package:theatre_companion_app/network/routing/peer_registry.dart';
+
 // ─── Testfaehige Unterklasse ──────────────────────────────────────────────────
 /// Ueberschreibt computeLocalScore(), damit keine Platform-Plugins benoetigt
 /// werden. Statt Battery/Connectivity gibt diese Klasse einen fixen Score
@@ -46,6 +48,7 @@ class TestableLeaderEngine extends LeaderElectionEngine {
         total: fixedScore,
       );
 }
+
 // ─────────────────────────────────────────────────────────────────────────────
 void main() {
   late PeerRegistry peers;
@@ -78,6 +81,7 @@ void main() {
       },
     );
   }
+
   setUp(() {
     peers = PeerRegistry();
     broadcastedPackets = [];
@@ -189,7 +193,8 @@ void main() {
         expect(leadershipEvents.first.isThisDevice, isFalse);
       });
     });
-    test('lokales Geraet gewinnt Tiebreaker wenn ID lexikografisch groesser', () {
+    test('lokales Geraet gewinnt Tiebreaker wenn ID lexikografisch groesser',
+        () {
       fakeAsync((async) {
         // 'zzz' > 'aaa' lexikografisch → lokal gewinnt
         final engine = makeEngine(localId: 'device-zzz', fixedScore: 100);
@@ -260,5 +265,3 @@ void main() {
     });
   });
 }
-
-

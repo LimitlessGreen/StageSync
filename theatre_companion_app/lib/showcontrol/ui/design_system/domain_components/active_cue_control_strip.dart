@@ -18,6 +18,7 @@ class ActiveCueControlStrip extends StatefulWidget {
   final VoidCallback? onStop;
   final VoidCallback? onPause;
   final VoidCallback? onResume;
+
   /// Called when the user commits a new fade duration (drag end / preset select).
   /// Parent should persist this to both fadeInMs and fadeOutMs of the cue.
   final ValueChanged<double>? onFadeDurationSaved;
@@ -67,7 +68,9 @@ class _ActiveCueControlStripState extends State<ActiveCueControlStrip>
 
   void _syncFadeDuration() {
     if (widget.cue.params case AudioParams p) {
-      final ms = p.fadeOutMs > 0 ? p.fadeOutMs : (p.fadeInMs > 0 ? p.fadeInMs : 1000.0);
+      final ms = p.fadeOutMs > 0
+          ? p.fadeOutMs
+          : (p.fadeInMs > 0 ? p.fadeInMs : 1000.0);
       if (ms != _fadeDurationMs) setState(() => _fadeDurationMs = ms);
     }
   }
@@ -78,7 +81,7 @@ class _ActiveCueControlStripState extends State<ActiveCueControlStrip>
     super.dispose();
   }
 
-  bool get _isCuePaused    => widget.playhead.isCuePaused(widget.cue.id);
+  bool get _isCuePaused => widget.playhead.isCuePaused(widget.cue.id);
   bool get _isGlobalPaused => widget.playhead.isPaused;
 
   @override
@@ -90,10 +93,14 @@ class _ActiveCueControlStripState extends State<ActiveCueControlStrip>
     // Global pause: Fade Up/Out and per-cue Pause are meaningless — only Stop
     // and the transport-level Resume (in the main transport bar) make sense.
     // Per-cue paused: Fade Out is redundant; Pause is replaced by Resume.
-    final canFadeUp  = !_isGlobalPaused && _isCuePaused     && widget.onFadeUp  != null;
-    final canFadeOut = !_isGlobalPaused && !_isCuePaused    && widget.onFadeOut != null;
-    final canPause   = !_isGlobalPaused && !_isCuePaused    && widget.onPause   != null;
-    final canResume  = !_isGlobalPaused && _isCuePaused     && widget.onResume  != null;
+    final canFadeUp =
+        !_isGlobalPaused && _isCuePaused && widget.onFadeUp != null;
+    final canFadeOut =
+        !_isGlobalPaused && !_isCuePaused && widget.onFadeOut != null;
+    final canPause =
+        !_isGlobalPaused && !_isCuePaused && widget.onPause != null;
+    final canResume =
+        !_isGlobalPaused && _isCuePaused && widget.onResume != null;
 
     return SizeTransition(
       sizeFactor: _slideAnim,
@@ -106,24 +113,34 @@ class _ActiveCueControlStripState extends State<ActiveCueControlStrip>
                   params: params,
                   isPaused: _isCuePaused,
                   fadeDurationMs: _fadeDurationMs,
-                  onFadeDurationChanged: (v) => setState(() => _fadeDurationMs = v),
+                  onFadeDurationChanged: (v) =>
+                      setState(() => _fadeDurationMs = v),
                   onFadeDurationSaved: widget.onFadeDurationSaved,
-                  onFadeUp:  canFadeUp  ? () => widget.onFadeUp!(_fadeDurationMs)  : null,
-                  onFadeOut: canFadeOut ? () => widget.onFadeOut!(_fadeDurationMs) : null,
-                  onPause:   canPause   ? widget.onPause   : null,
-                  onResume:  canResume  ? widget.onResume  : null,
+                  onFadeUp: canFadeUp
+                      ? () => widget.onFadeUp!(_fadeDurationMs)
+                      : null,
+                  onFadeOut: canFadeOut
+                      ? () => widget.onFadeOut!(_fadeDurationMs)
+                      : null,
+                  onPause: canPause ? widget.onPause : null,
+                  onResume: canResume ? widget.onResume : null,
                   onStop: widget.onStop,
                 )
               : _DesktopLayout(
                   params: params,
                   isPaused: _isCuePaused,
                   fadeDurationMs: _fadeDurationMs,
-                  onFadeDurationChanged: (v) => setState(() => _fadeDurationMs = v),
+                  onFadeDurationChanged: (v) =>
+                      setState(() => _fadeDurationMs = v),
                   onFadeDurationSaved: widget.onFadeDurationSaved,
-                  onFadeUp:  canFadeUp  ? () => widget.onFadeUp!(_fadeDurationMs)  : null,
-                  onFadeOut: canFadeOut ? () => widget.onFadeOut!(_fadeDurationMs) : null,
-                  onPause:   canPause   ? widget.onPause   : null,
-                  onResume:  canResume  ? widget.onResume  : null,
+                  onFadeUp: canFadeUp
+                      ? () => widget.onFadeUp!(_fadeDurationMs)
+                      : null,
+                  onFadeOut: canFadeOut
+                      ? () => widget.onFadeOut!(_fadeDurationMs)
+                      : null,
+                  onPause: canPause ? widget.onPause : null,
+                  onResume: canResume ? widget.onResume : null,
                   onStop: widget.onStop,
                 );
         },
@@ -166,13 +183,24 @@ class _DesktopLayout extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Row(
         children: [
-          _FadeDurationPicker(value: fadeDurationMs, onChanged: onFadeDurationChanged, onSaved: onFadeDurationSaved),
+          _FadeDurationPicker(
+              value: fadeDurationMs,
+              onChanged: onFadeDurationChanged,
+              onSaved: onFadeDurationSaved),
           const SizedBox(width: 8),
           _divider(),
           const SizedBox(width: 8),
-          _StripButton(icon: Icons.trending_up,   label: 'Fade Up',  color: ScColors.active,         onPressed: onFadeUp),
+          _StripButton(
+              icon: Icons.trending_up,
+              label: 'Fade Up',
+              color: ScColors.active,
+              onPressed: onFadeUp),
           const SizedBox(width: 4),
-          _StripButton(icon: Icons.trending_down, label: 'Fade Out', color: ScColors.warn,           onPressed: onFadeOut),
+          _StripButton(
+              icon: Icons.trending_down,
+              label: 'Fade Out',
+              color: ScColors.warn,
+              onPressed: onFadeOut),
           const SizedBox(width: 8),
           _divider(),
           const SizedBox(width: 8),
@@ -183,7 +211,11 @@ class _DesktopLayout extends StatelessWidget {
             onPressed: isPaused ? onResume : onPause,
           ),
           const SizedBox(width: 4),
-          _StripButton(icon: Icons.stop, label: 'Stop', color: ScColors.error, onPressed: onStop),
+          _StripButton(
+              icon: Icons.stop,
+              label: 'Stop',
+              color: ScColors.error,
+              onPressed: onStop),
           const Spacer(),
           _LevelReadout(params: params),
         ],
@@ -404,6 +436,7 @@ class _StripButton extends StatelessWidget {
 class _FadeDurationPicker extends StatefulWidget {
   final double value;
   final ValueChanged<double> onChanged;
+
   /// Called when user commits a value (drag end or preset picked).
   final ValueChanged<double>? onSaved;
   final bool mobilePresets;
@@ -439,14 +472,18 @@ class _FadeDurationPickerState extends State<_FadeDurationPicker> {
       context: context,
       color: ScColors.surface2,
       position: RelativeRect.fromLTRB(
-        pos.dx, pos.dy + box.size.height,
-        size.width - pos.dx - box.size.width, 0,
+        pos.dx,
+        pos.dy + box.size.height,
+        size.width - pos.dx - box.size.width,
+        0,
       ),
-      items: _presets.map((p) => PopupMenuItem(
-        value: p,
-        height: 36,
-        child: Text(_fmt(p), style: ScText.label),
-      )).toList(),
+      items: _presets
+          .map((p) => PopupMenuItem(
+                value: p,
+                height: 36,
+                child: Text(_fmt(p), style: ScText.label),
+              ))
+          .toList(),
     ).then((v) {
       if (v != null) {
         widget.onChanged(v);
@@ -506,7 +543,8 @@ class _FadeDurationPickerState extends State<_FadeDurationPicker> {
       },
       onLongPress: () => _showPresetsMenu(context),
       child: Tooltip(
-        message: 'Fade-Dauer — Drag, Doppelklick = 1s, Gedrückt halten = Presets',
+        message:
+            'Fade-Dauer — Drag, Doppelklick = 1s, Gedrückt halten = Presets',
         child: inner,
       ),
     );

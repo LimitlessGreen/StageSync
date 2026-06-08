@@ -135,7 +135,9 @@ void main() {
       expect(cue.logicalOutputId, 'surround');
     });
 
-    test('logicalOutputId falls back to targetNodeId when logicalOutputId empty', () {
+    test(
+        'logicalOutputId falls back to targetNodeId when logicalOutputId empty',
+        () {
       final proto = pb.Cue()
         ..cueId = 'c'
         ..number = '1'
@@ -173,8 +175,8 @@ void main() {
 
   group('cueFromProto — WaitParams', () {
     test('maps durationMs', () {
-      final cue = ShowControlRepository.cueFromProto(
-          _waitCueProto(durationMs: 5000));
+      final cue =
+          ShowControlRepository.cueFromProto(_waitCueProto(durationMs: 5000));
       expect(cue.params, isA<WaitParams>());
       expect((cue.params as WaitParams).durationMs, 5000);
     });
@@ -285,8 +287,7 @@ void main() {
     });
 
     test('GotoCue roundtrip preserves targetCueId', () {
-      final original =
-          ShowControlRepository.cueFromProto(_gotoCueProto());
+      final original = ShowControlRepository.cueFromProto(_gotoCueProto());
       final proto = ShowControlRepository.cueToProto(original);
       final rt = ShowControlRepository.cueFromProto(proto);
       expect((rt.params as GotoParams).targetCueId, 'cue-1');
@@ -298,10 +299,9 @@ void main() {
   group('patchConfigFromProto', () {
     test('maps logicalOutputs', () {
       final proto = pb.PatchConfig()
-        ..logicalOutputs.add(
-            pb.PatchLogicalOutput()
-              ..id = 'main-lr'
-              ..name = 'Main L/R');
+        ..logicalOutputs.add(pb.PatchLogicalOutput()
+          ..id = 'main-lr'
+          ..name = 'Main L/R');
       final config = ShowControlRepository.patchConfigFromProto(proto);
       expect(config.logicalOutputs, hasLength(1));
       expect(config.logicalOutputs.first.id, 'main-lr');
@@ -310,22 +310,20 @@ void main() {
 
     test('maps nodePatches', () {
       final proto = pb.PatchConfig()
-        ..nodeAssigns.add(
-            pb.PatchNodeAssign()
-              ..logicalOutputId = 'main-lr'
-              ..nodeIds.addAll(['node-1', 'node-2']));
+        ..nodeAssigns.add(pb.PatchNodeAssign()
+          ..logicalOutputId = 'main-lr'
+          ..nodeIds.addAll(['node-1', 'node-2']));
       final config = ShowControlRepository.patchConfigFromProto(proto);
       expect(config.nodePatches.first.nodeIds, ['node-1', 'node-2']);
     });
 
     test('maps devicePatches', () {
       final proto = pb.PatchConfig()
-        ..deviceAssigns.add(
-            pb.PatchDeviceAssign()
-              ..logicalOutputId = 'main-lr'
-              ..nodeId = 'node-1'
-              ..deviceIndex = 2
-              ..deviceName = 'ASIO Out 1-2');
+        ..deviceAssigns.add(pb.PatchDeviceAssign()
+          ..logicalOutputId = 'main-lr'
+          ..nodeId = 'node-1'
+          ..deviceIndex = 2
+          ..deviceName = 'ASIO Out 1-2');
       final config = ShowControlRepository.patchConfigFromProto(proto);
       final dp = config.devicePatches.first;
       expect(dp.deviceIndex, 2);
@@ -371,15 +369,13 @@ void main() {
 
     test('online node → NodeHealthPhase.online', () {
       final nodes = [_nodeInfo(id: 'n1', name: 'Audio', online: true)];
-      final statuses =
-          ShowControlRepository.nodeStatusesFromNodes(nodes, true);
+      final statuses = ShowControlRepository.nodeStatusesFromNodes(nodes, true);
       expect(statuses.first.health, NodeHealthPhase.online);
     });
 
     test('offline node → NodeHealthPhase.offline', () {
       final nodes = [_nodeInfo(id: 'n1', name: 'Audio', online: false)];
-      final statuses =
-          ShowControlRepository.nodeStatusesFromNodes(nodes, true);
+      final statuses = ShowControlRepository.nodeStatusesFromNodes(nodes, true);
       expect(statuses.first.health, NodeHealthPhase.offline);
     });
 
@@ -401,8 +397,7 @@ void main() {
             name: 'A',
             tasks: [pb_common.NodeTask.NODE_TASK_AUDIO_OUTPUT])
       ];
-      final statuses =
-          ShowControlRepository.nodeStatusesFromNodes(nodes, true);
+      final statuses = ShowControlRepository.nodeStatusesFromNodes(nodes, true);
       expect(statuses.first.tasks, contains('audio'));
     });
 

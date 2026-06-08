@@ -74,8 +74,10 @@ void main() {
     });
 
     test('startedAtMs == 0 → startedServerMs null', () {
-      final out = applyGridExecutionEvent(const {},
-          ev(GridExecutionEvent_Type.CLIP_PLAYING, clipId: 'c1', startedAtMs: 0));
+      final out = applyGridExecutionEvent(
+          const {},
+          ev(GridExecutionEvent_Type.CLIP_PLAYING,
+              clipId: 'c1', startedAtMs: 0));
       expect(out['c1']!.startedServerMs, isNull);
     });
   });

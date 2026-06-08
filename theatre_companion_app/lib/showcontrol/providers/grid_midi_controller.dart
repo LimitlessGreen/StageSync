@@ -115,7 +115,8 @@ class GridMidiController extends StateNotifier<GridMidiState> {
         );
       }
       if (target == null) {
-        state = state.copyWith(enabled: true, connected: false, error: 'Kein MIDI-Gerät gefunden');
+        state = state.copyWith(
+            enabled: true, connected: false, error: 'Kein MIDI-Gerät gefunden');
         return;
       }
       await _midi.connectToDevice(target);
@@ -127,9 +128,11 @@ class GridMidiController extends StateNotifier<GridMidiState> {
         _syncLeds(next);
       }, fireImmediately: true);
 
-      state = state.copyWith(enabled: true, connected: true, deviceName: target.name, error: null);
+      state = state.copyWith(
+          enabled: true, connected: true, deviceName: target.name, error: null);
     } catch (e) {
-      state = state.copyWith(enabled: true, connected: false, error: e.toString());
+      state =
+          state.copyWith(enabled: true, connected: false, error: e.toString());
     }
   }
 

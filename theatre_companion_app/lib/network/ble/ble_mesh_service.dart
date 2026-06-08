@@ -1,4 +1,4 @@
-﻿/// ble_mesh_service.dart
+/// ble_mesh_service.dart
 /// ──────────────────────
 /// Einheitlicher BLE-Mesh-Service für alle nativen Plattformen
 /// (Android, iOS, Windows, macOS) via `bluetooth_low_energy` v6.x.
@@ -23,82 +23,97 @@
 ///   Characteristic UUID: kStageSyncCharUuid
 ///     Properties: WRITE, WRITE_WITHOUT_RESPONSE, NOTIFY
 library;
+
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:bluetooth_low_energy/bluetooth_low_energy.dart';
-import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, TargetPlatform;
 import '../crypto/aes_gcm_service.dart';
 import '../models/ble_packet.dart';
 import '../platform/abstract_ble_service.dart';
 import '../routing/peer_registry.dart';
 export '../platform/abstract_ble_service.dart' show IncomingBlePacket;
+
 // ─── UUID-Konstanten ──────────────────────────────────────────────────────────
 const String kStageSyncServiceUuid = '4a4d4553-482d-0000-0000-535441474553';
-const String kStageSyncCharUuid    = '4a4d4553-482d-0001-0000-535441474553';
-const String kStageSyncCccdUuid    = '00002902-0000-1000-8000-00805f9b34fb';
-const String kStageSyncDeviceName  = 'StageSync';
-const int      kMaxGattConnections        = 7;
-const int      kScanRestartIntervalMs     = 10000;
-const Duration kGattConnectTimeout        = Duration(seconds: 12);
-const Duration kPeripheralRetryBaseDelay  = Duration(seconds: 15);
-const int      kMaxPeripheralRetries      = 5;
+const String kStageSyncCharUuid = '4a4d4553-482d-0001-0000-535441474553';
+const String kStageSyncCccdUuid = '00002902-0000-1000-8000-00805f9b34fb';
+const String kStageSyncDeviceName = 'StageSync';
+const int kMaxGattConnections = 7;
+const int kScanRestartIntervalMs = 10000;
+const Duration kGattConnectTimeout = Duration(seconds: 12);
+const Duration kPeripheralRetryBaseDelay = Duration(seconds: 15);
+const int kMaxPeripheralRetries = 5;
+
 /// Wartezeit bis Fallback-Scan (ohne UUID-Filter) aktiviert wird.
-const Duration kFallbackScanDelay         = Duration(seconds: 15);
+const Duration kFallbackScanDelay = Duration(seconds: 15);
+
 // ─────────────────────────────────────────────────────────────────────────────
 class BleMeshService implements AbstractBleService {
-  final PeerRegistry  _peers;
+  final PeerRegistry _peers;
   final AesGcmService _crypto;
-  final CentralManager    _central    = CentralManager();
+  final CentralManager _central = CentralManager();
   final PeripheralManager _peripheral = PeripheralManager();
-  final StreamController<String>            _errorController    = StreamController<String>.broadcast();
-  final StreamController<IncomingBlePacket> _incomingController = StreamController<IncomingBlePacket>.broadcast();
-  @override Stream<String>            get onBleError      => _errorController.stream;
-  @override Stream<IncomingBlePacket> get onPacketReceived => _incomingController.stream;
+  final StreamController<String> _errorController =
+      StreamController<String>.broadcast();
+  final StreamController<IncomingBlePacket> _incomingController =
+      StreamController<IncomingBlePacket>.broadcast();
+  @override
+  Stream<String> get onBleError => _errorController.stream;
+  @override
+  Stream<IncomingBlePacket> get onPacketReceived => _incomingController.stream;
   // ── Central-Zustand ────────────────────────────────────────────────────────
-  final Map<String, Peripheral>        _discovered     = {};
+  final Map<String, Peripheral> _discovered = {};
   final Map<String, GATTCharacteristic> _connectedChars = {};
-  final Set<String>                    _connectingSet  = {};
-  bool   _isScanning         = false;
-  bool   _isFallbackScanMode = false;
+  final Set<String> _connectingSet = {};
+  bool _isScanning = false;
+  bool _isFallbackScanMode = false;
   Timer? _scanRestartTimer;
   Timer? _fallbackScanTimer;
   // ── Peripheral-Zustand ─────────────────────────────────────────────────────
-  bool   _peripheralStarted   = false;
-  int    _peripheralRetryCount = 0;
+  bool _peripheralStarted = false;
+  int _peripheralRetryCount = 0;
   Timer? _peripheralRetryTimer;
-  GATTCharacteristic?        _mutableChar;
+  GATTCharacteristic? _mutableChar;
   final Map<String, Central> _notifySubscribers = {};
   // ── Lifecycle Guard ────────────────────────────────────────────────────────
   bool _stopped = false;
   // ── BLE-State Subscriptions ────────────────────────────────────────────────
   StreamSubscription<BluetoothLowEnergyStateChangedEventArgs>? _centralStateSub;
-  StreamSubscription<BluetoothLowEnergyStateChangedEventArgs>? _peripheralStateSub;
+  StreamSubscription<BluetoothLowEnergyStateChangedEventArgs>?
+      _peripheralStateSub;
   // ── Event Subscriptions ────────────────────────────────────────────────────
-  StreamSubscription<DiscoveredEventArgs>?                           _discoverySub;
-  StreamSubscription<PeripheralConnectionStateChangedEventArgs>?     _connStateSub;
-  StreamSubscription<GATTCharacteristicNotifiedEventArgs>?           _notifySub;
-  StreamSubscription<GATTCharacteristicWriteRequestedEventArgs>?     _writeReqSub;
-  StreamSubscription<GATTCharacteristicNotifyStateChangedEventArgs>? _notifyStateSub;
+  StreamSubscription<DiscoveredEventArgs>? _discoverySub;
+  StreamSubscription<PeripheralConnectionStateChangedEventArgs>? _connStateSub;
+  StreamSubscription<GATTCharacteristicNotifiedEventArgs>? _notifySub;
+  StreamSubscription<GATTCharacteristicWriteRequestedEventArgs>? _writeReqSub;
+  StreamSubscription<GATTCharacteristicNotifyStateChangedEventArgs>?
+      _notifyStateSub;
   BleMeshService({required PeerRegistry peers, required AesGcmService crypto})
-      : _peers = peers, _crypto = crypto;
+      : _peers = peers,
+        _crypto = crypto;
 
-    // Workaround: bluetooth_low_energy_windows sends discovered callbacks from
-    // a non-platform thread in 6.2.1. Disable Windows central scan temporarily
-    // to avoid runtime channel thread violations/crashes.
-    bool get _windowsCentralScanDisabled =>
+  // Workaround: bluetooth_low_energy_windows sends discovered callbacks from
+  // a non-platform thread in 6.2.1. Disable Windows central scan temporarily
+  // to avoid runtime channel thread violations/crashes.
+  bool get _windowsCentralScanDisabled =>
       defaultTargetPlatform == TargetPlatform.windows;
   // ─── Status-Getter ────────────────────────────────────────────────────────
-  @override bool get isAdvertising        => _peripheralStarted;
-  @override bool get isScanning           => _isScanning;
-  @override bool get isFallbackScanMode   => _isFallbackScanMode;
-  @override int  get activeConnectionCount => _connectedChars.length;
+  @override
+  bool get isAdvertising => _peripheralStarted;
+  @override
+  bool get isScanning => _isScanning;
+  @override
+  bool get isFallbackScanMode => _isFallbackScanMode;
+  @override
+  int get activeConnectionCount => _connectedChars.length;
   // ─── Lifecycle ────────────────────────────────────────────────────────────
   @override
   Future<void> start() async {
     _stopped = false;
     // 1. State-Änderungen abonnieren (VOR authorize/start).
-    _centralStateSub =
-        _central.stateChanged.listen(_onCentralStateChanged);
+    _centralStateSub = _central.stateChanged.listen(_onCentralStateChanged);
     _peripheralStateSub =
         _peripheral.stateChanged.listen(_onPeripheralStateChanged);
 
@@ -134,7 +149,7 @@ class BleMeshService implements AbstractBleService {
     if (_stopped) return;
 
     // Aktuellen State lesen und sofort starten falls bereits poweredOn.
-    final centralState    = _central.state;
+    final centralState = _central.state;
     final peripheralState = _peripheral.state;
     _emitStatus(
       'BLE-Adapter-State: Central=${centralState.name}, '
@@ -150,18 +165,19 @@ class BleMeshService implements AbstractBleService {
         !_windowsCentralScanDisabled) {
       _subscribeConnectionEvents();
       _subscribeNotifyEvents();
-      _startScan().ignore();        // fire-and-forget – kein await
+      _startScan().ignore(); // fire-and-forget – kein await
       _scheduleScanRestart();
       _scheduleFallbackScan();
     }
     if (peripheralState == BluetoothLowEnergyState.poweredOn) {
-      _startPeripheral().ignore();  // fire-and-forget – kein await
+      _startPeripheral().ignore(); // fire-and-forget – kein await
     }
   }
+
   @override
   Future<void> stop() async {
     _stopped = true;
-    _isScanning         = false;
+    _isScanning = false;
     _isFallbackScanMode = false;
     _scanRestartTimer?.cancel();
     _fallbackScanTimer?.cancel();
@@ -172,12 +188,14 @@ class BleMeshService implements AbstractBleService {
     await _connStateSub?.cancel();
     await _notifySub?.cancel();
     try {
-      await _central.stopDiscovery()
+      await _central
+          .stopDiscovery()
           .timeout(const Duration(seconds: 5), onTimeout: () {});
     } catch (_) {}
     for (final peer in List.of(_discovered.values)) {
       try {
-        await _central.disconnect(peer)
+        await _central
+            .disconnect(peer)
             .timeout(const Duration(seconds: 3), onTimeout: () {});
       } catch (_) {}
     }
@@ -185,16 +203,19 @@ class BleMeshService implements AbstractBleService {
     await _notifyStateSub?.cancel();
     if (_peripheralStarted) {
       try {
-        await _peripheral.stopAdvertising()
+        await _peripheral
+            .stopAdvertising()
             .timeout(const Duration(seconds: 5), onTimeout: () {});
-        await _peripheral.removeAllServices()
+        await _peripheral
+            .removeAllServices()
             .timeout(const Duration(seconds: 5), onTimeout: () {});
       } catch (_) {}
       _peripheralStarted = false;
     }
     if (!_incomingController.isClosed) await _incomingController.close();
-    if (!_errorController.isClosed)    await _errorController.close();
+    if (!_errorController.isClosed) await _errorController.close();
   }
+
   // ─── BLE-State Callbacks ──────────────────────────────────────────────────
   void _onCentralStateChanged(BluetoothLowEnergyStateChangedEventArgs args) {
     _emitStatus('Central-State: ${args.state.name}');
@@ -219,8 +240,8 @@ class BleMeshService implements AbstractBleService {
       _fallbackScanTimer?.cancel();
     }
   }
-  void _onPeripheralStateChanged(
-      BluetoothLowEnergyStateChangedEventArgs args) {
+
+  void _onPeripheralStateChanged(BluetoothLowEnergyStateChangedEventArgs args) {
     _emitStatus('Peripheral-State: ${args.state.name}');
     if (_stopped) return;
     if (args.state == BluetoothLowEnergyState.poweredOn) {
@@ -229,6 +250,7 @@ class BleMeshService implements AbstractBleService {
       _peripheralStarted = false;
     }
   }
+
   // ─── Peripheral-Rolle ────────────────────────────────────────────────────
   Future<void> _startPeripheral() async {
     if (_stopped) return;
@@ -260,22 +282,26 @@ class BleMeshService implements AbstractBleService {
         includedServices: [],
         characteristics: [char],
       );
-      await _peripheral.removeAllServices()
+      await _peripheral
+          .removeAllServices()
           .timeout(const Duration(seconds: 8), onTimeout: () {});
-      await _peripheral.addService(service)
-          .timeout(const Duration(seconds: 8), onTimeout: () {
+      await _peripheral.addService(service).timeout(const Duration(seconds: 8),
+          onTimeout: () {
         throw TimeoutException('addService() timeout');
       });
       _subscribePeripheralEvents(char);
-      await _peripheral.startAdvertising(Advertisement(
+      await _peripheral
+          .startAdvertising(Advertisement(
         name: kStageSyncDeviceName,
         serviceUUIDs: [UUID.fromString(kStageSyncServiceUuid)],
-      )).timeout(const Duration(seconds: 10), onTimeout: () {
+      ))
+          .timeout(const Duration(seconds: 10), onTimeout: () {
         throw TimeoutException('startAdvertising() timeout');
       });
-      _peripheralStarted    = true;
+      _peripheralStarted = true;
       _peripheralRetryCount = 0;
-      _emitStatus('Peripheral gestartet – sichtbar als "$kStageSyncDeviceName".');
+      _emitStatus(
+          'Peripheral gestartet – sichtbar als "$kStageSyncDeviceName".');
     } catch (e) {
       _peripheralStarted = false;
       _reportError(
@@ -285,6 +311,7 @@ class BleMeshService implements AbstractBleService {
       _schedulePeripheralRetry();
     }
   }
+
   void _schedulePeripheralRetry() {
     if (_stopped || _peripheralRetryCount >= kMaxPeripheralRetries) {
       if (_peripheralRetryCount >= kMaxPeripheralRetries) {
@@ -300,13 +327,17 @@ class BleMeshService implements AbstractBleService {
     _peripheralRetryTimer?.cancel();
     _peripheralRetryTimer = Timer(delay, _startPeripheral);
   }
+
   void _subscribePeripheralEvents(GATTCharacteristic char) {
     _writeReqSub?.cancel();
-    _writeReqSub = _peripheral.characteristicWriteRequested.listen((args) async {
+    _writeReqSub =
+        _peripheral.characteristicWriteRequested.listen((args) async {
       if (args.characteristic.uuid != char.uuid) return;
-      final centralUuid    = args.central.uuid.toString();
+      final centralUuid = args.central.uuid.toString();
       final encryptedBytes = args.request.value;
-      try { await _peripheral.respondWriteRequest(args.request); } catch (_) {}
+      try {
+        await _peripheral.respondWriteRequest(args.request);
+      } catch (_) {}
       _peers.touchPeer(
         deviceId: centralUuid,
         deviceShortId: shortIdFromString(centralUuid),
@@ -327,12 +358,14 @@ class BleMeshService implements AbstractBleService {
       }
     });
   }
+
   // ─── Central-Rolle: Scan ──────────────────────────────────────────────────
   /// Primärer Scan: filtert nach Service-UUID (effizient, batterieschonend).
   Future<void> _startScan() async {
     if (_stopped) return;
     try {
-      await _central.stopDiscovery()
+      await _central
+          .stopDiscovery()
           .timeout(const Duration(seconds: 5), onTimeout: () {});
     } catch (_) {}
     _isFallbackScanMode = false;
@@ -359,14 +392,16 @@ class BleMeshService implements AbstractBleService {
   Future<void> _startScanNoFilter() async {
     if (_stopped) return;
     try {
-      await _central.stopDiscovery()
+      await _central
+          .stopDiscovery()
           .timeout(const Duration(seconds: 5), onTimeout: () {});
     } catch (_) {}
     _isFallbackScanMode = true;
     _discoverySub?.cancel();
     _discoverySub = _central.discovered.listen(_onDeviceDiscoveredUnfiltered);
     try {
-      await _central.startDiscovery() // kein serviceUUIDs-Filter
+      await _central
+          .startDiscovery() // kein serviceUUIDs-Filter
           .timeout(const Duration(seconds: 10), onTimeout: () {
         _reportError('Fallback-Scan: startDiscovery() Timeout.');
       });
@@ -380,6 +415,7 @@ class BleMeshService implements AbstractBleService {
       _reportError('Fallback-Scan fehlgeschlagen: $e');
     }
   }
+
   void _scheduleScanRestart() {
     _scanRestartTimer?.cancel();
     _scanRestartTimer = Timer.periodic(
@@ -395,6 +431,7 @@ class BleMeshService implements AbstractBleService {
       },
     );
   }
+
   /// Plant Wechsel auf Fallback-Scan wenn nach [kFallbackScanDelay] kein Peer
   /// gefunden wurde.
   void _scheduleFallbackScan() {
@@ -410,11 +447,13 @@ class BleMeshService implements AbstractBleService {
       }
     });
   }
+
   void _onDeviceDiscovered(DiscoveredEventArgs args) {
     if (_stopped) return;
     _fallbackScanTimer?.cancel(); // Peer gefunden → kein Fallback nötig
     _connectOrUpdate(args.peripheral, args.rssi);
   }
+
   /// Callback für ungefilterten Scan – filtert manuell nach Name oder UUID.
   void _onDeviceDiscoveredUnfiltered(DiscoveredEventArgs args) {
     if (_stopped) return;
@@ -432,6 +471,7 @@ class BleMeshService implements AbstractBleService {
       _connectOrUpdate(args.peripheral, args.rssi);
     }
   }
+
   void _connectOrUpdate(Peripheral peer, int rssi) {
     final peerUuid = peer.uuid.toString();
     _discovered[peerUuid] = peer;
@@ -446,6 +486,7 @@ class BleMeshService implements AbstractBleService {
       _connectToPeer(peer).ignore();
     }
   }
+
   void _subscribeConnectionEvents() {
     _connStateSub?.cancel();
     _connStateSub = _central.connectionStateChanged.listen((args) {
@@ -455,6 +496,7 @@ class BleMeshService implements AbstractBleService {
       }
     });
   }
+
   void _subscribeNotifyEvents() {
     _notifySub?.cancel();
     _notifySub = _central.characteristicNotified.listen((args) async {
@@ -462,6 +504,7 @@ class BleMeshService implements AbstractBleService {
       await _onRawBytesReceived(peerUuid, args.value);
     });
   }
+
   Future<void> _connectToPeer(Peripheral peer) async {
     final peerUuid = peer.uuid.toString();
     if (_stopped ||
@@ -472,7 +515,7 @@ class BleMeshService implements AbstractBleService {
     _connectingSet.add(peerUuid);
     try {
       await _central.connect(peer).timeout(kGattConnectTimeout);
-      final services  = await _central.discoverGATT(peer);
+      final services = await _central.discoverGATT(peer);
       final targetChar = _findStageSyncChar(services);
       if (targetChar == null) {
         _reportError(
@@ -491,7 +534,9 @@ class BleMeshService implements AbstractBleService {
       if (targetChar.properties.contains(GATTCharacteristicProperty.notify)) {
         try {
           await _central.setCharacteristicNotifyState(
-            peer, targetChar, state: true,
+            peer,
+            targetChar,
+            state: true,
           );
         } catch (e) {
           _reportError('NOTIFY-Subscription auf $peerUuid fehlgeschlagen: $e');
@@ -507,8 +552,9 @@ class BleMeshService implements AbstractBleService {
       _connectingSet.remove(peerUuid);
     }
   }
+
   GATTCharacteristic? _findStageSyncChar(List<GATTService> services) {
-    final svcUuid  = UUID.fromString(kStageSyncServiceUuid);
+    final svcUuid = UUID.fromString(kStageSyncServiceUuid);
     final charUuid = UUID.fromString(kStageSyncCharUuid);
     for (final svc in services) {
       if (svc.uuid != svcUuid) continue;
@@ -518,6 +564,7 @@ class BleMeshService implements AbstractBleService {
     }
     return null;
   }
+
   void _onPeerDisconnected(String peerUuid) {
     _connectedChars.remove(peerUuid);
     _connectingSet.remove(peerUuid);
@@ -533,6 +580,7 @@ class BleMeshService implements AbstractBleService {
       );
     }
   }
+
   // ─── Send ─────────────────────────────────────────────────────────────────
   @override
   Future<void> sendPacket(
@@ -540,11 +588,13 @@ class BleMeshService implements AbstractBleService {
     final encrypted = await _crypto.encrypt(plainPacketBytes);
     await _sendEncryptedToDevice(targetDeviceId, encrypted);
   }
+
   @override
   Future<void> sendRawEncryptedPacket(
       String targetDeviceId, Uint8List alreadyEncryptedBytes) async {
     await _sendEncryptedToDevice(targetDeviceId, alreadyEncryptedBytes);
   }
+
   Future<void> _sendEncryptedToDevice(
       String peerUuid, Uint8List encryptedBytes) async {
     // Weg 1: Als Central via GATT-Write.
@@ -553,7 +603,8 @@ class BleMeshService implements AbstractBleService {
     if (char != null && peer != null) {
       try {
         await _central.writeCharacteristic(
-          peer, char,
+          peer,
+          char,
           value: encryptedBytes,
           type: GATTCharacteristicWriteType.withResponse,
         );
@@ -567,11 +618,12 @@ class BleMeshService implements AbstractBleService {
     }
     // Weg 2: Als Peripheral via NOTIFY an subscribed Central.
     final subscribedCentral = _notifySubscribers[peerUuid];
-    final mutableChar       = _mutableChar;
+    final mutableChar = _mutableChar;
     if (subscribedCentral != null && mutableChar != null) {
       try {
         await _peripheral.notifyCharacteristic(
-          subscribedCentral, mutableChar,
+          subscribedCentral,
+          mutableChar,
           value: encryptedBytes,
         );
         return;
@@ -584,6 +636,7 @@ class BleMeshService implements AbstractBleService {
       _connectToPeer(peer).ignore();
     }
   }
+
   @override
   Future<void> broadcastToSubscribers(Uint8List alreadyEncryptedBytes) async {
     final mutableChar = _mutableChar;
@@ -591,7 +644,8 @@ class BleMeshService implements AbstractBleService {
     for (final entry in List.of(_notifySubscribers.entries)) {
       try {
         await _peripheral.notifyCharacteristic(
-          entry.value, mutableChar,
+          entry.value,
+          mutableChar,
           value: alreadyEncryptedBytes,
         );
       } catch (e) {
@@ -602,25 +656,30 @@ class BleMeshService implements AbstractBleService {
       }
     }
   }
+
   // ─── Receive ──────────────────────────────────────────────────────────────
   Future<void> _onRawBytesReceived(
       String senderDeviceId, Uint8List encrypted) async {
     try {
       final plainBytes = await _crypto.decrypt(encrypted);
-      final packet     = parseBlePacket(plainBytes);
+      final packet = parseBlePacket(plainBytes);
       _incomingController.add(
         IncomingBlePacket(senderDeviceId: senderDeviceId, packet: packet),
       );
-    } on FormatException { /* malformed → verwerfen */ }
-    catch (_) { /* Authentifizierungsfehler → verwerfen */ }
+    } on FormatException {/* malformed → verwerfen */} catch (_) {
+      /* Authentifizierungsfehler → verwerfen */
+    }
   }
+
   // ─── Diagnostik ───────────────────────────────────────────────────────────
   void _reportError(String message) {
     if (!_errorController.isClosed) _errorController.add(message);
   }
+
   void _emitStatus(String message) {
     if (!_errorController.isClosed) _errorController.add(message);
   }
+
   String _shortUuid(String uuid) =>
       uuid.length > 8 ? '...${uuid.substring(uuid.length - 8)}' : uuid;
 }

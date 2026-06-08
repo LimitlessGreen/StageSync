@@ -32,7 +32,8 @@ import 'package:theatre_companion_app/showcontrol/nodes/audio_node/sweep_generat
 
 // ── WAV-Hilfe ─────────────────────────────────────────────────────────────────
 
-Uint8List _make1kHzTone({double durationSeconds = 1.0, double amplitudeDb = -6.0}) {
+Uint8List _make1kHzTone(
+    {double durationSeconds = 1.0, double amplitudeDb = -6.0}) {
   final amplitude = math.pow(10.0, amplitudeDb / 20.0).toDouble();
   return SweepGenerator.generateTone(
     frequencyHz: 1000,
@@ -71,7 +72,9 @@ void _printDevices(SoLoud soloud) {
 
 /// Testet ein einzelnes Gerät: init → play → verify → deinit.
 /// Gibt detaillierten Bericht aus.
-Future<bool> _testDevice(SoLoud soloud, PlaybackDevice device, {
+Future<bool> _testDevice(
+  SoLoud soloud,
+  PlaybackDevice device, {
   double durationSeconds = 1.0,
 }) async {
   print('\n▶  Teste: [${device.id}] ${device.name}');
@@ -115,7 +118,8 @@ Future<bool> _testDevice(SoLoud soloud, PlaybackDevice device, {
     print('   ✓ play() gestartet — handle=$handle');
     print('     → Sollte jetzt aus [${device.name}] kommen...');
     print('     → Warte ${durationSeconds}s...');
-    await Future.delayed(Duration(milliseconds: (durationSeconds * 1000).round()));
+    await Future.delayed(
+        Duration(milliseconds: (durationSeconds * 1000).round()));
     print('   ✓ Wiedergabe beendet');
   } catch (e) {
     print('   ✗ play FEHLER: $e');
@@ -197,7 +201,8 @@ Future<void> _testChangeDevice(SoLoud soloud) async {
   }
 
   // Prüfen ob Source noch gültig ist
-  print('  ▶ Spiele GLEICHE Source auf ${devices[1].name} (kein erneutes Laden!)...');
+  print(
+      '  ▶ Spiele GLEICHE Source auf ${devices[1].name} (kein erneutes Laden!)...');
   try {
     final h2 = soloud.play(source, volume: 0.5);
     await Future.delayed(const Duration(milliseconds: 600));
@@ -208,11 +213,14 @@ Future<void> _testChangeDevice(SoLoud soloud) async {
   } catch (e) {
     print('  ✗ play() nach changeDevice() FEHLER: $e');
     print('    → Source wurde durch changeDevice() ungültig gemacht');
-    print('    → deinit+reinit ist notwendig (und PRELOAD muss wiederholt werden)');
+    print(
+        '    → deinit+reinit ist notwendig (und PRELOAD muss wiederholt werden)');
   }
 
   // Aufräumen
-  try { await soloud.disposeSource(source); } catch (_) {}
+  try {
+    await soloud.disposeSource(source);
+  } catch (_) {}
 }
 
 /// Hauptdiagnose: alle Geräte sequenziell testen, dann HOT-Wechsel.
@@ -236,7 +244,8 @@ Future<void> runWindowsAudioDiagnostics() async {
 
   final results = <String, bool>{};
   for (final device in devices) {
-    results[device.name] = await _testDevice(soloud, device, durationSeconds: 0.8);
+    results[device.name] =
+        await _testDevice(soloud, device, durationSeconds: 0.8);
     await Future.delayed(const Duration(milliseconds: 200));
   }
 
@@ -282,4 +291,3 @@ void main() {
     );
   });
 }
-

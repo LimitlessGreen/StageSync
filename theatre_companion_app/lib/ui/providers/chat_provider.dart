@@ -85,4 +85,3 @@ final chatProvider =
     StateNotifierProvider<ChatNotifier, List<ChatMessageDisplay>>((ref) {
   return ChatNotifier(ref);
 });
-

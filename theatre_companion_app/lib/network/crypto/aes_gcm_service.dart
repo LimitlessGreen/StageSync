@@ -40,7 +40,7 @@ const String kStageSyncSharedKeyHex =
 
 class AesGcmService {
   static const int _nonceLength = 12; // GCM standard nonce size
-  static const int _macLength = 16;   // GCM authentication tag size
+  static const int _macLength = 16; // GCM authentication tag size
 
   final AesGcm _algorithm;
   final SecretKey _secretKey;
@@ -96,12 +96,13 @@ class AesGcmService {
     }
 
     final nonce = encryptedBytes.sublist(0, _nonceLength);
-    final cipherText =
-        encryptedBytes.sublist(_nonceLength, encryptedBytes.length - _macLength);
+    final cipherText = encryptedBytes.sublist(
+        _nonceLength, encryptedBytes.length - _macLength);
     final mac = encryptedBytes.sublist(encryptedBytes.length - _macLength);
 
     final secretBox = SecretBox(cipherText, nonce: nonce, mac: Mac(mac));
-    final plaintext = await _algorithm.decrypt(secretBox, secretKey: _secretKey);
+    final plaintext =
+        await _algorithm.decrypt(secretBox, secretKey: _secretKey);
     return Uint8List.fromList(plaintext);
   }
 
@@ -115,4 +116,3 @@ class AesGcmService {
     return result;
   }
 }
-

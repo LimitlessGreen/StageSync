@@ -57,6 +57,5 @@ class GridClipRunState {
       other.error == error;
 
   @override
-  int get hashCode =>
-      Object.hash(lifecycle, startedServerMs, lengthMs, error);
+  int get hashCode => Object.hash(lifecycle, startedServerMs, lengthMs, error);
 }

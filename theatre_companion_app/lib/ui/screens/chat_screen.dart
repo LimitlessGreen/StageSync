@@ -61,8 +61,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ? const _EmptyChatState()
                 : ListView.builder(
                     controller: _scrollController,
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     itemCount: messages.length,
                     itemBuilder: (context, i) => _ChatBubble(
                       message: messages[i],
@@ -89,8 +89,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     status!.pendingQueuedPackets > 0)
                   Text(
                     '${status.pendingQueuedPackets} in Queue',
-                    style: const TextStyle(
-                        fontSize: 10, color: Colors.orange),
+                    style: const TextStyle(fontSize: 10, color: Colors.orange),
                   ),
               ],
             ),
@@ -188,11 +187,14 @@ class _ChatSubtitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (label, color) = switch (syncStatus) {
-      NetworkSyncStatus.syncing ||
-      NetworkSyncStatus.upToDate =>
-        ('Server + $peerCount Peers', Colors.green),
-      NetworkSyncStatus.meshOnly =>
-        ('$peerCount Peers via BLE Mesh', Colors.blueAccent),
+      NetworkSyncStatus.syncing || NetworkSyncStatus.upToDate => (
+          'Server + $peerCount Peers',
+          Colors.green
+        ),
+      NetworkSyncStatus.meshOnly => (
+          '$peerCount Peers via BLE Mesh',
+          Colors.blueAccent
+        ),
       _ => ('Offline – Store & Forward aktiv', Colors.orange),
     };
 
@@ -207,8 +209,7 @@ class _ChatSubtitle extends StatelessWidget {
             decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
           const SizedBox(width: 6),
-          Text(label,
-              style: TextStyle(fontSize: 11, color: color)),
+          Text(label, style: TextStyle(fontSize: 11, color: color)),
         ],
       ),
     );
@@ -228,8 +229,7 @@ class _ChatBubble extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     final isMine = message.isMine;
 
-    final timeLabel =
-        '${message.timestamp.hour.toString().padLeft(2, '0')}'
+    final timeLabel = '${message.timestamp.hour.toString().padLeft(2, '0')}'
         ':${message.timestamp.minute.toString().padLeft(2, '0')}';
 
     return Padding(
@@ -256,13 +256,12 @@ class _ChatBubble extends StatelessWidget {
               if (!isMine) ...[
                 CircleAvatar(
                   radius: 14,
-                  backgroundColor:
-                      _colorForLabel(message.senderLabel).withValues(alpha: 0.2),
+                  backgroundColor: _colorForLabel(message.senderLabel)
+                      .withValues(alpha: 0.2),
                   child: Text(
-                    message.senderLabel.substring(
-                        message.senderLabel.length > 1
-                            ? message.senderLabel.length - 1
-                            : 0),
+                    message.senderLabel.substring(message.senderLabel.length > 1
+                        ? message.senderLabel.length - 1
+                        : 0),
                     style: TextStyle(
                         fontSize: 10,
                         color: _colorForLabel(message.senderLabel)),
@@ -272,8 +271,8 @@ class _ChatBubble extends StatelessWidget {
               ],
               Flexible(
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
                     color: isMine
                         ? colors.primaryContainer
@@ -281,18 +280,15 @@ class _ChatBubble extends StatelessWidget {
                     borderRadius: BorderRadius.only(
                       topLeft: const Radius.circular(18),
                       topRight: const Radius.circular(18),
-                      bottomLeft:
-                          Radius.circular(isMine ? 18 : 4),
-                      bottomRight:
-                          Radius.circular(isMine ? 4 : 18),
+                      bottomLeft: Radius.circular(isMine ? 18 : 4),
+                      bottomRight: Radius.circular(isMine ? 4 : 18),
                     ),
                   ),
                   child: Text(
                     message.content,
                     style: TextStyle(
-                      color: isMine
-                          ? colors.onPrimaryContainer
-                          : colors.onSurface,
+                      color:
+                          isMine ? colors.onPrimaryContainer : colors.onSurface,
                     ),
                   ),
                 ),
@@ -302,9 +298,7 @@ class _ChatBubble extends StatelessWidget {
           ),
           Padding(
             padding: EdgeInsets.only(
-                left: isMine ? 0 : 40,
-                right: isMine ? 0 : 0,
-                top: 2),
+                left: isMine ? 0 : 40, right: isMine ? 0 : 0, top: 2),
             child: Text(
               timeLabel,
               style: const TextStyle(fontSize: 10, color: Colors.grey),
@@ -341,7 +335,7 @@ class _EmptyChatState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-            Icon(
+          Icon(
             Icons.chat_bubble_outline,
             size: 60,
             color: Colors.grey.withValues(alpha: 0.4),
@@ -362,4 +356,3 @@ class _EmptyChatState extends StatelessWidget {
     );
   }
 }
-

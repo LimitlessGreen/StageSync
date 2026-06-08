@@ -29,8 +29,7 @@ library network_isolate_manager;
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart'
-    show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../coordinator/network_repository_weaver.dart';
 import '../crypto/aes_gcm_service.dart';
@@ -168,10 +167,10 @@ class NetworkIsolateManager {
         required int winningScore,
       }) =>
           weaver.handleLeadershipChange(
-            newLeaderId: newLeaderId,
-            isThisDeviceLeader: isThisDeviceLeader,
-            winningScore: winningScore,
-          ),
+        newLeaderId: newLeaderId,
+        isThisDeviceLeader: isThisDeviceLeader,
+        winningScore: winningScore,
+      ),
     );
 
     // ── GossipEngine ───────────────────────────────────────────────────────

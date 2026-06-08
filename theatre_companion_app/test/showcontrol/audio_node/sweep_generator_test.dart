@@ -119,7 +119,8 @@ void main() {
       expect(firstSample, lessThan(100));
     });
 
-    test('unterschiedliche Frequenzen erzeugen unterschiedliche Wellenformen', () {
+    test('unterschiedliche Frequenzen erzeugen unterschiedliche Wellenformen',
+        () {
       final wav440 = SweepGenerator.generateTone(
         frequencyHz: 440,
         durationSeconds: 0.1,
@@ -196,7 +197,8 @@ void main() {
           break;
         }
       }
-      expect(differ, isTrue, reason: 'Aufwärts- und Abwärts-Sweep müssen sich unterscheiden');
+      expect(differ, isTrue,
+          reason: 'Aufwärts- und Abwärts-Sweep müssen sich unterscheiden');
     });
 
     test('Sweep und Ton gleicher Dauer haben gleiche Byte-Länge', () {
@@ -239,4 +241,3 @@ void main() {
     });
   });
 }
-

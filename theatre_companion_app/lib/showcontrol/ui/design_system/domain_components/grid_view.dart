@@ -62,7 +62,8 @@ class ScGridView extends ConsumerWidget {
                               Expanded(
                                 child: Padding(
                                   padding: const EdgeInsets.only(right: 4),
-                                  child: _cell(context, state, notifier, track, scene, nowMs),
+                                  child: _cell(context, state, notifier, track,
+                                      scene, nowMs),
                                 ),
                               ),
                             _sceneLaunchButton(effectiveGrid, notifier, scene),
@@ -85,7 +86,8 @@ class ScGridView extends ConsumerWidget {
       int track, int scene, int nowMs) {
     final clip = state.clipAt(track, scene);
     final run = state.runStateAt(track, scene);
-    final isSel = selected != null && selected!.$1 == track && selected!.$2 == scene;
+    final isSel =
+        selected != null && selected!.$1 == track && selected!.$2 == scene;
 
     void openInspector() {
       if (onEditCell != null) {
@@ -102,7 +104,9 @@ class ScGridView extends ConsumerWidget {
       progress: _progress(run, nowMs),
       selected: isSel,
       // Leere Zelle → Inspector öffnen; belegte Zelle → Clip starten.
-      onTap: clip == null ? openInspector : () => notifier.launchClip(track, scene),
+      onTap: clip == null
+          ? openInspector
+          : () => notifier.launchClip(track, scene),
       onLongPress: openInspector,
     );
   }
@@ -113,8 +117,14 @@ class ScGridView extends ConsumerWidget {
     return Grid(
       gridId: 'main',
       name: 'Grid',
-      tracks: [for (var t = 0; t < cols; t++) GridTrack(trackId: 'T$t', name: 'T${t + 1}', exclusive: true)],
-      scenes: [for (var s = 0; s < rows; s++) GridScene(sceneId: 'S$s', name: 'S${s + 1}')],
+      tracks: [
+        for (var t = 0; t < cols; t++)
+          GridTrack(trackId: 'T$t', name: 'T${t + 1}', exclusive: true)
+      ],
+      scenes: [
+        for (var s = 0; s < rows; s++)
+          GridScene(sceneId: 'S$s', name: 'S${s + 1}')
+      ],
     );
   }
 
@@ -144,8 +154,11 @@ class ScGridView extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(3),
                     ),
                     child: Text(
-                      grid.tracks[t].name.isEmpty ? 'T${t + 1}' : grid.tracks[t].name,
-                      style: const TextStyle(color: ScColors.textSecondary, fontSize: 10),
+                      grid.tracks[t].name.isEmpty
+                          ? 'T${t + 1}'
+                          : grid.tracks[t].name,
+                      style: const TextStyle(
+                          color: ScColors.textSecondary, fontSize: 10),
                     ),
                   ),
                 ),
@@ -175,7 +188,8 @@ class ScGridView extends ConsumerWidget {
     );
   }
 
-  Widget _bottomBar(BuildContext context, WidgetRef ref, GridNotifier notifier) {
+  Widget _bottomBar(
+      BuildContext context, WidgetRef ref, GridNotifier notifier) {
     final midi = ref.watch(gridMidiProvider);
     final midiLabel = midi.connected
         ? 'MIDI: ${midi.deviceName ?? "verbunden"}'
@@ -191,14 +205,14 @@ class ScGridView extends ConsumerWidget {
           selected: midi.enabled,
           selectedColor: ScColors.selected,
           backgroundColor: ScColors.surface2,
-          onSelected: (v) =>
-              ref.read(gridMidiProvider.notifier).setEnabled(v),
+          onSelected: (v) => ref.read(gridMidiProvider.notifier).setEnabled(v),
         ),
         const Spacer(),
         TextButton.icon(
           onPressed: notifier.stopAll,
           icon: const Icon(Icons.stop, color: ScColors.error, size: 18),
-          label: const Text('Stop All', style: TextStyle(color: ScColors.error)),
+          label:
+              const Text('Stop All', style: TextStyle(color: ScColors.error)),
         ),
       ],
     );

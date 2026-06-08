@@ -12,16 +12,16 @@ class NodeStatusBadge extends StatelessWidget {
   const NodeStatusBadge({super.key, required this.node, this.onTap});
 
   ScChipState get _chipState => switch (node.health) {
-        NodeHealthPhase.online      => ScChipState.ok,
-        NodeHealthPhase.degraded    => ScChipState.warn,
+        NodeHealthPhase.online => ScChipState.ok,
+        NodeHealthPhase.degraded => ScChipState.warn,
         NodeHealthPhase.reconnecting => ScChipState.syncing,
-        NodeHealthPhase.offline     => ScChipState.error,
+        NodeHealthPhase.offline => ScChipState.error,
       };
 
   String get _taskLabel {
     if (node.isMaster && node.isAudio) return 'MASTER+AUDIO';
     if (node.isMaster) return 'MASTER';
-    if (node.isAudio)  return 'AUDIO';
+    if (node.isAudio) return 'AUDIO';
     if (node.isMaNode) return 'MA';
     if (node.isEditor) return 'EDITOR';
     return 'NODE';

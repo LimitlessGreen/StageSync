@@ -137,8 +137,7 @@ class _ScFloatingPanelState extends State<ScFloatingPanel>
                     const Spacer(),
                     ...widget.actions,
                     if (widget.onClose != null) ...[
-                      if (widget.actions.isNotEmpty)
-                        const SizedBox(width: 4),
+                      if (widget.actions.isNotEmpty) const SizedBox(width: 4),
                       _CloseButton(onTap: widget.onClose!),
                     ],
                   ],

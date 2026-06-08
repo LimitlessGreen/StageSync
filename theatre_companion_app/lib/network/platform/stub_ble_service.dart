@@ -54,7 +54,8 @@ class StubBleService implements AbstractBleService {
   }
 
   @override
-  Future<void> sendPacket(String targetDeviceId, Uint8List plainPacketBytes) async {
+  Future<void> sendPacket(
+      String targetDeviceId, Uint8List plainPacketBytes) async {
     // Intentional No-op: auf dieser Plattform kein BLE.
     // Der Weaver muss die Nachricht alternativ via WebSocket senden.
   }

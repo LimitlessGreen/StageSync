@@ -206,16 +206,18 @@ class GridNotifier extends StateNotifier<GridState> {
       ..nodeId = _session.myNode!.nodeId
       ..token = _token
       ..gridId = _gridId;
-    _execSub = StageSyncClient.instance.grid
-        .watchGridExecution(req)
-        .listen(_handleExec, onError: (_) => _scheduleReconnect(), onDone: _scheduleReconnect);
+    _execSub = StageSyncClient.instance.grid.watchGridExecution(req).listen(
+        _handleExec,
+        onError: (_) => _scheduleReconnect(),
+        onDone: _scheduleReconnect);
   }
 
   void _handleExec(GridExecutionEvent event) {
     final seq = event.seq.toInt();
     if (seq != 0 && seq < _lastExecSeq) return;
     if (seq > _lastExecSeq) _lastExecSeq = seq;
-    state = state.copyWith(runStates: applyGridExecutionEvent(state.runStates, event));
+    state = state.copyWith(
+        runStates: applyGridExecutionEvent(state.runStates, event));
   }
 
   void _scheduleReconnect() {

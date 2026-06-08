@@ -48,15 +48,16 @@ class MediaState {
     this.error,
   });
 
-  bool get isUploading =>
-      uploadQueue.any((u) => u.status == UploadStatus.uploading ||
-                             u.status == UploadStatus.pending ||
-                             u.status == UploadStatus.analyzing);
+  bool get isUploading => uploadQueue.any((u) =>
+      u.status == UploadStatus.uploading ||
+      u.status == UploadStatus.pending ||
+      u.status == UploadStatus.analyzing);
 
   String? get uploadError {
     final failed = uploadQueue.where((u) => u.status == UploadStatus.error);
     if (failed.isEmpty) return null;
-    if (failed.length == 1) return 'Upload fehlgeschlagen: ${failed.first.filename}';
+    if (failed.length == 1)
+      return 'Upload fehlgeschlagen: ${failed.first.filename}';
     return '${failed.length} Uploads fehlgeschlagen';
   }
 
@@ -93,8 +94,7 @@ class MediaState {
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 
-final mediaProvider =
-    StateNotifierProvider<MediaNotifier, MediaState>((ref) {
+final mediaProvider = StateNotifierProvider<MediaNotifier, MediaState>((ref) {
   return MediaNotifier(ref);
 });
 
@@ -121,7 +121,7 @@ final assetWithReadinessProvider =
 /// Full asset list with [AssetReadiness] correctly elevated for patched assets.
 /// Use this in the MediaManagerScreen so the Readiness column is accurate.
 final enrichedAssetsProvider = Provider<List<Asset>>((ref) {
-  final assets  = ref.watch(mediaProvider).assets;
+  final assets = ref.watch(mediaProvider).assets;
   final patched = ref.watch(patchedAssetIdsProvider);
   if (patched.isEmpty) return assets;
   return [
@@ -172,9 +172,10 @@ class MediaNotifier extends StateNotifier<MediaState> {
     if (event.type == ManifestEventType.snapshot) {
       final assets = event.assets.map(_toAsset).toList()
         ..sort((a, b) => naturalCompare(a.name, b.name));
-      state = state.copyWith(assets: assets, isLoading: false, clearError: true);
+      state =
+          state.copyWith(assets: assets, isLoading: false, clearError: true);
     } else if (event.type == ManifestEventType.added ||
-               event.type == ManifestEventType.updated) {
+        event.type == ManifestEventType.updated) {
       for (final f in event.assets) {
         final updated = _toAsset(f);
         final existing = state.assets.indexWhere((a) => a.name == f.name);
@@ -201,12 +202,15 @@ class MediaNotifier extends StateNotifier<MediaState> {
   }
 
   /// Fügt mehrere Dateien zur Upload-Queue hinzu und startet sie sequenziell.
-  Future<void> uploadFiles(List<({String filename, Uint8List bytes})> files) async {
-    final items = files.map((f) => UploadItem(
-      id: '${DateTime.now().microsecondsSinceEpoch}_${f.filename}',
-      filename: f.filename,
-      totalBytes: f.bytes.length,
-    )).toList();
+  Future<void> uploadFiles(
+      List<({String filename, Uint8List bytes})> files) async {
+    final items = files
+        .map((f) => UploadItem(
+              id: '${DateTime.now().microsecondsSinceEpoch}_${f.filename}',
+              filename: f.filename,
+              totalBytes: f.bytes.length,
+            ))
+        .toList();
 
     state = state.copyWith(uploadQueue: [...state.uploadQueue, ...items]);
 
@@ -218,24 +222,30 @@ class MediaNotifier extends StateNotifier<MediaState> {
           files[i].filename,
           files[i].bytes,
           onProgress: (sent, total) {
-            _updateItem(item.id, item.copyWith(
-              status: UploadStatus.uploading,
-              sentBytes: sent,
-            ));
+            _updateItem(
+                item.id,
+                item.copyWith(
+                  status: UploadStatus.uploading,
+                  sentBytes: sent,
+                ));
           },
         );
         // Bytes vollständig gesendet, Server analysiert noch (EBU R128)
-        _updateItem(item.id, item.copyWith(
-          status: UploadStatus.analyzing,
-          sentBytes: files[i].bytes.length,
-        ));
+        _updateItem(
+            item.id,
+            item.copyWith(
+              status: UploadStatus.analyzing,
+              sentBytes: files[i].bytes.length,
+            ));
         // WatchManifest-Event markiert den Upload als abgeschlossen
         _updateItem(item.id, item.copyWith(status: UploadStatus.done));
       } catch (e) {
-        _updateItem(item.id, item.copyWith(
-          status: UploadStatus.error,
-          error: e.toString(),
-        ));
+        _updateItem(
+            item.id,
+            item.copyWith(
+              status: UploadStatus.error,
+              error: e.toString(),
+            ));
       }
     }
   }
@@ -253,9 +263,10 @@ class MediaNotifier extends StateNotifier<MediaState> {
   void clearUploadQueue() {
     state = state.copyWith(
       uploadQueue: state.uploadQueue
-          .where((u) => u.status == UploadStatus.uploading ||
-                        u.status == UploadStatus.pending ||
-                        u.status == UploadStatus.analyzing)
+          .where((u) =>
+              u.status == UploadStatus.uploading ||
+              u.status == UploadStatus.pending ||
+              u.status == UploadStatus.analyzing)
           .toList(),
     );
   }
@@ -309,11 +320,11 @@ class MediaNotifier extends StateNotifier<MediaState> {
       audio: isAudio
           ? AudioMetadata(
               declaredDurationMs: f.audio?.durationMs.toDouble() ?? 0,
-              channelCount:       f.audio?.channels    ?? 0,
-              sampleRateHz:       f.audio?.sampleRate  ?? 0,
-              loudnessLufs:       f.audio?.loudnessLufs,
-              codec:              codec,
-              bitDepth:           f.audio?.bitDepth    ?? 0,
+              channelCount: f.audio?.channels ?? 0,
+              sampleRateHz: f.audio?.sampleRate ?? 0,
+              loudnessLufs: f.audio?.loudnessLufs,
+              codec: codec,
+              bitDepth: f.audio?.bitDepth ?? 0,
             )
           : null,
       readiness: AssetReadiness.present,
@@ -323,14 +334,14 @@ class MediaNotifier extends StateNotifier<MediaState> {
   static String _mimeFor(String name) {
     final ext = name.toLowerCase().split('.').last;
     return switch (ext) {
-      'wav'  => 'audio/wav',
-      'mp3'  => 'audio/mpeg',
+      'wav' => 'audio/wav',
+      'mp3' => 'audio/mpeg',
       'flac' => 'audio/flac',
-      'aac'  => 'audio/aac',
-      'ogg'  => 'audio/ogg',
-      'm4a'  => 'audio/mp4',
+      'aac' => 'audio/aac',
+      'ogg' => 'audio/ogg',
+      'm4a' => 'audio/mp4',
       'aiff' => 'audio/aiff',
-      _      => 'application/octet-stream',
+      _ => 'application/octet-stream',
     };
   }
 
@@ -342,12 +353,15 @@ class MediaNotifier extends StateNotifier<MediaState> {
 /// Natural (human) sort comparison: "2 Song" < "10 Song", case-insensitive.
 int naturalCompare(String a, String b) {
   final re = RegExp(r'(\d+)|([^\d]+)');
-  final aTokens = re.allMatches(a.toLowerCase()).map((m) => m.group(0)!).toList();
-  final bTokens = re.allMatches(b.toLowerCase()).map((m) => m.group(0)!).toList();
+  final aTokens =
+      re.allMatches(a.toLowerCase()).map((m) => m.group(0)!).toList();
+  final bTokens =
+      re.allMatches(b.toLowerCase()).map((m) => m.group(0)!).toList();
   for (var i = 0; i < aTokens.length && i < bTokens.length; i++) {
     final at = aTokens[i], bt = bTokens[i];
     final an = int.tryParse(at), bn = int.tryParse(bt);
-    final cmp = (an != null && bn != null) ? an.compareTo(bn) : at.compareTo(bt);
+    final cmp =
+        (an != null && bn != null) ? an.compareTo(bn) : at.compareTo(bt);
     if (cmp != 0) return cmp;
   }
   return aTokens.length.compareTo(bTokens.length);

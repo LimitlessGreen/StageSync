@@ -5,6 +5,7 @@ import 'package:theatre_companion_app/showcontrol/domain/cue_params.dart';
 import 'package:theatre_companion_app/showcontrol/domain/playhead.dart';
 import 'package:theatre_companion_app/showcontrol/domain/show.dart';
 import 'package:theatre_companion_app/showcontrol/ui/design_system/domain_components/cue_list_row.dart';
+
 const _audioCue = Cue(
   id: 'cue-1',
   number: '1',
@@ -73,10 +74,12 @@ void main() {
         const CueListRow(cue: _audioCue, expanded: true),
       ));
       final container = tester.widget<Container>(
-        find.descendant(
-          of: find.byType(CueListRow),
-          matching: find.byType(Container),
-        ).first,
+        find
+            .descendant(
+              of: find.byType(CueListRow),
+              matching: find.byType(Container),
+            )
+            .first,
       );
       // Expanded rows have height > 48
       expect(container.constraints?.maxHeight ?? 80.0, greaterThan(48));

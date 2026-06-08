@@ -42,8 +42,8 @@ class _LocalAudioPanelState extends ConsumerState<LocalAudioPanel> {
   @override
   Widget build(BuildContext context) {
     final audioStatus = ref.watch(audioNodeProvider);
-    final session     = ref.watch(sessionProvider);
-    final isRunning   = audioStatus.state == AudioNodeState.connected;
+    final session = ref.watch(sessionProvider);
+    final isRunning = audioStatus.state == AudioNodeState.connected;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -55,15 +55,16 @@ class _LocalAudioPanelState extends ConsumerState<LocalAudioPanel> {
           isRunning: isRunning,
           refreshing: _refreshing,
           onRefresh: _refresh,
-          onStart:  () => ref.read(audioNodeProvider.notifier).startAudioNode(),
-          onStop:   () => ref.read(audioNodeProvider.notifier).stopAudioNode(),
+          onStart: () => ref.read(audioNodeProvider.notifier).startAudioNode(),
+          onStop: () => ref.read(audioNodeProvider.notifier).stopAudioNode(),
         ),
         const Divider(height: 1, color: ScColors.divider),
         // ── Master Volume ───────────────────────────────────────────────────
         if (isRunning)
           Padding(
             padding: const EdgeInsets.symmetric(
-              horizontal: ScSpacing.panelPad, vertical: 8,
+              horizontal: ScSpacing.panelPad,
+              vertical: 8,
             ),
             child: MasterVolumeSlider(
               value: audioStatus.masterVolumeDb,
@@ -182,14 +183,15 @@ class _StatusDot extends StatelessWidget {
   Widget build(BuildContext context) {
     final (color, label) = switch (state) {
       AudioNodeState.connected => (ScColors.active, 'AKTIV'),
-      AudioNodeState.error     => (ScColors.error,  'FEHLER'),
-      AudioNodeState.idle      => (ScColors.past,   'INAKTIV'),
+      AudioNodeState.error => (ScColors.error, 'FEHLER'),
+      AudioNodeState.idle => (ScColors.past, 'INAKTIV'),
     };
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 6, height: 6,
+          width: 6,
+          height: 6,
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 5),
@@ -281,7 +283,7 @@ class _DeviceRowState extends State<_DeviceRow> {
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
-      onExit:  (_) => setState(() => _hovered = false),
+      onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
         onTap: widget.onTap,
         child: Container(
@@ -295,7 +297,8 @@ class _DeviceRowState extends State<_DeviceRow> {
                 width: 12,
                 child: widget.isSelected
                     ? Container(
-                        width: 4, height: 4,
+                        width: 4,
+                        height: 4,
                         decoration: const BoxDecoration(
                           color: ScColors.active,
                           shape: BoxShape.circle,
@@ -328,7 +331,8 @@ class _DeviceRowState extends State<_DeviceRow> {
                 ),
                 child: Text(
                   d.backend.name.toUpperCase(),
-                  style: ScText.statusSmall.copyWith(fontSize: 9, letterSpacing: 0.3),
+                  style: ScText.statusSmall
+                      .copyWith(fontSize: 9, letterSpacing: 0.3),
                 ),
               ),
             ],
@@ -339,14 +343,14 @@ class _DeviceRowState extends State<_DeviceRow> {
   }
 
   IconData _backendIcon(AudioBackend b) => switch (b) {
-    AudioBackend.asio      => Icons.speed,
-    AudioBackend.wasapi    => Icons.speaker,
-    AudioBackend.coreAudio => Icons.apple,
-    AudioBackend.alsa      => Icons.speaker,
-    AudioBackend.aaudio    => Icons.phone_android,
-    AudioBackend.openSLES  => Icons.phone_android,
-    _                      => Icons.volume_up,
-  };
+        AudioBackend.asio => Icons.speed,
+        AudioBackend.wasapi => Icons.speaker,
+        AudioBackend.coreAudio => Icons.apple,
+        AudioBackend.alsa => Icons.speaker,
+        AudioBackend.aaudio => Icons.phone_android,
+        AudioBackend.openSLES => Icons.phone_android,
+        _ => Icons.volume_up,
+      };
 }
 
 // ── Status column ──────────────────────────────────────────────────────────────
@@ -374,10 +378,9 @@ class _StatusColumn extends StatelessWidget {
           ),
           const Divider(height: 1, color: ScColors.divider),
           if (selected != null) ...[
-            _PropRow('Name',    selected.name),
+            _PropRow('Name', selected.name),
             _PropRow('Backend', selected.backend.name.toUpperCase()),
-            if (selected.index >= 0)
-              _PropRow('Index', '${selected.index}'),
+            if (selected.index >= 0) _PropRow('Index', '${selected.index}'),
           ] else
             Padding(
               padding: const EdgeInsets.symmetric(
@@ -393,8 +396,8 @@ class _StatusColumn extends StatelessWidget {
             Container(
               height: 28,
               color: ScColors.surface,
-              padding: const EdgeInsets.symmetric(
-                  horizontal: ScSpacing.panelPad),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: ScSpacing.panelPad),
               alignment: Alignment.centerLeft,
               child: Text('LÄUFT', style: ScText.panelTitle),
             ),

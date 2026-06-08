@@ -62,7 +62,8 @@ class SessionState {
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 
-final sessionServiceProvider = Provider<SessionService>((_) => SessionService());
+final sessionServiceProvider =
+    Provider<SessionService>((_) => SessionService());
 
 final sessionProvider =
     StateNotifierProvider<SessionNotifier, SessionState>((ref) {
@@ -369,13 +370,13 @@ class SessionNotifier extends StateNotifier<SessionState> {
   }
 
   static String _taskLabel(NodeTask t) => switch (t) {
-    NodeTask.NODE_TASK_MASTER       => 'Master',
-    NodeTask.NODE_TASK_AUDIO_OUTPUT => 'Audio',
-    NodeTask.NODE_TASK_EDITOR       => 'Editor',
-    NodeTask.NODE_TASK_MA_OSC       => 'MA OSC',
-    NodeTask.NODE_TASK_VIEWER       => 'Viewer',
-    _                               => '',
-  };
+        NodeTask.NODE_TASK_MASTER => 'Master',
+        NodeTask.NODE_TASK_AUDIO_OUTPUT => 'Audio',
+        NodeTask.NODE_TASK_EDITOR => 'Editor',
+        NodeTask.NODE_TASK_MA_OSC => 'MA OSC',
+        NodeTask.NODE_TASK_VIEWER => 'Viewer',
+        _ => '',
+      };
 
   Future<void> leaveSession() async {
     final s = state;
@@ -479,8 +480,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
           }
         },
         onDone: () {
-          if (state.isInSession &&
-              state.health == ConnectionHealth.connected) {
+          if (state.isInSession && state.health == ConnectionHealth.connected) {
             state = state.copyWith(health: ConnectionHealth.disconnected);
           }
         },
@@ -510,9 +510,11 @@ class SessionNotifier extends StateNotifier<SessionState> {
           }
         }
       }
-      state = state.copyWith(session: merged, health: ConnectionHealth.connected);
+      state =
+          state.copyWith(session: merged, health: ConnectionHealth.connected);
     } else {
-      state = state.copyWith(session: incoming, health: ConnectionHealth.connected);
+      state =
+          state.copyWith(session: incoming, health: ConnectionHealth.connected);
     }
   }
 

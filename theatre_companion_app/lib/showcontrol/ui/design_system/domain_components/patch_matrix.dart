@@ -73,7 +73,9 @@ class _PatchMatrixState extends State<PatchMatrix>
             controller: _tabs,
             children: [
               _CueBusTab(config: widget.config, nodes: widget.nodes),
-              _NodePatchTab(config: widget.config, nodes: widget.nodes,
+              _NodePatchTab(
+                  config: widget.config,
+                  nodes: widget.nodes,
                   onChanged: widget.onChanged),
               _DevicePatchTab(config: widget.config, nodes: widget.nodes),
             ],
@@ -111,11 +113,13 @@ class _CueBusTab extends StatelessWidget {
           label: output.name,
           hasConflict: hasConflict,
           trailing: assignedNodes.isEmpty
-              ? Text('— kein Node', style: ScText.label.copyWith(color: ScColors.textDim))
+              ? Text('— kein Node',
+                  style: ScText.label.copyWith(color: ScColors.textDim))
               : Wrap(
                   spacing: 4,
                   children: assignedNodes.map((nid) {
-                    final node = nodes.where((n) => n.nodeId == nid).firstOrNull;
+                    final node =
+                        nodes.where((n) => n.nodeId == nid).firstOrNull;
                     return ScChip(
                       label: node?.name ?? nid,
                       state: node == null
@@ -148,7 +152,8 @@ class _NodePatchTab extends StatelessWidget {
     if (nodes.isEmpty) {
       return const _EmptyState(
         message: 'Keine Nodes verbunden.',
-        hint: 'Verbinde mindestens einen Audio-Node um Routing zu konfigurieren.',
+        hint:
+            'Verbinde mindestens einen Audio-Node um Routing zu konfigurieren.',
       );
     }
 
@@ -173,8 +178,8 @@ class _NodePatchTab extends StatelessWidget {
               ),
               ...nodes.map((n) => Padding(
                     padding: const EdgeInsets.all(8),
-                    child: Text(n.name, style: ScText.label,
-                        overflow: TextOverflow.ellipsis),
+                    child: Text(n.name,
+                        style: ScText.label, overflow: TextOverflow.ellipsis),
                   )),
             ],
           ),
@@ -184,7 +189,8 @@ class _NodePatchTab extends StatelessWidget {
             return TableRow(
               children: [
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                   child: Text(output.name, style: ScText.label),
                 ),
                 ...nodes.map((node) {
@@ -193,7 +199,8 @@ class _NodePatchTab extends StatelessWidget {
                     isAssigned: isAssigned,
                     onTap: onChanged == null
                         ? null
-                        : () => _togglePatch(output.id, node.nodeId, isAssigned),
+                        : () =>
+                            _togglePatch(output.id, node.nodeId, isAssigned),
                   );
                 }),
               ],
@@ -265,7 +272,8 @@ class _DevicePatchTab extends StatelessWidget {
     if (config.devicePatches.isEmpty) {
       return const _EmptyState(
         message: 'Keine Device-Patches konfiguriert.',
-        hint: 'Device-Patches werden automatisch gemeldet wenn ein Audio-Node connected.',
+        hint:
+            'Device-Patches werden automatisch gemeldet wenn ein Audio-Node connected.',
       );
     }
 
@@ -330,7 +338,8 @@ class _MatrixRow extends StatelessWidget {
         children: [
           SizedBox(
             width: 140,
-            child: Text(label, style: ScText.label, overflow: TextOverflow.ellipsis),
+            child: Text(label,
+                style: ScText.label, overflow: TextOverflow.ellipsis),
           ),
           if (hasConflict) ...[
             const Icon(Icons.warning_amber_rounded,

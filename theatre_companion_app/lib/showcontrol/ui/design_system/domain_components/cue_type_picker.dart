@@ -6,13 +6,16 @@ import '../../../domain/cue_params.dart';
 /// [context] muss der BuildContext des Buttons selbst sein (Builder-Kontext).
 /// Gibt null zurück wenn der User abbricht.
 Future<CueParams?> showCueTypePicker(BuildContext context) async {
-  final button  = context.findRenderObject() as RenderBox;
-  final overlay = Navigator.of(context).overlay!.context.findRenderObject() as RenderBox;
+  final button = context.findRenderObject() as RenderBox;
+  final overlay =
+      Navigator.of(context).overlay!.context.findRenderObject() as RenderBox;
   final buttonRect = Rect.fromPoints(
     button.localToGlobal(Offset.zero, ancestor: overlay),
-    button.localToGlobal(button.size.bottomRight(Offset.zero), ancestor: overlay),
+    button.localToGlobal(button.size.bottomRight(Offset.zero),
+        ancestor: overlay),
   );
-  final position = RelativeRect.fromRect(buttonRect, Offset.zero & overlay.size);
+  final position =
+      RelativeRect.fromRect(buttonRect, Offset.zero & overlay.size);
   final result = await showMenu<String>(
     context: context,
     color: const Color(0xFF1E1E1E),
@@ -20,25 +23,31 @@ Future<CueParams?> showCueTypePicker(BuildContext context) async {
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     position: position,
     items: [
-      cueTypeMenuItem('audio', Icons.volume_up,            'Audio', 'Audiodatei abspielen'),
-      cueTypeMenuItem('wait',  Icons.timer_outlined,        'Wait',  'Pause / Timer'),
-      cueTypeMenuItem('fade',  Icons.tune,                  'Fade',  'Lautstärke einer laufenden Cue faden'),
-      cueTypeMenuItem('maOsc', Icons.settings_remote,       'MA OSC','GrandMA über OSC'),
-      cueTypeMenuItem('goto',  Icons.redo,                  'GOTO',  'Zu einer anderen Cue springen'),
-      cueTypeMenuItem('group', Icons.account_tree_outlined, 'Group', 'Cues parallel/sequentiell'),
-      cueTypeMenuItem('note',  Icons.text_fields,           'Note',  'Textmarker / Trennlinie'),
+      cueTypeMenuItem(
+          'audio', Icons.volume_up, 'Audio', 'Audiodatei abspielen'),
+      cueTypeMenuItem('wait', Icons.timer_outlined, 'Wait', 'Pause / Timer'),
+      cueTypeMenuItem(
+          'fade', Icons.tune, 'Fade', 'Lautstärke einer laufenden Cue faden'),
+      cueTypeMenuItem(
+          'maOsc', Icons.settings_remote, 'MA OSC', 'GrandMA über OSC'),
+      cueTypeMenuItem(
+          'goto', Icons.redo, 'GOTO', 'Zu einer anderen Cue springen'),
+      cueTypeMenuItem('group', Icons.account_tree_outlined, 'Group',
+          'Cues parallel/sequentiell'),
+      cueTypeMenuItem(
+          'note', Icons.text_fields, 'Note', 'Textmarker / Trennlinie'),
     ],
   );
 
   return switch (result) {
     'audio' => const AudioParams(assetId: ''),
-    'wait'  => const WaitParams(durationMs: 5000),
+    'wait' => const WaitParams(durationMs: 5000),
     'maOsc' => const MaOscParams(oscAddress: '/gma2/cmd'),
-    'goto'  => const GotoParams(targetCueId: ''),
+    'goto' => const GotoParams(targetCueId: ''),
     'group' => const GroupParams(childCueIds: [], sequential: false),
-    'note'  => const NoteParams(text: ''),
-    'fade'  => const FadeParams(),
-    _       => null,
+    'note' => const NoteParams(text: ''),
+    'fade' => const FadeParams(),
+    _ => null,
   };
 }
 
@@ -65,8 +74,7 @@ PopupMenuItem<String> cueTypeMenuItem(
                     fontSize: 13,
                     fontWeight: FontWeight.w600)),
             Text(subtitle,
-                style: const TextStyle(
-                    color: Color(0xFF555555), fontSize: 10)),
+                style: const TextStyle(color: Color(0xFF555555), fontSize: 10)),
           ],
         ),
       ],

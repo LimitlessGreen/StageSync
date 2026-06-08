@@ -206,4 +206,3 @@ class NetworkFacade {
     _manager.send(command);
   }
 }
-

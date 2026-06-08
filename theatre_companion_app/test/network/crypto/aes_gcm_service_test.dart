@@ -1,6 +1,7 @@
-﻿import 'dart:typed_data';
+import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:theatre_companion_app/network/crypto/aes_gcm_service.dart';
+
 void main() {
   late AesGcmService svc;
   setUpAll(() async {
@@ -18,13 +19,16 @@ void main() {
       final dec = await svc.decrypt(enc);
       expect(dec, plain);
     });
-    test('zwei Verschluesselungen des gleichen Textes ergeben unterschiedliche Ciphertexte (random nonce)', () async {
+    test(
+        'zwei Verschluesselungen des gleichen Textes ergeben unterschiedliche Ciphertexte (random nonce)',
+        () async {
       final plain = Uint8List.fromList([42, 43, 44]);
       final enc1 = await svc.encrypt(plain);
       final enc2 = await svc.encrypt(plain);
       expect(enc1, isNot(enc2)); // verschiedene Nonces
     });
-    test('Manipulation des Ciphertexts wirft SecretBoxAuthenticationError', () async {
+    test('Manipulation des Ciphertexts wirft SecretBoxAuthenticationError',
+        () async {
       final plain = Uint8List.fromList([1, 2, 3]);
       final enc = await svc.encrypt(plain);
       final tampered = Uint8List.fromList(enc)
@@ -42,7 +46,8 @@ void main() {
       expect(dec, empty);
     });
     test('fromHexKey mit falschem Format wirft AssertionError', () async {
-      expect(() => AesGcmService.fromHexKey('zu-kurz'), throwsA(isA<AssertionError>()));
+      expect(() => AesGcmService.fromHexKey('zu-kurz'),
+          throwsA(isA<AssertionError>()));
     });
   });
 }

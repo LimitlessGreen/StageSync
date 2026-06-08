@@ -61,5 +61,6 @@ class MiniaudioEngine implements AbstractAudioEngine {
     String filePath, {
     double thresholdDb = -60.0,
     double padMs = 50.0,
-  }) async => null;
+  }) async =>
+      null;
 }

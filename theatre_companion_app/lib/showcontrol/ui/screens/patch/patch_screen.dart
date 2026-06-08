@@ -16,7 +16,7 @@ class PatchScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final domain   = ref.watch(showControlDomainProvider);
+    final domain = ref.watch(showControlDomainProvider);
     final notifier = ref.read(showControlProvider.notifier);
 
     return Column(
@@ -51,13 +51,14 @@ class PatchScreen extends ConsumerWidget {
                           size: 32, color: ScColors.textDim),
                       const SizedBox(height: 12),
                       Text('Keine Patch-Konfiguration',
-                          style: ScText.label.copyWith(color: ScColors.textDim)),
+                          style:
+                              ScText.label.copyWith(color: ScColors.textDim)),
                     ],
                   ),
                 )
               : PatchMatrix(
-                  config:    domain.patchConfig,
-                  nodes:     domain.nodes,
+                  config: domain.patchConfig,
+                  nodes: domain.nodes,
                   onChanged: (updated) => notifier.updatePatchConfig(updated),
                 ),
         ),

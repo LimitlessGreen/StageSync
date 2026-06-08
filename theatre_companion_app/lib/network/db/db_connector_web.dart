@@ -15,4 +15,3 @@ import 'package:drift/drift.dart';
 /// [path] wird als Datenbankname verwendet (kein Dateipfad).
 QueryExecutor openDatabaseForPlatform(String path) =>
     WebDatabase(path, logStatements: false);
-

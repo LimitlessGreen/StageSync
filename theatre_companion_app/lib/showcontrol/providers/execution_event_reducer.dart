@@ -147,15 +147,18 @@ ShowControlState applyExecutionEvent(
       final doneId = event.hasAffectedCue() ? event.affectedCue.cueId : '';
       final running = event.runningCueIds.isNotEmpty
           ? event.runningCueIds.toSet()
-          : <String>{...state.runningCueIds}..remove(doneId);
+          : <String>{...state.runningCueIds}
+        ..remove(doneId);
       final perCuePaused = <String>{...state.perCuePausedIds}..remove(doneId);
-      final perCuePausedAt = Map<String, int>.from(state.perCuePausedAtMs)..remove(doneId);
+      final perCuePausedAt = Map<String, int>.from(state.perCuePausedAtMs)
+        ..remove(doneId);
       final isActiveCue = doneId.isNotEmpty && state.activeCue?.cueId == doneId;
 
       if (running.isEmpty) {
         return state.copyWith(
           activeCue: isActiveCue ? null : state.activeCue,
-          activeCueStartedServerMs: isActiveCue ? null : state.activeCueStartedServerMs,
+          activeCueStartedServerMs:
+              isActiveCue ? null : state.activeCueStartedServerMs,
           runningCueIds: const {},
           runningCueStartedServerMs: const {},
           cueDoneServerMs: isActiveCue ? null : eventMs(),
@@ -167,7 +170,8 @@ ShowControlState applyExecutionEvent(
 
       final starts = Map<String, int>.from(state.runningCueStartedServerMs)
         ..removeWhere((id, _) => !running.contains(id));
-      final doneResumedAt = Map<String, int>.from(state.perCueResumedAtMs)..remove(doneId);
+      final doneResumedAt = Map<String, int>.from(state.perCueResumedAtMs)
+        ..remove(doneId);
       return state.copyWith(
         runningCueIds: running,
         runningCueStartedServerMs: starts,
@@ -184,7 +188,8 @@ ShowControlState applyExecutionEvent(
           : <String>{...state.perCuePausedIds, if (cueId.isNotEmpty) cueId};
       final pausedAt = Map<String, int>.from(state.perCuePausedAtMs);
       if (cueId.isNotEmpty) pausedAt[cueId] = eventMs();
-      return state.copyWith(perCuePausedIds: pausedIds, perCuePausedAtMs: pausedAt);
+      return state.copyWith(
+          perCuePausedIds: pausedIds, perCuePausedAtMs: pausedAt);
 
     // ── Per-Cue RESUME ───────────────────────────────────────────────────────
     case ShowExecutionEvent_ExecutionEventType.CUE_CUE_RESUMED:
@@ -200,8 +205,10 @@ ShowControlState applyExecutionEvent(
       }
       final resumedIds = event.perCuePausedIds.isNotEmpty
           ? event.perCuePausedIds.toSet()
-          : <String>{...state.perCuePausedIds}..remove(cueId);
-      final pausedAt = Map<String, int>.from(state.perCuePausedAtMs)..remove(cueId);
+          : <String>{...state.perCuePausedIds}
+        ..remove(cueId);
+      final pausedAt = Map<String, int>.from(state.perCuePausedAtMs)
+        ..remove(cueId);
       // Store resume time for fade-in animation window in the UI.
       final resumedAt = Map<String, int>.from(state.perCueResumedAtMs);
       if (cueId.isNotEmpty) resumedAt[cueId] = resumeTime;

@@ -70,8 +70,7 @@ void main() {
   group('MediaSync — syncAllFromList', () {
     test('downloads only files missing locally', () async {
       final fileContent = [1, 2, 3, 4];
-      final (sync, cacheDir) =
-          await _setup(files: {'intro.wav': fileContent});
+      final (sync, cacheDir) = await _setup(files: {'intro.wav': fileContent});
       addTearDown(() => Directory(cacheDir).deleteSync(recursive: true));
 
       await sync.syncAllFromList([_file('intro.wav', 'sha-abc')]);
@@ -82,8 +81,9 @@ void main() {
     });
 
     test('skips files already present with matching sha256', () async {
-      final (sync, cacheDir) =
-          await _setup(files: {'existing.wav': [9, 8, 7]});
+      final (sync, cacheDir) = await _setup(files: {
+        'existing.wav': [9, 8, 7]
+      });
       addTearDown(() => Directory(cacheDir).deleteSync(recursive: true));
 
       final localFile = File(p.join(cacheDir, 'existing.wav'));
@@ -103,8 +103,7 @@ void main() {
 
     test('re-downloads files with changed sha256', () async {
       final newContent = [0xDE, 0xAD, 0xBE, 0xEF];
-      final (sync, cacheDir) =
-          await _setup(files: {'changed.wav': newContent});
+      final (sync, cacheDir) = await _setup(files: {'changed.wav': newContent});
       addTearDown(() => Directory(cacheDir).deleteSync(recursive: true));
 
       final localFile = File(p.join(cacheDir, 'changed.wav'));
@@ -118,14 +117,16 @@ void main() {
     });
 
     test('prunes local files absent from server manifest', () async {
-      final (sync, cacheDir) = await _setup(files: {'file-b.wav': [2]});
+      final (sync, cacheDir) = await _setup(files: {
+        'file-b.wav': [2]
+      });
       addTearDown(() => Directory(cacheDir).deleteSync(recursive: true));
 
       final staleFile = File(p.join(cacheDir, 'file-a.wav'));
       await staleFile.writeAsBytes([1]);
       final manifestFile = File(p.join(cacheDir, '.manifest.json'));
-      await manifestFile.writeAsString(
-          '{"file-a.wav":"sha-a","file-b.wav":"sha-b-old"}');
+      await manifestFile
+          .writeAsString('{"file-a.wav":"sha-a","file-b.wav":"sha-b-old"}');
 
       await sync.syncAllFromList([_file('file-b.wav', 'sha-b')]);
 
@@ -135,8 +136,10 @@ void main() {
     });
 
     test('manifest preserved after sync', () async {
-      final (sync, cacheDir) =
-          await _setup(files: {'a.wav': [1], 'b.wav': [2]});
+      final (sync, cacheDir) = await _setup(files: {
+        'a.wav': [1],
+        'b.wav': [2]
+      });
       addTearDown(() => Directory(cacheDir).deleteSync(recursive: true));
 
       await sync.syncAllFromList([
@@ -154,8 +157,7 @@ void main() {
     });
 
     test('server unreachable: syncAllFromList does not throw', () async {
-      final tmp =
-          await Directory.systemTemp.createTemp('media_sync_fail_');
+      final tmp = await Directory.systemTemp.createTemp('media_sync_fail_');
       addTearDown(() => tmp.deleteSync(recursive: true));
       final sync = MediaSync(_FailingMediaGrpcClient(), tmp.path);
 
@@ -167,12 +169,12 @@ void main() {
 
     test('concurrent syncAllFromList calls are serialised', () async {
       var downloadCount = 0;
-      final inner = FakeMediaGrpcClient(
-          {'track.wav': Uint8List.fromList([0])});
+      final inner = FakeMediaGrpcClient({
+        'track.wav': Uint8List.fromList([0])
+      });
       final trackingClient =
           _TrackingGrpcClient(inner, onDownload: () => downloadCount++);
-      final tmp =
-          await Directory.systemTemp.createTemp('media_sync_conc_');
+      final tmp = await Directory.systemTemp.createTemp('media_sync_conc_');
       addTearDown(() => tmp.deleteSync(recursive: true));
       final sync = MediaSync(trackingClient, tmp.path);
 
@@ -201,8 +203,9 @@ void main() {
     });
 
     test('fetches and returns path when file is missing', () async {
-      final (sync, cacheDir) =
-          await _setup(files: {'lazy.wav': [1, 2, 3]});
+      final (sync, cacheDir) = await _setup(files: {
+        'lazy.wav': [1, 2, 3]
+      });
       addTearDown(() => Directory(cacheDir).deleteSync(recursive: true));
 
       final result = await sync.ensureLocal('lazy.wav');
@@ -232,12 +235,12 @@ void main() {
 
     test('duplicate ensureLocal calls use inflight dedup', () async {
       var downloadCount = 0;
-      final inner = FakeMediaGrpcClient(
-          {'dup.wav': Uint8List.fromList([42])});
+      final inner = FakeMediaGrpcClient({
+        'dup.wav': Uint8List.fromList([42])
+      });
       final trackingClient =
           _TrackingGrpcClient(inner, onDownload: () => downloadCount++);
-      final tmp =
-          await Directory.systemTemp.createTemp('media_sync_dedup_');
+      final tmp = await Directory.systemTemp.createTemp('media_sync_dedup_');
       addTearDown(() => tmp.deleteSync(recursive: true));
       final sync = MediaSync(trackingClient, tmp.path);
 
@@ -254,8 +257,9 @@ void main() {
 
   group('MediaSync — filenameForSha256', () {
     test('returns filename when sha256 is known', () async {
-      final (sync, cacheDir) =
-          await _setup(files: {'track.wav': [1]});
+      final (sync, cacheDir) = await _setup(files: {
+        'track.wav': [1]
+      });
       addTearDown(() => Directory(cacheDir).deleteSync(recursive: true));
       await sync.syncAllFromList([_file('track.wav', 'sha-track')]);
       expect(sync.filenameForSha256('sha-track'), 'track.wav');

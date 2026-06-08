@@ -74,11 +74,13 @@ class SweepGenerator {
     // fmt chunk
     _writeAscii(buf, 12, 'fmt ');
     buf.setUint32(16, 16, Endian.little); // chunk size
-    buf.setUint16(20, 1, Endian.little);  // PCM
+    buf.setUint16(20, 1, Endian.little); // PCM
     buf.setUint16(22, _channels, Endian.little);
     buf.setUint32(24, _sampleRate, Endian.little);
-    buf.setUint32(28, _sampleRate * _channels * _bitsPerSample ~/ 8, Endian.little); // byte rate
-    buf.setUint16(32, _channels * _bitsPerSample ~/ 8, Endian.little); // block align
+    buf.setUint32(28, _sampleRate * _channels * _bitsPerSample ~/ 8,
+        Endian.little); // byte rate
+    buf.setUint16(
+        32, _channels * _bitsPerSample ~/ 8, Endian.little); // block align
     buf.setUint16(34, _bitsPerSample, Endian.little);
 
     // data chunk

@@ -1,4 +1,4 @@
-﻿/// dao_integration_test.dart
+/// dao_integration_test.dart
 /// ────────────────────────────
 /// Integrations-Tests fuer InventoryDao und PacketQueueDao mit einer
 /// In-Memory-Drift-Datenbank (NativeDatabase.memory()).
@@ -11,6 +11,7 @@
 ///   5. PacketQueueDao.markDelivered() – Zustellbestaetigung
 ///   6. PacketQueueDao.purgeStale() – Ablauf alter Eintraege
 library dao_integration_test;
+
 import 'dart:typed_data';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -19,6 +20,7 @@ import 'package:theatre_companion_app/network/db/dao/inventory_dao.dart';
 import 'package:theatre_companion_app/network/db/dao/packet_queue_dao.dart';
 import 'package:theatre_companion_app/network/models/ble_packet.dart';
 import 'package:theatre_companion_app/network/models/inventory_item_crdt.dart';
+
 // ─── Hilfsfunktionen ─────────────────────────────────────────────────────────
 /// Berechnet den djb2-16-Bit-Hash einer String-ID (muss identisch mit
 /// InventoryDao.getByShortId() sein).
@@ -29,6 +31,7 @@ int djb2ShortId(String id) {
   }
   return hash & 0xFFFF;
 }
+
 /// Erstellt ein Test-CRDT fuer einen Artikel.
 InventoryItemCrdt makeTestCrdt({
   required String itemId,
@@ -45,6 +48,7 @@ InventoryItemCrdt makeTestCrdt({
     wallClockMs: wallClockMs,
   );
 }
+
 // ─────────────────────────────────────────────────────────────────────────────
 void main() {
   late AppDatabase db;
@@ -69,7 +73,8 @@ void main() {
       expect(result!.itemId, equals('item-uuid-001'));
       expect(result.statusId, equals(1));
     });
-    test('upsertCrdt() aktualisiert vorhandenen Artikel (idempotent)', () async {
+    test('upsertCrdt() aktualisiert vorhandenen Artikel (idempotent)',
+        () async {
       final crdt1 = makeTestCrdt(itemId: 'item-001', statusId: 1);
       await inventoryDao.upsertCrdt(crdt1);
       final crdt2 = makeTestCrdt(itemId: 'item-001', statusId: 3);
@@ -78,7 +83,8 @@ void main() {
       expect(items, hasLength(1)); // Kein Duplikat
       expect(items.first.statusId, equals(3));
     });
-    test('mergeRemote() fuegt neues Item ein wenn noch nicht vorhanden', () async {
+    test('mergeRemote() fuegt neues Item ein wenn noch nicht vorhanden',
+        () async {
       final remote = makeTestCrdt(itemId: 'item-new', statusId: 2);
       final merged = await inventoryDao.mergeRemote(remote);
       expect(merged.itemId, equals('item-new'));
@@ -173,7 +179,8 @@ void main() {
       );
       expect(id, greaterThan(0));
     });
-    test('dequeueForDelivery() gibt Pakete fuer den Ziel-Peer zurueck', () async {
+    test('dequeueForDelivery() gibt Pakete fuer den Ziel-Peer zurueck',
+        () async {
       await queueDao.enqueue(
         encryptedPayload: [0xAA],
         targetDeviceId: 'peer-target',
@@ -188,9 +195,11 @@ void main() {
       );
       final forTarget = await queueDao.dequeueForDelivery('peer-target');
       expect(forTarget, hasLength(1));
-      expect(forTarget.first.encryptedPayload, equals(Uint8List.fromList([0xAA])));
+      expect(
+          forTarget.first.encryptedPayload, equals(Uint8List.fromList([0xAA])));
     });
-    test('dequeueForDelivery() gibt auch Broadcast-Pakete (targetDeviceId=null) zurueck',
+    test(
+        'dequeueForDelivery() gibt auch Broadcast-Pakete (targetDeviceId=null) zurueck',
         () async {
       await queueDao.enqueue(
         encryptedPayload: [0xCC],
@@ -201,26 +210,34 @@ void main() {
       final packets = await queueDao.dequeueForDelivery('any-peer');
       expect(packets, hasLength(1));
     });
-    test('dequeueForDelivery() gibt Pakete in FIFO-Reihenfolge (aelteste zuerst)',
+    test(
+        'dequeueForDelivery() gibt Pakete in FIFO-Reihenfolge (aelteste zuerst)',
         () async {
       final t1 = nowMs - 2000;
       final t2 = nowMs - 1000;
       final t3 = nowMs;
       await queueDao.enqueue(
-          encryptedPayload: [0x03], targetDeviceId: null,
-          packetTypeByte: 0, nowMs: t3);
+          encryptedPayload: [0x03],
+          targetDeviceId: null,
+          packetTypeByte: 0,
+          nowMs: t3);
       await queueDao.enqueue(
-          encryptedPayload: [0x01], targetDeviceId: null,
-          packetTypeByte: 0, nowMs: t1);
+          encryptedPayload: [0x01],
+          targetDeviceId: null,
+          packetTypeByte: 0,
+          nowMs: t1);
       await queueDao.enqueue(
-          encryptedPayload: [0x02], targetDeviceId: null,
-          packetTypeByte: 0, nowMs: t2);
+          encryptedPayload: [0x02],
+          targetDeviceId: null,
+          packetTypeByte: 0,
+          nowMs: t2);
       final packets = await queueDao.dequeueForDelivery('peer-x');
       expect(packets[0].encryptedPayload[0], equals(0x01)); // aeltestes zuerst
       expect(packets[1].encryptedPayload[0], equals(0x02));
       expect(packets[2].encryptedPayload[0], equals(0x03));
     });
-    test('markDelivered() schliesst Paket von zukuenftiger Dequeue aus', () async {
+    test('markDelivered() schliesst Paket von zukuenftiger Dequeue aus',
+        () async {
       final rowId = await queueDao.enqueue(
         encryptedPayload: [0xFF],
         targetDeviceId: 'peer-x',

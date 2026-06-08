@@ -31,18 +31,20 @@ class _StubNotifier extends ShowControlNotifier {
   Future<void> goToCue(String id) async {}
 
   @override
-  Future<Cue?> addCue({CueParams params = const AudioParams(assetId: '')}) async => null;
+  Future<Cue?> addCue(
+          {CueParams params = const AudioParams(assetId: '')}) async =>
+      null;
 }
 
 // ── Provider overrides to avoid native library loads ─────────────────────────
 
 List<Override> _audioProviderOverrides() => [
-  // AudioNodeNotifier.forTest() skips FFI/AudioNodeService initialisation
-  audioNodeProvider.overrideWith((_) => AudioNodeNotifier.forTest()),
-  assetWithReadinessProvider.overrideWith((ref, id) => null),
-  enrichedAssetsProvider.overrideWithValue([]),
-  domainCueListProvider.overrideWithValue(null),
-];
+      // AudioNodeNotifier.forTest() skips FFI/AudioNodeService initialisation
+      audioNodeProvider.overrideWith((_) => AudioNodeNotifier.forTest()),
+      assetWithReadinessProvider.overrideWith((ref, id) => null),
+      enrichedAssetsProvider.overrideWithValue([]),
+      domainCueListProvider.overrideWithValue(null),
+    ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -126,7 +128,8 @@ void main() {
       const wait = WaitParams(durationMs: 5000);
 
       applyParamsChange(audio, wait, cache);
-      final result = applyParamsChange(wait, const AudioParams(assetId: ''), cache);
+      final result =
+          applyParamsChange(wait, const AudioParams(assetId: ''), cache);
 
       expect(result, isA<AudioParams>());
       expect((result as AudioParams).volumeDb, -12.0);
@@ -187,7 +190,8 @@ void main() {
 
     setUp(() => notifier = _StubNotifier());
 
-    testWidgets('renders cue number and label in title (WaitParams)', (tester) async {
+    testWidgets('renders cue number and label in title (WaitParams)',
+        (tester) async {
       await tester.pumpWidget(_wrap(
         CueInspector(cue: _waitCue, notifier: notifier),
       ));
@@ -197,7 +201,8 @@ void main() {
       expect(find.text('4 · WARTEN'), findsOneWidget);
     });
 
-    testWidgets('renders cue number and label for NoteParams cue', (tester) async {
+    testWidgets('renders cue number and label for NoteParams cue',
+        (tester) async {
       await tester.pumpWidget(_wrap(
         CueInspector(cue: _noteCue, notifier: notifier),
       ));
@@ -235,7 +240,8 @@ void main() {
       expect(find.text('NOTE'), findsOneWidget);
     });
 
-    testWidgets('shows GrandMA OSC section for MaOscParams cue', (tester) async {
+    testWidgets('shows GrandMA OSC section for MaOscParams cue',
+        (tester) async {
       await tester.pumpWidget(_wrap(
         CueInspector(cue: _maOscCue, notifier: notifier),
       ));
@@ -282,7 +288,8 @@ void main() {
       expect(find.text('AUDIO'), findsOneWidget);
     });
 
-    testWidgets('switching Audio → Wait → Audio restores Audio section', (tester) async {
+    testWidgets('switching Audio → Wait → Audio restores Audio section',
+        (tester) async {
       await tester.pumpWidget(_wrap(
         CueInspector(cue: _audioCue, notifier: notifier),
       ));
@@ -326,7 +333,8 @@ void main() {
       expect(notifier.upsertCalls, isNotEmpty);
     });
 
-    testWidgets('didUpdateWidget: different cue id resets draft', (tester) async {
+    testWidgets('didUpdateWidget: different cue id resets draft',
+        (tester) async {
       late StateSetter outerSetState;
       var currentCue = _waitCue;
 
@@ -339,7 +347,8 @@ void main() {
             theme: ThemeData.dark(useMaterial3: true),
             home: Scaffold(
               body: SizedBox(
-                width: 400, height: 800,
+                width: 400,
+                height: 800,
                 child: StatefulBuilder(
                   builder: (context, setState) {
                     outerSetState = setState;

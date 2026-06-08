@@ -16,15 +16,13 @@ class InventoryDao {
   // ─── Read ────────────────────────────────────────────────────────────────
 
   /// Returns all inventory items ordered by most recently updated.
-  Future<List<InventoryItem>> getAllItems() =>
-      (_db.select(_db.inventoryItems)
-            ..orderBy([(t) => OrderingTerm.desc(t.lastUpdatedMs)]))
-          .get();
+  Future<List<InventoryItem>> getAllItems() => (_db.select(_db.inventoryItems)
+        ..orderBy([(t) => OrderingTerm.desc(t.lastUpdatedMs)]))
+      .get();
 
   /// Returns a single item by its application-level [itemId], or null.
   Future<InventoryItem?> getByItemId(String itemId) =>
-      (_db.select(_db.inventoryItems)
-            ..where((t) => t.itemId.equals(itemId)))
+      (_db.select(_db.inventoryItems)..where((t) => t.itemId.equals(itemId)))
           .getSingleOrNull();
 
   /// Sucht alle lokalen Items, deren 16-Bit-ShortId (djb2 hash % 65536) mit
@@ -81,12 +79,12 @@ class InventoryDao {
       sourceDeviceId: crdt.status.ownerShortId.toString(),
     );
     return _db.into(_db.inventoryItems).insert(
-      companion,
-      onConflict: DoUpdate(
-        (old) => companion,
-        target: [_db.inventoryItems.itemId],
-      ),
-    );
+          companion,
+          onConflict: DoUpdate(
+            (old) => companion,
+            target: [_db.inventoryItems.itemId],
+          ),
+        );
   }
 
   /// Merges a remote [InventoryItemCrdt] with the local copy (if any).
@@ -135,9 +133,7 @@ class InventoryDao {
 
   /// Emits a fresh list every time the [InventoryItems] table changes.
   /// The UI can consume this via a Riverpod StreamProvider for live updates.
-  Stream<List<InventoryItem>> watchAllItems() =>
-      (_db.select(_db.inventoryItems)
-            ..orderBy([(t) => OrderingTerm.desc(t.lastUpdatedMs)]))
-          .watch();
+  Stream<List<InventoryItem>> watchAllItems() => (_db.select(_db.inventoryItems)
+        ..orderBy([(t) => OrderingTerm.desc(t.lastUpdatedMs)]))
+      .watch();
 }
-

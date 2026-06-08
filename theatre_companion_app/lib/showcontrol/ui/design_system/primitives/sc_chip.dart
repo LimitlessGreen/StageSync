@@ -23,10 +23,10 @@ class ScChip extends StatelessWidget {
   });
 
   static Color _color(ScChipState s) => switch (s) {
-        ScChipState.ok      => ScColors.active,
-        ScChipState.warn    => ScColors.warn,
-        ScChipState.error   => ScColors.error,
-        ScChipState.idle    => ScColors.past,
+        ScChipState.ok => ScColors.active,
+        ScChipState.warn => ScColors.warn,
+        ScChipState.error => ScColors.error,
+        ScChipState.idle => ScColors.past,
         ScChipState.syncing => const Color(0xFF42A5F5),
       };
 

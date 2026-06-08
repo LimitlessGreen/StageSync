@@ -32,7 +32,8 @@ import 'dart:math' show sqrt;
 
 import 'package:battery_plus/battery_plus.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:flutter/foundation.dart' show kIsWeb, TargetPlatform, defaultTargetPlatform;
+import 'package:flutter/foundation.dart'
+    show kIsWeb, TargetPlatform, defaultTargetPlatform;
 import 'package:sensors_plus/sensors_plus.dart';
 
 import '../models/ble_packet.dart';
@@ -331,6 +332,3 @@ bool _isMobilePlatform() {
   return defaultTargetPlatform == TargetPlatform.android ||
       defaultTargetPlatform == TargetPlatform.iOS;
 }
-
-
-

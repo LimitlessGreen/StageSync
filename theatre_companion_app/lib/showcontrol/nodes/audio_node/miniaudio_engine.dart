@@ -125,12 +125,19 @@ class MiniaudioEngine implements AbstractAudioEngine {
     _play = _lib.lookupFunction<_PlayNative, _PlayDart>('ma_wrapper_play');
     _stop = _lib.lookupFunction<_StopNative, _StopDart>('ma_wrapper_stop');
     _pause = _lib.lookupFunction<_PauseNative, _PauseDart>('ma_wrapper_pause');
-    _resume = _lib.lookupFunction<_ResumNative, _ResumDart>('ma_wrapper_resume');
-    _fadeVol = _lib.lookupFunction<_FadeVolNative, _FadeVolDart>('ma_wrapper_fade_volume');
-    _setMasterVol = _lib.lookupFunction<_SetMasterVolNative, _SetMasterVolDart>('ma_wrapper_set_master_volume');
-    _stopAll = _lib.lookupFunction<_StopAllNative, _StopAllDart>('ma_wrapper_stop_all');
-    _freeStr = _lib.lookupFunction<_FreeStrNative, _FreeStrDart>('ma_wrapper_free_string');
-    _detectSilence = _lib.lookupFunction<_DetectSilenceNative, _DetectSilenceDart>('ma_wrapper_detect_silence');
+    _resume =
+        _lib.lookupFunction<_ResumNative, _ResumDart>('ma_wrapper_resume');
+    _fadeVol = _lib
+        .lookupFunction<_FadeVolNative, _FadeVolDart>('ma_wrapper_fade_volume');
+    _setMasterVol = _lib.lookupFunction<_SetMasterVolNative, _SetMasterVolDart>(
+        'ma_wrapper_set_master_volume');
+    _stopAll = _lib
+        .lookupFunction<_StopAllNative, _StopAllDart>('ma_wrapper_stop_all');
+    _freeStr = _lib
+        .lookupFunction<_FreeStrNative, _FreeStrDart>('ma_wrapper_free_string');
+    _detectSilence =
+        _lib.lookupFunction<_DetectSilenceNative, _DetectSilenceDart>(
+            'ma_wrapper_detect_silence');
   }
 
   // ── AbstractAudioEngine ────────────────────────────────────────────────────
@@ -375,9 +382,13 @@ class MiniaudioEngine implements AbstractAudioEngine {
     final outStart = calloc<Float>();
     final outEnd = calloc<Float>();
     try {
-      final result = _detectSilence(pathPtr, thresholdDb, padMs, outStart, outEnd);
+      final result =
+          _detectSilence(pathPtr, thresholdDb, padMs, outStart, outEnd);
       if (result != 0) return null;
-      return (startMs: outStart.value.toDouble(), endMs: outEnd.value.toDouble());
+      return (
+        startMs: outStart.value.toDouble(),
+        endMs: outEnd.value.toDouble()
+      );
     } finally {
       malloc.free(pathPtr);
       calloc.free(outStart);

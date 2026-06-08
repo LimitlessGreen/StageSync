@@ -26,6 +26,7 @@ class MediaAudioInfo {
   final int channels;
   final int sampleRate;
   final int bitDepth;
+
   /// EBU R128 integrated loudness in LUFS. null = not yet measured.
   final double? loudnessLufs;
 
@@ -38,11 +39,11 @@ class MediaAudioInfo {
   });
 
   factory MediaAudioInfo.fromJson(Map<String, dynamic> j) => MediaAudioInfo(
-        durationMs:   (j['duration_ms']    as num?)?.toInt()    ?? 0,
-        channels:     (j['channels']       as num?)?.toInt()    ?? 0,
-        sampleRate:   (j['sample_rate']    as num?)?.toInt()    ?? 0,
-        bitDepth:     (j['bit_depth']      as num?)?.toInt()    ?? 0,
-        loudnessLufs: (j['loudness_lufs']  as num?)?.toDouble(),
+        durationMs: (j['duration_ms'] as num?)?.toInt() ?? 0,
+        channels: (j['channels'] as num?)?.toInt() ?? 0,
+        sampleRate: (j['sample_rate'] as num?)?.toInt() ?? 0,
+        bitDepth: (j['bit_depth'] as num?)?.toInt() ?? 0,
+        loudnessLufs: (j['loudness_lufs'] as num?)?.toDouble(),
       );
 }
 
@@ -67,11 +68,11 @@ class MediaFile {
   factory MediaFile.fromJson(Map<String, dynamic> j) {
     final audioJson = j['audio'] as Map<String, dynamic>?;
     return MediaFile(
-      name:       j['name'] as String,
-      sizeBytes:  (j['size_bytes'] as num?)?.toInt() ?? 0,
-      sha256:     j['sha256'] as String? ?? '',
+      name: j['name'] as String,
+      sizeBytes: (j['size_bytes'] as num?)?.toInt() ?? 0,
+      sha256: j['sha256'] as String? ?? '',
       modifiedMs: (j['modified_ms'] as num?)?.toInt() ?? 0,
-      mimeType:   j['mime_type'] as String? ?? 'audio/wav',
+      mimeType: j['mime_type'] as String? ?? 'audio/wav',
       audio: audioJson != null ? MediaAudioInfo.fromJson(audioJson) : null,
     );
   }
@@ -86,7 +87,8 @@ class ServerMediaClient {
   final String baseUrl;
   final http.Client? _http;
 
-  ServerMediaClient(this.baseUrl, {http.Client? httpClient}) : _http = httpClient;
+  ServerMediaClient(this.baseUrl, {http.Client? httpClient})
+      : _http = httpClient;
 
   /// Erzeugt einen Client aus der aktuellen Server-Verbindung (oder null,
   /// wenn nicht verbunden).
@@ -133,11 +135,15 @@ class ServerMediaClient {
   /// Lädt eine Datei zum Server hoch.
   Future<MediaFile> upload(String filename, List<int> bytes) async {
     final req = http.MultipartRequest('POST', _u('/media/upload'))
-      ..files.add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
-    final streamed = await (_http ?? http.Client()).send(req).timeout(const Duration(seconds: 60));
+      ..files
+          .add(http.MultipartFile.fromBytes('file', bytes, filename: filename));
+    final streamed = await (_http ?? http.Client())
+        .send(req)
+        .timeout(const Duration(seconds: 60));
     final resp = await http.Response.fromStream(streamed);
     if (resp.statusCode != 200) {
-      throw HttpException('upload fehlgeschlagen (HTTP ${resp.statusCode}): ${resp.body}');
+      throw HttpException(
+          'upload fehlgeschlagen (HTTP ${resp.statusCode}): ${resp.body}');
     }
     return MediaFile.fromJson(jsonDecode(resp.body) as Map<String, dynamic>);
   }

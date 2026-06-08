@@ -1,8 +1,11 @@
-﻿import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:theatre_companion_app/network/routing/peer_registry.dart';
-PeerInfo makePeer(String id, {int shortId = 1, int rssi = -70}) =>
-    PeerInfo(deviceId: id, deviceShortId: shortId, rssi: rssi,
-        lastSeenMs: DateTime.now().millisecondsSinceEpoch);
+
+PeerInfo makePeer(String id, {int shortId = 1, int rssi = -70}) => PeerInfo(
+    deviceId: id,
+    deviceShortId: shortId,
+    rssi: rssi,
+    lastSeenMs: DateTime.now().millisecondsSinceEpoch);
 void main() {
   late PeerRegistry reg;
   setUp(() => reg = PeerRegistry());
@@ -19,7 +22,10 @@ void main() {
     });
     test('neuer Peer loest PeerChangeCallback aus', () {
       bool called = false;
-      reg.addListener((peer, isOnline) { called = true; expect(isOnline, isTrue); });
+      reg.addListener((peer, isOnline) {
+        called = true;
+        expect(isOnline, isTrue);
+      });
       reg.touchPeer(deviceId: 'dev-B', deviceShortId: 2, rssi: -70);
       expect(called, isTrue);
     });
@@ -55,8 +61,10 @@ void main() {
     test('abgelaufene Peers werden entfernt', () {
       // Peer mit lastSeenMs in der Vergangenheit (> kPeerTimeoutMs)
       final stale = PeerInfo(
-        deviceId: 'old-dev', deviceShortId: 99,
-        lastSeenMs: DateTime.now().millisecondsSinceEpoch - kPeerTimeoutMs - 1000,
+        deviceId: 'old-dev',
+        deviceShortId: 99,
+        lastSeenMs:
+            DateTime.now().millisecondsSinceEpoch - kPeerTimeoutMs - 1000,
       );
       reg.upsert(stale);
       reg.touchPeer(deviceId: 'fresh-dev', deviceShortId: 1, rssi: -60);
@@ -69,7 +77,8 @@ void main() {
       final calls = <bool>[];
       reg.addListener((_, isOnline) => calls.add(isOnline));
       final stale = PeerInfo(
-        deviceId: 'stale', deviceShortId: 5,
+        deviceId: 'stale',
+        deviceShortId: 5,
         lastSeenMs: DateTime.now().millisecondsSinceEpoch - kPeerTimeoutMs - 1,
       );
       reg.upsert(stale);
@@ -108,5 +117,3 @@ void main() {
     test('null wenn keine Peers', () => expect(reg.highestScoredPeer, isNull));
   });
 }
-
-

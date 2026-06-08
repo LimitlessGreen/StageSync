@@ -135,7 +135,8 @@ class _QrScanScreenState extends State<QrScanScreen> {
                 duration: const Duration(milliseconds: 300),
                 child: _scanned
                     ? _ScannedBadge(value: _lastValue ?? '')
-                    : _HintLabel(hint: widget.hint ?? 'QR-Code in den Rahmen halten'),
+                    : _HintLabel(
+                        hint: widget.hint ?? 'QR-Code in den Rahmen halten'),
               ),
             ),
         ],
@@ -182,8 +183,7 @@ class _ScanOverlayState extends State<_ScanOverlay>
 
   @override
   Widget build(BuildContext context) {
-    final color =
-        widget.scanned ? Colors.greenAccent : widget.accentColor;
+    final color = widget.scanned ? Colors.greenAccent : widget.accentColor;
 
     return Center(
       child: SizedBox(
@@ -269,7 +269,9 @@ class _FramePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_FramePainter old) =>
-      old.scanLineY != scanLineY || old.scanned != scanned || old.color != color;
+      old.scanLineY != scanLineY ||
+      old.scanned != scanned ||
+      old.color != color;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -329,4 +331,3 @@ class _ScannedBadge extends StatelessWidget {
     );
   }
 }
-

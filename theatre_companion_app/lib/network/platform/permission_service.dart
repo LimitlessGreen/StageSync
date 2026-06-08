@@ -231,8 +231,8 @@ class PermissionService {
       anyPermanentlyDenied = true;
     }
 
-    final bleGranted =
-        denied.isEmpty || await Permission.bluetooth.status.then((s) => s.isGranted);
+    final bleGranted = denied.isEmpty ||
+        await Permission.bluetooth.status.then((s) => s.isGranted);
 
     return PermissionResult(
       bleMeshGranted: bleGranted,
@@ -284,4 +284,3 @@ class PermissionService {
     return await Permission.bluetooth.status.then((s) => s.isGranted);
   }
 }
-

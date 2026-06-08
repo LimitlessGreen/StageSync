@@ -8,7 +8,8 @@ class StageSyncServer {
   final int port;
   final String name;
 
-  const StageSyncServer({required this.host, required this.port, required this.name});
+  const StageSyncServer(
+      {required this.host, required this.port, required this.name});
 
   @override
   String toString() => '$name ($host:$port)';
@@ -36,7 +37,8 @@ class MdnsDiscovery {
       await client.start(interfacesFactory: _multicastCapableInterfaces);
 
       await for (final PtrResourceRecord ptr in client
-          .lookup<PtrResourceRecord>(ResourceRecordQuery.serverPointer(_serviceType))
+          .lookup<PtrResourceRecord>(
+              ResourceRecordQuery.serverPointer(_serviceType))
           .timeout(timeout, onTimeout: (_) {})) {
         if (seen.contains(ptr.domainName)) continue;
         seen.add(ptr.domainName);
@@ -45,7 +47,8 @@ class MdnsDiscovery {
         int port = 50051;
         String? srvTarget;
         await for (final SrvResourceRecord srv in client
-            .lookup<SrvResourceRecord>(ResourceRecordQuery.service(ptr.domainName))
+            .lookup<SrvResourceRecord>(
+                ResourceRecordQuery.service(ptr.domainName))
             .timeout(const Duration(seconds: 2), onTimeout: (_) {})) {
           port = srv.port;
           srvTarget = srv.target;
@@ -56,7 +59,8 @@ class MdnsDiscovery {
         final serverIps = <String>[];
         final target = srvTarget ?? ptr.domainName;
         await for (final IPAddressResourceRecord ip in client
-            .lookup<IPAddressResourceRecord>(ResourceRecordQuery.addressIPv4(target))
+            .lookup<IPAddressResourceRecord>(
+                ResourceRecordQuery.addressIPv4(target))
             .timeout(const Duration(seconds: 2), onTimeout: (_) {})) {
           serverIps.add(ip.address.address);
         }
@@ -101,7 +105,8 @@ class MdnsDiscovery {
     for (final local in localIps) {
       final localOctets = local.split('.');
       if (localOctets.length != 4) continue;
-      final localPrefix = '${localOctets[0]}.${localOctets[1]}.${localOctets[2]}.';
+      final localPrefix =
+          '${localOctets[0]}.${localOctets[1]}.${localOctets[2]}.';
 
       for (final server in serverIps) {
         if (server.startsWith(localPrefix)) return server;

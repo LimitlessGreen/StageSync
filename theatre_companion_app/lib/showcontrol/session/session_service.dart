@@ -127,9 +127,10 @@ class SessionService {
 
   Exception _mapGrpcError(GrpcError e) {
     return switch (e.code) {
-      StatusCode.unauthenticated => SessionAuthException(e.message ?? 'Auth failed'),
-      StatusCode.notFound        => SessionNotFoundException(e.message ?? 'Not found'),
-      _                          => SessionException(e.message ?? 'Unknown error'),
+      StatusCode.unauthenticated =>
+        SessionAuthException(e.message ?? 'Auth failed'),
+      StatusCode.notFound => SessionNotFoundException(e.message ?? 'Not found'),
+      _ => SessionException(e.message ?? 'Unknown error'),
     };
   }
 }
@@ -137,7 +138,8 @@ class SessionService {
 class SessionException implements Exception {
   final String message;
   const SessionException(this.message);
-  @override String toString() => 'SessionException: $message';
+  @override
+  String toString() => 'SessionException: $message';
 }
 
 class SessionAuthException extends SessionException {

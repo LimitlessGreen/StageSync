@@ -32,15 +32,12 @@ void main() {
     });
 
     test('hasError only for error phase', () {
-      expect(
-          NodeExecState(phase: NodeExecPhase.error).hasError, isTrue);
-      expect(
-          NodeExecState(phase: NodeExecPhase.playing).hasError, isFalse);
+      expect(NodeExecState(phase: NodeExecPhase.error).hasError, isTrue);
+      expect(NodeExecState(phase: NodeExecPhase.playing).hasError, isFalse);
     });
 
     test('copyWith preserves unset fields', () {
-      final s = NodeExecState(
-          phase: NodeExecPhase.buffering, bufferPct: 0.5);
+      final s = NodeExecState(phase: NodeExecPhase.buffering, bufferPct: 0.5);
       final u = s.copyWith(bufferPct: 0.9);
       expect(u.phase, NodeExecPhase.buffering);
       expect(u.bufferPct, 0.9);
@@ -116,8 +113,7 @@ void main() {
     test('runStateFor returns correct state', () {
       final runState = CueRunState(lifecycle: CueLifecycle.running);
       final state = idle.copyWith(perCue: {'cue-1': runState});
-      expect(state.runStateFor('cue-1')?.lifecycle,
-          CueLifecycle.running);
+      expect(state.runStateFor('cue-1')?.lifecycle, CueLifecycle.running);
     });
 
     test('runningCueIds tracks parallel execution', () {

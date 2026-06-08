@@ -48,9 +48,8 @@ class CloudPeerInfo {
   const CloudPeerInfo({required this.userId, required this.userName});
 
   /// Kurzanzeige für die UI (letzten 8 Zeichen der userId).
-  String get shortId => userId.length > 8
-      ? '…${userId.substring(userId.length - 8)}'
-      : userId;
+  String get shortId =>
+      userId.length > 8 ? '…${userId.substring(userId.length - 8)}' : userId;
 }
 
 /// Snapshot of a single peer as seen by the local device.

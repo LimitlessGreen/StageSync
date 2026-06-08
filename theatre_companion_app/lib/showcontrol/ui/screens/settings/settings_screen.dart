@@ -60,7 +60,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _SectionHeader('ANZEIGE'),
           _ToggleRow(
             label: 'Display immer an',
-            description: 'Verhindert, dass der Bildschirm sich während einer Show ausschaltet.',
+            description:
+                'Verhindert, dass der Bildschirm sich während einer Show ausschaltet.',
             icon: Icons.screen_lock_portrait,
             value: settings.keepScreenOn,
             onChanged: notifier.setKeepScreenOn,
@@ -76,7 +77,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             _InfoRow(
               icon: Icons.warning_amber_rounded,
               label: 'Hintergrund eingeschränkt',
-              description: 'Ohne Batterieoptimierungs-Ausnahme kann Android die App '
+              description:
+                  'Ohne Batterieoptimierungs-Ausnahme kann Android die App '
                   'nach ~1–2 Min. im Hintergrund einschränken oder beenden. '
                   'Tippe oben auf "Ausnahme beantragen" um das zu beheben.',
             ),
@@ -84,7 +86,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             _InfoRow(
               icon: Icons.check_circle_outline,
               label: 'Hintergrund-Betrieb aktiv',
-              description: 'StageSync läuft als Foreground Service und ist von der '
+              description:
+                  'StageSync läuft als Foreground Service und ist von der '
                   'Batterieoptimierung ausgenommen. gRPC-Streams und Audio bleiben '
                   'auch bei ausgeschaltetem Bildschirm aktiv.',
             ),
@@ -103,7 +106,8 @@ class _SectionHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(ScSpacing.panelPad, 16, ScSpacing.panelPad, 6),
+      padding: const EdgeInsets.fromLTRB(
+          ScSpacing.panelPad, 16, ScSpacing.panelPad, 6),
       child: Text(title, style: ScText.panelTitle),
     );
   }
@@ -135,7 +139,8 @@ class _ToggleRow extends StatelessWidget {
             horizontal: ScSpacing.panelPad, vertical: 12),
         child: Row(
           children: [
-            Icon(icon, size: 18, color: value ? ScColors.active : ScColors.textDim),
+            Icon(icon,
+                size: 18, color: value ? ScColors.active : ScColors.textDim),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
@@ -148,8 +153,8 @@ class _ToggleRow extends StatelessWidget {
                       )),
                   const SizedBox(height: 2),
                   Text(description,
-                      style: ScText.label.copyWith(
-                          color: ScColors.textDim, fontSize: 11)),
+                      style: ScText.label
+                          .copyWith(color: ScColors.textDim, fontSize: 11)),
                 ],
               ),
             ),
@@ -183,8 +188,8 @@ class _BatteryRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final loading = isIgnoring == null;
-    final ok      = isIgnoring == true;
-    final color   = ok ? ScColors.active : ScColors.warn;
+    final ok = isIgnoring == true;
+    final color = ok ? ScColors.active : ScColors.warn;
 
     return Container(
       padding: const EdgeInsets.symmetric(
@@ -213,7 +218,8 @@ class _BatteryRow extends StatelessWidget {
                       : ok
                           ? 'Ausnahme aktiv — App läuft uneingeschränkt im Hintergrund.'
                           : 'Nicht ausgenommen — Android kann die App einschränken.',
-                  style: ScText.label.copyWith(color: ScColors.textDim, fontSize: 11),
+                  style: ScText.label
+                      .copyWith(color: ScColors.textDim, fontSize: 11),
                 ),
               ],
             ),
@@ -227,7 +233,8 @@ class _BatteryRow extends StatelessWidget {
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: ScColors.warn.withValues(alpha: 0.12),
-                  border: Border.all(color: ScColors.warn.withValues(alpha: 0.5)),
+                  border:
+                      Border.all(color: ScColors.warn.withValues(alpha: 0.5)),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
@@ -286,8 +293,8 @@ class _InfoRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(label,
-                    style: ScText.label.copyWith(
-                        color: color, fontWeight: FontWeight.w600)),
+                    style: ScText.label
+                        .copyWith(color: color, fontWeight: FontWeight.w600)),
                 const SizedBox(height: 3),
                 Text(description,
                     style: ScText.label

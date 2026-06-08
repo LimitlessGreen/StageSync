@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../showcontrol/grpc/generated/stagesync/v1/talkback.pb.dart' as tb_proto;
+import '../../showcontrol/grpc/generated/stagesync/v1/talkback.pb.dart'
+    as tb_proto;
 import '../../talkback/talkback_provider.dart';
 import 'talk_button.dart';
 
@@ -59,7 +60,8 @@ class _TalkbackBarState extends ConsumerState<TalkbackBar> {
               decoration: BoxDecoration(
                 color: const Color(0xFFE65100).withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(4),
-                border: Border.all(color: const Color(0xFFE65100).withValues(alpha: 0.4)),
+                border: Border.all(
+                    color: const Color(0xFFE65100).withValues(alpha: 0.4)),
               ),
               child: Text(
                 tbState.errorMessage!,
@@ -104,8 +106,7 @@ class _TalkbackBarState extends ConsumerState<TalkbackBar> {
               _ModeToggle(tbState: tbState),
               const SizedBox(width: 6),
               // Bus-Selector
-              if (widget.availableBusIds.isNotEmpty)
-                _buildBusSelector(context),
+              if (widget.availableBusIds.isNotEmpty) _buildBusSelector(context),
             ],
           ),
         ],
@@ -125,8 +126,7 @@ class _TalkbackBarState extends ConsumerState<TalkbackBar> {
     final label = _selectedBusIds.isEmpty
         ? 'Alle Buses'
         : _selectedBusIds.length == 1
-            ? (widget.busNames[_selectedBusIds.first] ??
-                _selectedBusIds.first)
+            ? (widget.busNames[_selectedBusIds.first] ?? _selectedBusIds.first)
             : '${_selectedBusIds.length} Buses';
 
     return GestureDetector(
@@ -149,7 +149,8 @@ class _TalkbackBarState extends ConsumerState<TalkbackBar> {
               style: const TextStyle(color: Color(0xFFCCCCCC), fontSize: 12),
             ),
             const SizedBox(width: 4),
-            const Icon(Icons.arrow_drop_down, color: Color(0xFF888888), size: 18),
+            const Icon(Icons.arrow_drop_down,
+                color: Color(0xFF888888), size: 18),
           ],
         ),
       ),
@@ -190,8 +191,7 @@ class _TalkbackBarState extends ConsumerState<TalkbackBar> {
               final name = widget.busNames[id] ?? id;
               return CheckboxListTile(
                 value: _selectedBusIds.contains(id),
-                title: Text(name,
-                    style: const TextStyle(color: Colors.white)),
+                title: Text(name, style: const TextStyle(color: Colors.white)),
                 subtitle: Text(id,
                     style: const TextStyle(
                         color: Color(0xFF888888), fontSize: 11)),
@@ -243,9 +243,8 @@ class _ModeToggle extends ConsumerWidget {
                 : const Color(0xFF2C2C2C),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color: isDelayed
-                  ? const Color(0xFFCE93D8)
-                  : const Color(0xFF444444),
+              color:
+                  isDelayed ? const Color(0xFFCE93D8) : const Color(0xFF444444),
             ),
           ),
           child: Column(
@@ -297,7 +296,9 @@ class _TalkerChip extends StatelessWidget {
           const Icon(Icons.mic, color: Color(0xFFFF5252), size: 12),
           const SizedBox(width: 4),
           Text(
-            talker.displayName.isNotEmpty ? talker.displayName : talker.clientId,
+            talker.displayName.isNotEmpty
+                ? talker.displayName
+                : talker.clientId,
             style: const TextStyle(color: Color(0xFFFF8A80), fontSize: 11),
           ),
         ],

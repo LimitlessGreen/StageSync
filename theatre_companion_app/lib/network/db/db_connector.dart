@@ -8,4 +8,3 @@
 //   final db = AppDatabase(openDatabaseForPlatform('/pfad/zur/db.sqlite'));
 export 'db_connector_native.dart'
     if (dart.library.html) 'db_connector_web.dart';
-

@@ -10,12 +10,12 @@ import '../sc_typography.dart';
 /// 0 dB (unity) is marked visually at the 90% position.
 /// No domain knowledge — takes raw dB and emits dB.
 class MasterVolumeSlider extends StatelessWidget {
-  final double value;          // current value in dB
+  final double value; // current value in dB
   final ValueChanged<double> onChanged;
-  final bool compact;          // true = single-row, false = with label row
+  final bool compact; // true = single-row, false = with label row
 
   static const double _min = -60.0;
-  static const double _max =   6.0;
+  static const double _max = 6.0;
 
   const MasterVolumeSlider({
     super.key,
@@ -31,7 +31,7 @@ class MasterVolumeSlider extends StatelessWidget {
 
   Color get _trackColor {
     if (value <= _min) return ScColors.past;
-    if (value > 0)     return ScColors.warn;
+    if (value > 0) return ScColors.warn;
     return ScColors.active;
   }
 
@@ -50,17 +50,19 @@ class MasterVolumeSlider extends StatelessWidget {
           children: [
             const Icon(Icons.volume_up, size: 14, color: ScColors.textDim),
             const SizedBox(width: 6),
-            const Text('MASTER VOLUME', style: TextStyle(
-              color: ScColors.textDim,
-              fontSize: 10,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.8,
-            )),
+            const Text('MASTER VOLUME',
+                style: TextStyle(
+                  color: ScColors.textDim,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.8,
+                )),
             const Spacer(),
-            Text(_label, style: ScText.numberSmall.copyWith(
-              color: _trackColor,
-              fontWeight: FontWeight.w700,
-            )),
+            Text(_label,
+                style: ScText.numberSmall.copyWith(
+                  color: _trackColor,
+                  fontWeight: FontWeight.w700,
+                )),
           ],
         ),
         _slider(context),
@@ -75,8 +77,10 @@ class MasterVolumeSlider extends StatelessWidget {
         Expanded(child: _slider(context)),
         SizedBox(
           width: 44,
-          child: Text(_label,
-            style: ScText.numberSmall.copyWith(color: _trackColor, fontSize: 10),
+          child: Text(
+            _label,
+            style:
+                ScText.numberSmall.copyWith(color: _trackColor, fontSize: 10),
             textAlign: TextAlign.right,
           ),
         ),

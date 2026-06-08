@@ -50,7 +50,8 @@ class _TalkButtonState extends ConsumerState<TalkButton>
 
   @override
   Widget build(BuildContext context) {
-    final tbState = ref.watch(talkbackProvider).valueOrNull ?? const TalkbackState();
+    final tbState =
+        ref.watch(talkbackProvider).valueOrNull ?? const TalkbackState();
     final status = tbState.status;
     final isDelayed = tbState.mode == TalkbackMode.delayed;
     final isActive = status == TalkbackStatus.active;
@@ -89,7 +90,12 @@ class _TalkButtonState extends ConsumerState<TalkButton>
         color: bgColor,
         borderRadius: BorderRadius.circular(8),
         boxShadow: isActive && !_discarding
-            ? [BoxShadow(color: bgColor.withValues(alpha: 0.5), blurRadius: 12, spreadRadius: 2)]
+            ? [
+                BoxShadow(
+                    color: bgColor.withValues(alpha: 0.5),
+                    blurRadius: 12,
+                    spreadRadius: 2)
+              ]
             : [],
       ),
       child: Stack(
@@ -128,7 +134,8 @@ class _TalkButtonState extends ConsumerState<TalkButton>
     if ((isActive || isRequesting) && !_discarding) {
       button = AnimatedBuilder(
         animation: _pulse,
-        builder: (_, child) => Transform.scale(scale: _pulse.value, child: child),
+        builder: (_, child) =>
+            Transform.scale(scale: _pulse.value, child: child),
         child: button,
       );
     }
@@ -136,7 +143,7 @@ class _TalkButtonState extends ConsumerState<TalkButton>
     return Listener(
       onPointerDown: (e) => _onPressDown(e.position),
       onPointerMove: (e) => _onPointerMove(e.position),
-      onPointerUp:   (_) => _onPressUp(),
+      onPointerUp: (_) => _onPressUp(),
       onPointerCancel: (_) => _onPressUp(),
       child: button,
     );
@@ -170,7 +177,9 @@ class _TalkButtonState extends ConsumerState<TalkButton>
     final dist = math.sqrt(delta.dx * delta.dx + delta.dy * delta.dy);
     final shouldDiscard = dist >= _kDiscardThreshold;
     if (shouldDiscard != _discarding) {
-      setState(() { _discarding = shouldDiscard; });
+      setState(() {
+        _discarding = shouldDiscard;
+      });
     }
   }
 
@@ -180,13 +189,15 @@ class _TalkButtonState extends ConsumerState<TalkButton>
 
     if (_discarding) {
       setState(() => _discarding = false);
-      if (status == TalkbackStatus.active || status == TalkbackStatus.requesting) {
+      if (status == TalkbackStatus.active ||
+          status == TalkbackStatus.requesting) {
         ref.read(talkbackProvider.notifier).cancelTalking();
       }
       return;
     }
 
-    if (status == TalkbackStatus.active || status == TalkbackStatus.requesting) {
+    if (status == TalkbackStatus.active ||
+        status == TalkbackStatus.requesting) {
       _releaseTimer = Timer(const Duration(milliseconds: 500), () {
         final s = ref.read(talkbackProvider).valueOrNull?.status;
         if (s == TalkbackStatus.active || s == TalkbackStatus.requesting) {

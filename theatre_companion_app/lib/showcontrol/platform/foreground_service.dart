@@ -36,7 +36,8 @@ class ForegroundService {
   static Future<bool> isIgnoringBatteryOptimizations() async {
     if (!Platform.isAndroid) return true;
     try {
-      return await _channel.invokeMethod('isIgnoringBatteryOptimizations') as bool;
+      return await _channel.invokeMethod('isIgnoringBatteryOptimizations')
+          as bool;
     } on PlatformException catch (_) {
       return false;
     }

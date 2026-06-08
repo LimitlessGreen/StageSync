@@ -12,10 +12,10 @@ class ScDragField extends StatefulWidget {
   final double value;
   final double min;
   final double max;
-  final double step;          // per-pixel drag sensitivity
+  final double step; // per-pixel drag sensitivity
   final int decimalPlaces;
   final String? suffix;
-  final String? label;        // optional label shown left of the field
+  final String? label; // optional label shown left of the field
   final bool readOnly;
   final ValueChanged<double>? onChanged;
   final ValueChanged<double>? onSubmitted; // fires when text confirmed
@@ -39,9 +39,9 @@ class ScDragField extends StatefulWidget {
 }
 
 class _ScDragFieldState extends State<ScDragField> {
-  bool _editing   = false;
-  bool _dragging  = false;
-  bool _hovered   = false;
+  bool _editing = false;
+  bool _dragging = false;
+  bool _hovered = false;
   double _dragStart = 0;
   double _valueAtDragStart = 0;
   double _fieldWidth = 120; // updated by LayoutBuilder
@@ -51,7 +51,7 @@ class _ScDragFieldState extends State<ScDragField> {
   @override
   void initState() {
     super.initState();
-    _ctrl  = TextEditingController(text: _fmt(widget.value));
+    _ctrl = TextEditingController(text: _fmt(widget.value));
     _focus = FocusNode();
     _focus.addListener(() {
       if (!_focus.hasFocus && _editing) _commitText();
@@ -96,8 +96,8 @@ class _ScDragFieldState extends State<ScDragField> {
     if (widget.readOnly) return;
     setState(() => _editing = true);
     _ctrl.text = _fmt(widget.value);
-    _ctrl.selection = TextSelection(
-      baseOffset: 0, extentOffset: _ctrl.text.length);
+    _ctrl.selection =
+        TextSelection(baseOffset: 0, extentOffset: _ctrl.text.length);
     WidgetsBinding.instance.addPostFrameCallback((_) => _focus.requestFocus());
   }
 
@@ -143,9 +143,11 @@ class _ScDragFieldState extends State<ScDragField> {
     return MouseRegion(
       cursor: widget.readOnly
           ? SystemMouseCursors.basic
-          : (_editing ? SystemMouseCursors.text : SystemMouseCursors.resizeLeftRight),
+          : (_editing
+              ? SystemMouseCursors.text
+              : SystemMouseCursors.resizeLeftRight),
       onEnter: (_) => setState(() => _hovered = true),
-      onExit:  (_) => setState(() => _hovered = false),
+      onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
         onDoubleTap: _enterEdit,
         onTap: _editing ? null : (_dragging ? null : _enterEdit),
@@ -164,10 +166,12 @@ class _ScDragFieldState extends State<ScDragField> {
             : (d) {
                 final delta = d.globalPosition.dx - _dragStart;
                 final double newVal;
-                final hasFiniteRange = !widget.min.isInfinite && !widget.max.isInfinite;
+                final hasFiniteRange =
+                    !widget.min.isInfinite && !widget.max.isInfinite;
                 if (hasFiniteRange && _fieldWidth > 0) {
                   // 1:1 with fill bar: dragging across full field width = full range
-                  newVal = _clamp(_valueAtDragStart + (delta / _fieldWidth) * (widget.max - widget.min));
+                  newVal = _clamp(_valueAtDragStart +
+                      (delta / _fieldWidth) * (widget.max - widget.min));
                 } else {
                   newVal = _clamp(_valueAtDragStart + delta * widget.step);
                 }
@@ -180,7 +184,11 @@ class _ScDragFieldState extends State<ScDragField> {
                 widget.onSubmitted?.call(widget.value);
               },
         child: _editing
-            ? _EditingField(ctrl: _ctrl, focus: _focus, suffix: widget.suffix, onSubmit: _commitText)
+            ? _EditingField(
+                ctrl: _ctrl,
+                focus: _focus,
+                suffix: widget.suffix,
+                onSubmit: _commitText)
             : _DisplayField(
                 value: widget.value,
                 suffix: widget.suffix,
@@ -218,9 +226,7 @@ class _DisplayField extends StatelessWidget {
     return Container(
       height: 22,
       decoration: BoxDecoration(
-        color: hovered
-            ? const Color(0xFF252525)
-            : const Color(0xFF1A1A1A),
+        color: hovered ? const Color(0xFF252525) : const Color(0xFF1A1A1A),
         borderRadius: BorderRadius.circular(3),
       ),
       child: ClipRRect(
@@ -287,7 +293,8 @@ class _EditingField extends StatelessWidget {
         decoration: InputDecoration(
           filled: true,
           fillColor: const Color(0xFF2D2D2D),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
           border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(3),
             borderSide: const BorderSide(color: Color(0xFF00E676), width: 1),
@@ -301,11 +308,14 @@ class _EditingField extends StatelessWidget {
             borderSide: const BorderSide(color: Color(0xFF00E676), width: 1),
           ),
           suffix: suffix != null
-              ? Text(suffix!, style: const TextStyle(color: Color(0xFF888888), fontSize: 10))
+              ? Text(suffix!,
+                  style:
+                      const TextStyle(color: Color(0xFF888888), fontSize: 10))
               : null,
           isDense: true,
         ),
-        keyboardType: const TextInputType.numberWithOptions(signed: true, decimal: true),
+        keyboardType:
+            const TextInputType.numberWithOptions(signed: true, decimal: true),
         textAlign: TextAlign.center,
         onSubmitted: (_) => onSubmit(),
       ),

@@ -65,7 +65,8 @@ class _BusConfigSheetState extends ConsumerState<_BusConfigSheet> {
                 const Spacer(),
                 TextButton.icon(
                   onPressed: () => _showAddBusDialog(context),
-                  icon: const Icon(Icons.add, size: 18, color: Color(0xFF64B5F6)),
+                  icon:
+                      const Icon(Icons.add, size: 18, color: Color(0xFF64B5F6)),
                   label: const Text('Bus hinzufügen',
                       style: TextStyle(color: Color(0xFF64B5F6), fontSize: 12)),
                 ),
@@ -139,11 +140,13 @@ class _BusConfigSheetState extends ConsumerState<_BusConfigSheet> {
                 value: selectedType,
                 dropdownColor: const Color(0xFF2C2C2C),
                 isExpanded: true,
-                items: AudioBusType.values.map((t) => DropdownMenuItem(
-                  value: t,
-                  child: Text(_busTypeName(t),
-                      style: const TextStyle(color: Colors.white)),
-                )).toList(),
+                items: AudioBusType.values
+                    .map((t) => DropdownMenuItem(
+                          value: t,
+                          child: Text(_busTypeName(t),
+                              style: const TextStyle(color: Colors.white)),
+                        ))
+                    .toList(),
                 onChanged: (t) {
                   if (t != null) setDlg(() => selectedType = t);
                 },
@@ -194,7 +197,8 @@ class _BusTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final audioNodes = ref.watch(showControlDomainProvider)
+    final audioNodes = ref
+        .watch(showControlDomainProvider)
         .nodes
         .where((n) => n.isAudio && n.isOnline)
         .toList();
@@ -266,7 +270,8 @@ class _BusTile extends ConsumerWidget {
                 width: 52,
                 child: Text(
                   '${bus.outputLevelDb.toStringAsFixed(1)} dB',
-                  style: const TextStyle(color: Color(0xFFAAAAAA), fontSize: 11),
+                  style:
+                      const TextStyle(color: Color(0xFFAAAAAA), fontSize: 11),
                   textAlign: TextAlign.right,
                 ),
               ),
@@ -302,8 +307,7 @@ class _BusTile extends ConsumerWidget {
                 )
               else
                 const Text('Keine Audio-Nodes online',
-                    style:
-                        TextStyle(color: Color(0xFF555555), fontSize: 11)),
+                    style: TextStyle(color: Color(0xFF555555), fontSize: 11)),
             ],
           ),
           const SizedBox(height: 6),
@@ -329,8 +333,7 @@ class _BusTile extends ConsumerWidget {
                 padding: const EdgeInsets.only(bottom: 4),
                 child: Row(
                   children: [
-                    const Icon(Icons.circle,
-                        size: 6, color: Color(0xFF64B5F6)),
+                    const Icon(Icons.circle, size: 6, color: Color(0xFF64B5F6)),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -344,13 +347,12 @@ class _BusTile extends ConsumerWidget {
                       icon: const Icon(Icons.close,
                           size: 14, color: Color(0xFF666666)),
                       padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                          minWidth: 24, minHeight: 24),
+                      constraints:
+                          const BoxConstraints(minWidth: 24, minHeight: 24),
                       onPressed: () {
                         final newPatch = bus.patch
-                            .where((a) =>
-                                !(a.nodeId == assign.nodeId &&
-                                    a.deviceIndex == assign.deviceIndex))
+                            .where((a) => !(a.nodeId == assign.nodeId &&
+                                a.deviceIndex == assign.deviceIndex))
                             .toList();
                         onChanged(_copyBus(patch: newPatch));
                       },
@@ -380,10 +382,9 @@ class _BusTile extends ConsumerWidget {
 
   void _showAddNodeDialog(BuildContext context, List<NodeStatus> audioNodes) {
     NodeStatus? selectedNode = audioNodes.first;
-    int selectedDeviceIndex =
-        audioNodes.first.availableDevices.isNotEmpty
-            ? audioNodes.first.availableDevices.first.index
-            : 0;
+    int selectedDeviceIndex = audioNodes.first.availableDevices.isNotEmpty
+        ? audioNodes.first.availableDevices.first.index
+        : 0;
 
     showDialog<void>(
       context: context,
@@ -399,8 +400,7 @@ class _BusTile extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text('Audio-Node',
-                    style: TextStyle(
-                        color: Color(0xFF888888), fontSize: 12)),
+                    style: TextStyle(color: Color(0xFF888888), fontSize: 12)),
                 const SizedBox(height: 4),
                 DropdownButton<NodeStatus>(
                   value: selectedNode,
@@ -410,27 +410,23 @@ class _BusTile extends ConsumerWidget {
                       .map((n) => DropdownMenuItem(
                             value: n,
                             child: Text(n.name,
-                                style: const TextStyle(
-                                    color: Colors.white)),
+                                style: const TextStyle(color: Colors.white)),
                           ))
                       .toList(),
                   onChanged: (n) => setDlg(() {
                     selectedNode = n;
-                    selectedDeviceIndex =
-                        n?.availableDevices.isNotEmpty == true
-                            ? n!.availableDevices.first.index
-                            : 0;
+                    selectedDeviceIndex = n?.availableDevices.isNotEmpty == true
+                        ? n!.availableDevices.first.index
+                        : 0;
                   }),
                 ),
                 const SizedBox(height: 12),
                 const Text('Ausgabegerät',
-                    style: TextStyle(
-                        color: Color(0xFF888888), fontSize: 12)),
+                    style: TextStyle(color: Color(0xFF888888), fontSize: 12)),
                 const SizedBox(height: 4),
                 if (devices.isEmpty)
                   const Text('System Default',
-                      style: TextStyle(
-                          color: Color(0xFFAAAAAA), fontSize: 13))
+                      style: TextStyle(color: Color(0xFFAAAAAA), fontSize: 13))
                 else
                   DropdownButton<int>(
                     value: selectedDeviceIndex,
@@ -462,9 +458,10 @@ class _BusTile extends ConsumerWidget {
                 onPressed: () {
                   if (selectedNode == null) return;
                   final devName = selectedNode!.availableDevices
-                      .where((d) => d.index == selectedDeviceIndex)
-                      .map((d) => d.name)
-                      .firstOrNull ?? '';
+                          .where((d) => d.index == selectedDeviceIndex)
+                          .map((d) => d.name)
+                          .firstOrNull ??
+                      '';
                   final newAssign = BusNodeAssign(
                     nodeId: selectedNode!.nodeId,
                     deviceIndex: selectedDeviceIndex,
@@ -492,8 +489,8 @@ class _BusTile extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text('Bus löschen?',
-            style: TextStyle(color: Colors.white)),
+        title:
+            const Text('Bus löschen?', style: TextStyle(color: Colors.white)),
         content: Text('"${bus.name}" wird aus der PatchConfig entfernt.',
             style: const TextStyle(color: Color(0xFFAAAAAA))),
         actions: [
@@ -570,17 +567,17 @@ class _EmptyBusHint extends StatelessWidget {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 String _busTypeName(AudioBusType t) => switch (t) {
-      AudioBusType.main     => 'MAIN',
-      AudioBusType.monitor  => 'MONITOR',
+      AudioBusType.main => 'MAIN',
+      AudioBusType.monitor => 'MONITOR',
       AudioBusType.talkback => 'TALKBACK',
-      AudioBusType.aux      => 'AUX',
-      AudioBusType.iem      => 'IEM',
+      AudioBusType.aux => 'AUX',
+      AudioBusType.iem => 'IEM',
     };
 
 Color _busTypeColor(AudioBusType t) => switch (t) {
-      AudioBusType.main     => const Color(0xFF64B5F6),
-      AudioBusType.monitor  => const Color(0xFF81C784),
+      AudioBusType.main => const Color(0xFF64B5F6),
+      AudioBusType.monitor => const Color(0xFF81C784),
       AudioBusType.talkback => const Color(0xFFFF8A65),
-      AudioBusType.aux      => const Color(0xFFCE93D8),
-      AudioBusType.iem      => const Color(0xFF4DD0E1),
+      AudioBusType.aux => const Color(0xFFCE93D8),
+      AudioBusType.iem => const Color(0xFF4DD0E1),
     };

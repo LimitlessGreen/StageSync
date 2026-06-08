@@ -62,6 +62,7 @@ enum BlePacketType {
   heartbeat(1),
   electionBid(2),
   ack(3),
+
   /// Chat text message – variable-length payload.
   text(4);
 
@@ -115,8 +116,8 @@ class BlePacketHeader {
   }
 
   /// Returns a new header with TTL decremented by 1.
-  BlePacketHeader withDecrementedTtl() =>
-      BlePacketHeader(type: type, ttl: ttl - 1, sourceDeviceShortId: sourceDeviceShortId);
+  BlePacketHeader withDecrementedTtl() => BlePacketHeader(
+      type: type, ttl: ttl - 1, sourceDeviceShortId: sourceDeviceShortId);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -182,7 +183,8 @@ class BleDataPacket {
   static BleDataPacket fromBytes(Uint8List bytes) {
     assert(bytes.length >= kHeaderSize + kDataBodySize);
     final header = BlePacketHeader.readFrom(bytes, 0);
-    final bd = ByteData.sublistView(bytes, kHeaderSize, kHeaderSize + kDataBodySize);
+    final bd =
+        ByteData.sublistView(bytes, kHeaderSize, kHeaderSize + kDataBodySize);
     return BleDataPacket(
       header: header,
       packetShortId: bd.getUint16(0, Endian.little),
@@ -328,8 +330,8 @@ class BleAckPacket {
   static BleAckPacket fromBytes(Uint8List bytes) {
     assert(bytes.length >= kHeaderSize + kAckBodySize);
     final header = BlePacketHeader.readFrom(bytes, 0);
-    final acked =
-        ByteData.sublistView(bytes, kHeaderSize, kHeaderSize + 2).getUint16(0, Endian.little);
+    final acked = ByteData.sublistView(bytes, kHeaderSize, kHeaderSize + 2)
+        .getUint16(0, Endian.little);
     return BleAckPacket(header: header, ackedPacketShortId: acked);
   }
 }
@@ -459,7 +461,3 @@ class BleChatTextPacket {
 
   String get dedupKey => '${header.sourceDeviceShortId}:$messageId';
 }
-
-
-
-

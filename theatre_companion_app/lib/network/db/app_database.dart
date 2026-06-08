@@ -184,7 +184,14 @@ class ChatMessages extends Table {
 // Database Class
 // ─────────────────────────────────────────────────────────────────────────────
 
-@DriftDatabase(tables: [InventoryItems, PacketQueue, PeerTable, ChatMessages, ShowCueLists, ShowCues])
+@DriftDatabase(tables: [
+  InventoryItems,
+  PacketQueue,
+  PeerTable,
+  ChatMessages,
+  ShowCueLists,
+  ShowCues
+])
 class AppDatabase extends _$AppDatabase {
   AppDatabase(super.e);
 
@@ -222,6 +229,3 @@ class AppDatabase extends _$AppDatabase {
     return AppDatabase(openDatabaseForPlatform(path));
   }
 }
-
-
-

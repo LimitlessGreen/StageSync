@@ -13,7 +13,7 @@ class ScInlineField extends StatefulWidget {
   final String label;
   final String value;
   final ValueChanged<String>? onChanged;
-  final String? suffix;     // unit: 'dB', 'ms', 's'
+  final String? suffix; // unit: 'dB', 'ms', 's'
   final bool readOnly;
   final TextInputType keyboardType;
   final String? tooltip;

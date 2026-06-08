@@ -9,7 +9,7 @@ import '../sc_typography.dart';
 /// Phase 3+: can add a waveform painter here without changing the API.
 class AudioCueMinibar extends StatelessWidget {
   final AudioParams params;
-  final Asset? asset;           // null if asset not yet resolved
+  final Asset? asset; // null if asset not yet resolved
   final double? knownDurationMs; // from asset metadata if available
 
   const AudioCueMinibar({
@@ -39,7 +39,8 @@ class AudioCueMinibar extends StatelessWidget {
             const SizedBox(width: 6),
             Expanded(
               child: Text(
-                asset?.name ?? (params.assetId.isEmpty ? 'Kein Asset' : params.assetId),
+                asset?.name ??
+                    (params.assetId.isEmpty ? 'Kein Asset' : params.assetId),
                 style: ScText.cueLabel.copyWith(fontSize: 12),
                 overflow: TextOverflow.ellipsis,
               ),
@@ -79,7 +80,8 @@ class AudioCueMinibar extends StatelessWidget {
               const Icon(Icons.skip_next, size: 11, color: ScColors.active),
               Text(
                 'AUTO',
-                style: ScText.label.copyWith(color: ScColors.active, fontSize: 9),
+                style:
+                    ScText.label.copyWith(color: ScColors.active, fontSize: 9),
               ),
             ] else if (params.startTimeMs > 0.001) ...[
               const SizedBox(width: 12),
@@ -139,7 +141,7 @@ class _DurationFadeBar extends StatelessWidget {
       );
     }
 
-    final fadeInFrac  = (fadeInMs / durationMs).clamp(0.0, 0.45);
+    final fadeInFrac = (fadeInMs / durationMs).clamp(0.0, 0.45);
     final fadeOutFrac = (fadeOutMs / durationMs).clamp(0.0, 0.45);
 
     return Container(
@@ -171,7 +173,7 @@ class _FadePainter extends CustomPainter {
     final paint = Paint()..color = Colors.blue.withValues(alpha: 0.35);
 
     // Sustained level fill
-    final fadeInW  = size.width * fadeInFrac;
+    final fadeInW = size.width * fadeInFrac;
     final fadeOutW = size.width * fadeOutFrac;
     canvas.drawRect(
       Rect.fromLTWH(fadeInW, 0, size.width - fadeInW - fadeOutW, size.height),
@@ -209,24 +211,24 @@ class _ReadinessBadge extends StatelessWidget {
   const _ReadinessBadge({required this.readiness});
 
   Color get _color => switch (readiness) {
-        AssetReadiness.patched    => ScColors.active,
+        AssetReadiness.patched => ScColors.active,
         AssetReadiness.renderable => ScColors.warn,
-        AssetReadiness.validated  => const Color(0xFF42A5F5),
-        AssetReadiness.present    => ScColors.warn,
+        AssetReadiness.validated => const Color(0xFF42A5F5),
+        AssetReadiness.present => ScColors.warn,
       };
 
   String get _label => switch (readiness) {
-        AssetReadiness.patched    => '✓',
+        AssetReadiness.patched => '✓',
         AssetReadiness.renderable => '▶',
-        AssetReadiness.validated  => '✓',
-        AssetReadiness.present    => '↑',
+        AssetReadiness.validated => '✓',
+        AssetReadiness.present => '↑',
       };
 
   String get _tooltip => switch (readiness) {
-        AssetReadiness.patched    => 'Bereit auf allen Nodes',
+        AssetReadiness.patched => 'Bereit auf allen Nodes',
         AssetReadiness.renderable => 'Abspielbar (nicht vollständig verteilt)',
-        AssetReadiness.validated  => 'Geprüft',
-        AssetReadiness.present    => 'Auf Server – wird auf Nodes verteilt',
+        AssetReadiness.validated => 'Geprüft',
+        AssetReadiness.present => 'Auf Server – wird auf Nodes verteilt',
       };
 
   @override

@@ -18,7 +18,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../network/isolate/isolate_messages.dart';
 import '../providers/network_state_provider.dart';
-import 'qr_scan_screen.dart';// ─────────────────────────────────────────────────────────────────────────────
+import 'qr_scan_screen.dart'; // ─────────────────────────────────────────────────────────────────────────────
 // SharedPreferences Schlüssel
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -126,9 +126,8 @@ class _CloudSettingsScreenState extends ConsumerState<CloudSettingsScreen> {
             ? _userNameCtrl.text.trim()
             : _userIdCtrl.text.trim(),
         secret: _secretCtrl.text.trim(),
-        showId: _showIdCtrl.text.trim().isNotEmpty
-            ? _showIdCtrl.text.trim()
-            : null,
+        showId:
+            _showIdCtrl.text.trim().isNotEmpty ? _showIdCtrl.text.trim() : null,
       ));
     });
 
@@ -171,7 +170,8 @@ class _CloudSettingsScreenState extends ConsumerState<CloudSettingsScreen> {
     try {
       final map = jsonDecode(result) as Map<String, dynamic>;
       final version = map['v'] as int? ?? 0;
-      if (version < 1) throw FormatException('Unbekannte Payload-Version: $version');
+      if (version < 1)
+        throw FormatException('Unbekannte Payload-Version: $version');
 
       // URL und Secret direkt übernehmen
       if (map['url'] is String) _urlCtrl.text = map['url'] as String;
@@ -188,7 +188,8 @@ class _CloudSettingsScreenState extends ConsumerState<CloudSettingsScreen> {
       }
 
       // Anzeigename: aus QR oder leer lassen
-      if (map['userName'] is String) _userNameCtrl.text = map['userName'] as String;
+      if (map['userName'] is String)
+        _userNameCtrl.text = map['userName'] as String;
 
       if (!mounted) return;
       setState(() {});
@@ -227,7 +228,8 @@ class _CloudSettingsScreenState extends ConsumerState<CloudSettingsScreen> {
   @override
   void dispose() {
     _eventSub?.close();
-    _urlCtrl.dispose();    _userIdCtrl.dispose();
+    _urlCtrl.dispose();
+    _userIdCtrl.dispose();
     _userNameCtrl.dispose();
     _secretCtrl.dispose();
     _showIdCtrl.dispose();
@@ -293,7 +295,8 @@ class _CloudSettingsScreenState extends ConsumerState<CloudSettingsScreen> {
                 minimumSize: const Size(double.infinity, 52),
                 side: BorderSide(color: colors.primary),
                 foregroundColor: colors.primary,
-                textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                textStyle:
+                    const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
               ),
             ),
             Padding(
@@ -322,17 +325,20 @@ class _CloudSettingsScreenState extends ConsumerState<CloudSettingsScreen> {
               controller: _urlCtrl,
               decoration: const InputDecoration(
                 labelText: 'Server-URL',
-                hintText: 'https://theater.example.com  oder  http://192.168.1.10:4001',
+                hintText:
+                    'https://theater.example.com  oder  http://192.168.1.10:4001',
                 prefixIcon: Icon(Icons.cloud_outlined),
                 border: OutlineInputBorder(),
               ),
               keyboardType: TextInputType.url,
               autocorrect: false,
               validator: (v) {
-                if (v == null || v.trim().isEmpty) return 'URL ist erforderlich';
+                if (v == null || v.trim().isEmpty)
+                  return 'URL ist erforderlich';
                 final uri = Uri.tryParse(v.trim());
                 if (uri == null || !uri.hasScheme) return 'Ungültige URL';
-                if (!uri.scheme.startsWith('http')) return 'Nur http/https erlaubt';
+                if (!uri.scheme.startsWith('http'))
+                  return 'Nur http/https erlaubt';
                 return null;
               },
             ),
@@ -357,8 +363,9 @@ class _CloudSettingsScreenState extends ConsumerState<CloudSettingsScreen> {
                 border: OutlineInputBorder(),
               ),
               autocorrect: false,
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Konto-ID erforderlich' : null,
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? 'Konto-ID erforderlich'
+                  : null,
             ),
             const SizedBox(height: 8),
             TextFormField(
@@ -373,7 +380,8 @@ class _CloudSettingsScreenState extends ConsumerState<CloudSettingsScreen> {
             const SizedBox(height: 20),
 
             // ── Sicherheit ─────────────────────────────────────────────────
-            Text('Authentifizierung', style: Theme.of(context).textTheme.titleSmall),
+            Text('Authentifizierung',
+                style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 8),
             TextFormField(
               controller: _secretCtrl,
@@ -393,13 +401,15 @@ class _CloudSettingsScreenState extends ConsumerState<CloudSettingsScreen> {
               ),
               autocorrect: false,
               enableSuggestions: false,
-              validator: (v) =>
-                  (v == null || v.trim().isEmpty) ? 'Geheimnis erforderlich' : null,
+              validator: (v) => (v == null || v.trim().isEmpty)
+                  ? 'Geheimnis erforderlich'
+                  : null,
             ),
             const SizedBox(height: 20),
 
             // ── Vorstellung ────────────────────────────────────────────────
-            Text('Vorstellung (optional)', style: Theme.of(context).textTheme.titleSmall),
+            Text('Vorstellung (optional)',
+                style: Theme.of(context).textTheme.titleSmall),
             const SizedBox(height: 8),
             TextFormField(
               controller: _showIdCtrl,
@@ -419,8 +429,7 @@ class _CloudSettingsScreenState extends ConsumerState<CloudSettingsScreen> {
               value: _autoConnect,
               onChanged: (v) => setState(() => _autoConnect = v),
               title: const Text('Beim Start automatisch verbinden'),
-              subtitle:
-                  const Text('Benötigt gespeicherte Einstellungen'),
+              subtitle: const Text('Benötigt gespeicherte Einstellungen'),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
                 side: BorderSide(color: colors.outline.withValues(alpha: 0.3)),
@@ -600,17 +609,3 @@ class _NetworkScanHintState extends State<_NetworkScanHint> {
     );
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-

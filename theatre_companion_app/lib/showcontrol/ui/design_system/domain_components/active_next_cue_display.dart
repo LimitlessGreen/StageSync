@@ -27,13 +27,18 @@ class ActiveNextCueDisplay extends StatelessWidget {
         ? cues.indexWhere((c) => c.id == playhead.activeCueId)
         : -1;
     final activeCue = activeIdx >= 0 ? cues[activeIdx] : null;
-    final nextCue   = (activeIdx >= 0 && activeIdx + 1 < total) ? cues[activeIdx + 1] : null;
-    final progress  = total == 0 ? 0.0 : ((activeIdx + 1) / total).clamp(0.0, 1.0);
+    final nextCue =
+        (activeIdx >= 0 && activeIdx + 1 < total) ? cues[activeIdx + 1] : null;
+    final progress =
+        total == 0 ? 0.0 : ((activeIdx + 1) / total).clamp(0.0, 1.0);
 
     return Container(
       color: ScColors.surface,
       padding: const EdgeInsets.fromLTRB(
-        ScSpacing.panelPad, 8, ScSpacing.panelPad, 10,
+        ScSpacing.panelPad,
+        8,
+        ScSpacing.panelPad,
+        10,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -77,7 +82,8 @@ class ActiveNextCueDisplay extends StatelessWidget {
                   child: LinearProgressIndicator(
                     value: progress,
                     backgroundColor: ScColors.divider,
-                    valueColor: const AlwaysStoppedAnimation<Color>(ScColors.active),
+                    valueColor:
+                        const AlwaysStoppedAnimation<Color>(ScColors.active),
                     minHeight: 3,
                   ),
                 ),

@@ -4,11 +4,11 @@ import '../session/clock_sync.dart';
 part 'playhead.freezed.dart';
 
 enum CueListPhase {
-  idle,    // kein aktiver Eintrag, Timer = 0:00
-  cueing,  // GO-Befehl gesendet, noch kein CUE_STARTED
+  idle, // kein aktiver Eintrag, Timer = 0:00
+  cueing, // GO-Befehl gesendet, noch kein CUE_STARTED
   running, // Cue läuft, Timer zählt hoch
-  paused,  // Cue pausiert, Timer eingefroren (gelb)
-  done,    // Cue natürlich beendet, Timer eingefroren bei Enddauer (gedimmt)
+  paused, // Cue pausiert, Timer eingefroren (gelb)
+  done, // Cue natürlich beendet, Timer eingefroren bei Enddauer (gedimmt)
   panic,
 }
 
@@ -60,6 +60,7 @@ class CueRunState with _$CueRunState {
 
   const factory CueRunState({
     required CueLifecycle lifecycle,
+
     /// nodeId → per-node execution state.
     @Default({}) Map<String, NodeExecState> nodes,
     String? errorMessage,
@@ -125,10 +126,10 @@ class PlayheadState {
   static const PlayheadState empty = PlayheadState(cueListId: '');
 
   bool get isRunning => phase == CueListPhase.running;
-  bool get isPaused  => phase == CueListPhase.paused;
-  bool get isDone    => phase == CueListPhase.done;
-  bool get isIdle    => phase == CueListPhase.idle;
-  bool get isActive  => isRunning || isPaused || isDone;
+  bool get isPaused => phase == CueListPhase.paused;
+  bool get isDone => phase == CueListPhase.done;
+  bool get isIdle => phase == CueListPhase.idle;
+  bool get isActive => isRunning || isPaused || isDone;
 
   CueRunState? runStateFor(String cueId) => perCue[cueId];
 
@@ -162,8 +163,10 @@ class PlayheadState {
         doneServerMs: doneServerMs,
         perCue: perCue ?? this.perCue,
         perCuePausedIds: perCuePausedIds ?? this.perCuePausedIds,
-        perCuePausedAtServerMs: perCuePausedAtServerMs ?? this.perCuePausedAtServerMs,
-        perCueResumedAtServerMs: perCueResumedAtServerMs ?? this.perCueResumedAtServerMs,
+        perCuePausedAtServerMs:
+            perCuePausedAtServerMs ?? this.perCuePausedAtServerMs,
+        perCueResumedAtServerMs:
+            perCueResumedAtServerMs ?? this.perCueResumedAtServerMs,
       );
 }
 

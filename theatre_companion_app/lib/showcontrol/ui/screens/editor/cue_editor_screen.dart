@@ -26,7 +26,7 @@ class _CueEditorScreenState extends ConsumerState<CueEditorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final domain   = ref.watch(showControlDomainProvider);
+    final domain = ref.watch(showControlDomainProvider);
     final notifier = ref.read(showControlProvider.notifier);
 
     return ScSplitView(
@@ -63,9 +63,8 @@ class _EditorInspectorPane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cue = selectedCueId != null
-        ? domain.cueList?.cueById(selectedCueId!)
-        : null;
+    final cue =
+        selectedCueId != null ? domain.cueList?.cueById(selectedCueId!) : null;
 
     return Column(
       children: [

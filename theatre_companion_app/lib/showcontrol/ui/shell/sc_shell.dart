@@ -65,8 +65,8 @@ class _ScShellState extends ConsumerState<ScShell>
     with TickerProviderStateMixin {
   // ── Desktop-specific state ────────────────────────────────────────────────
   String? _selectedCueId;
-  late TabController _tabController;       // bottom panel tabs (6)
-  late TabController _rightTabController;  // Inspector / Monitor
+  late TabController _tabController; // bottom panel tabs (6)
+  late TabController _rightTabController; // Inspector / Monitor
   bool _bottomPanelOpen = false;
   int _lastOpenTab = 0;
   double _bottomPanelHeight = 320.0;
@@ -80,7 +80,7 @@ class _ScShellState extends ConsumerState<ScShell>
   @override
   void initState() {
     super.initState();
-    _tabController      = TabController(length: 6, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
     _rightTabController = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(showControlProvider.notifier).initialize();
@@ -129,7 +129,7 @@ class _ScShellState extends ConsumerState<ScShell>
   void _selectOffset(int delta) {
     final cues = ref.read(showControlDomainProvider).cueList?.cues ?? [];
     if (cues.isEmpty) return;
-    final idx  = cues.indexWhere((c) => c.id == _selectedCueId);
+    final idx = cues.indexWhere((c) => c.id == _selectedCueId);
     final next = (idx + delta).clamp(0, cues.length - 1);
     setState(() => _selectedCueId = cues[next].id);
   }
@@ -138,10 +138,11 @@ class _ScShellState extends ConsumerState<ScShell>
 
   @override
   Widget build(BuildContext context) {
-    final isDesktop    = MediaQuery.sizeOf(context).width >= ScSpacing.desktopBreakpoint;
-    final domainState  = ref.watch(showControlDomainProvider);
+    final isDesktop =
+        MediaQuery.sizeOf(context).width >= ScSpacing.desktopBreakpoint;
+    final domainState = ref.watch(showControlDomainProvider);
     final sessionState = ref.watch(sessionProvider);
-    final notifier     = ref.read(showControlProvider.notifier);
+    final notifier = ref.read(showControlProvider.notifier);
 
     return ScTick(
       child: Actions(
@@ -149,14 +150,21 @@ class _ScShellState extends ConsumerState<ScShell>
         // registered as no-ops in ScAdaptiveShell; these override them).
         actions: isDesktop
             ? {
-                PrevCueIntent:   CallbackAction<PrevCueIntent>(onInvoke:   (_) { _selectOffset(-1); return null; }),
-                NextCueIntent:   CallbackAction<NextCueIntent>(onInvoke:   (_) { _selectOffset(1);  return null; }),
+                PrevCueIntent: CallbackAction<PrevCueIntent>(onInvoke: (_) {
+                  _selectOffset(-1);
+                  return null;
+                }),
+                NextCueIntent: CallbackAction<NextCueIntent>(onInvoke: (_) {
+                  _selectOffset(1);
+                  return null;
+                }),
                 SelectCueIntent: CallbackAction<SelectCueIntent>(onInvoke: (_) {
                   if (_selectedCueId != null) notifier.goToCue(_selectedCueId!);
                   return null;
                 }),
                 DeleteCueIntent: CallbackAction<DeleteCueIntent>(onInvoke: (_) {
-                  if (_selectedCueId != null) notifier.deleteCueById(_selectedCueId!);
+                  if (_selectedCueId != null)
+                    notifier.deleteCueById(_selectedCueId!);
                   return null;
                 }),
               }
@@ -195,13 +203,14 @@ class _ScShellState extends ConsumerState<ScShell>
             }),
           ),
           if (sessionState.health != ConnectionHealth.connected)
-            _ConnectionBanner(health: sessionState.health, onLeave: _leaveSession),
+            _ConnectionBanner(
+                health: sessionState.health, onLeave: _leaveSession),
           TransportBar(
             playhead: domainState.playhead,
             cueList: domainState.cueList,
-            onGo:     () => notifier.go(),
-            onStop:   () => notifier.stop(),
-            onPause:  () => notifier.pause(),
+            onGo: () => notifier.go(),
+            onStop: () => notifier.stop(),
+            onPause: () => notifier.pause(),
             onResume: () => notifier.resume(),
           ),
           const Divider(height: 1, color: ScColors.divider),
@@ -243,7 +252,8 @@ class _ScShellState extends ConsumerState<ScShell>
                   color: ScColors.surface,
                   child: Center(
                     child: Container(
-                      width: 40, height: 3,
+                      width: 40,
+                      height: 3,
                       decoration: BoxDecoration(
                         color: ScColors.divider,
                         borderRadius: BorderRadius.circular(2),
@@ -283,8 +293,9 @@ class _ScShellState extends ConsumerState<ScShell>
     SessionState sessionState,
     ShowControlNotifier notifier,
   ) {
-    final talkbackBuses = domainState.patchConfig.busesOfType(AudioBusType.talkback);
-    final busIds   = talkbackBuses.map((b) => b.id).toList();
+    final talkbackBuses =
+        domainState.patchConfig.busesOfType(AudioBusType.talkback);
+    final busIds = talkbackBuses.map((b) => b.id).toList();
     final busNames = {for (final b in talkbackBuses) b.id: b.name};
 
     final statusStrip = _StatusStrip(
@@ -313,9 +324,9 @@ class _ScShellState extends ConsumerState<ScShell>
     );
     final transport = _TransportControls(
       playhead: domainState.playhead,
-      onGo:     () => notifier.go(),
-      onStop:   () => notifier.stop(),
-      onPause:  () => notifier.pause(),
+      onGo: () => notifier.go(),
+      onStop: () => notifier.stop(),
+      onPause: () => notifier.pause(),
       onResume: () => notifier.resume(),
     );
 
@@ -343,7 +354,8 @@ class _ScShellState extends ConsumerState<ScShell>
                             ],
                           ),
                         ),
-                        const VerticalDivider(width: 1, color: ScColors.divider),
+                        const VerticalDivider(
+                            width: 1, color: ScColors.divider),
                         Expanded(
                           flex: 4,
                           child: SingleChildScrollView(child: transport),
@@ -388,8 +400,8 @@ class _ConnectionBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDisconnected = health == ConnectionHealth.disconnected;
-    final color  = isDisconnected ? ScColors.error : ScColors.warn;
-    final label  = isDisconnected
+    final color = isDisconnected ? ScColors.error : ScColors.warn;
+    final label = isDisconnected
         ? 'Verbindung zum Server getrennt'
         : 'Verbindung wird wiederhergestellt…';
 
@@ -400,7 +412,8 @@ class _ConnectionBanner extends StatelessWidget {
         children: [
           Icon(
             isDisconnected ? Icons.cloud_off : Icons.cloud_sync,
-            size: 14, color: color,
+            size: 14,
+            color: color,
           ),
           const SizedBox(width: 8),
           Expanded(
@@ -418,7 +431,8 @@ class _ConnectionBanner extends StatelessWidget {
             )
           else
             SizedBox(
-              width: 12, height: 12,
+              width: 12,
+              height: 12,
               child: CircularProgressIndicator(strokeWidth: 2, color: color),
             ),
         ],
@@ -451,8 +465,8 @@ class _HeaderBar extends ConsumerWidget {
   }
 
   void _showShareDialog(BuildContext context, WidgetRef ref) {
-    final session   = ref.read(sessionProvider).session;
-    final port      = ref.read(embeddedPortProvider);
+    final session = ref.read(sessionProvider).session;
+    final port = ref.read(embeddedPortProvider);
     final sessionId = session?.sessionId ?? '—';
     final sessionName = session?.name ?? '—';
 
@@ -505,9 +519,9 @@ class _HeaderBar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final audioStatus  = ref.watch(audioNodeProvider);
-    final maStatus     = ref.watch(maNodeProvider);
-    final tasks        = ref.watch(sessionProvider).myNode?.tasks.toList() ?? [];
+    final audioStatus = ref.watch(audioNodeProvider);
+    final maStatus = ref.watch(maNodeProvider);
+    final tasks = ref.watch(sessionProvider).myNode?.tasks.toList() ?? [];
     final isStandalone = ref.watch(isStandaloneSupportedProvider);
 
     return Container(
@@ -585,46 +599,46 @@ class _HeaderBar extends ConsumerWidget {
   }
 
   static String _audioLabel(AudioNodeStatus s) => switch (s.state) {
-    AudioNodeState.connected => 'Wiedergabe bereit',
-    AudioNodeState.error     => 'Audio-Fehler',
-    _                        => 'Audio gestoppt',
-  };
+        AudioNodeState.connected => 'Wiedergabe bereit',
+        AudioNodeState.error => 'Audio-Fehler',
+        _ => 'Audio gestoppt',
+      };
 
   static Color _audioColor(AudioNodeStatus s) => switch (s.state) {
-    AudioNodeState.connected => ScColors.active,
-    AudioNodeState.error     => ScColors.error,
-    _                        => ScColors.textDim,
-  };
+        AudioNodeState.connected => ScColors.active,
+        AudioNodeState.error => ScColors.error,
+        _ => ScColors.textDim,
+      };
 
   static String _audioTooltip(AudioNodeStatus s) => switch (s.state) {
-    AudioNodeState.connected =>
-      s.selectedDevice != null
-          ? 'Ausgang: ${s.selectedDevice!.name}  ·  Klicken → Audio-Panel'
-          : 'Audio-Engine läuft  ·  Klicken → Audio-Panel',
-    AudioNodeState.error =>
-      s.errorMessage != null
-          ? '${s.errorMessage}  ·  Klicken → Audio-Panel'
-          : 'Fehler  ·  Klicken → Audio-Panel',
-    _ => 'Audio-Engine ist nicht gestartet  ·  Klicken → Audio-Panel',
-  };
+        AudioNodeState.connected => s.selectedDevice != null
+            ? 'Ausgang: ${s.selectedDevice!.name}  ·  Klicken → Audio-Panel'
+            : 'Audio-Engine läuft  ·  Klicken → Audio-Panel',
+        AudioNodeState.error => s.errorMessage != null
+            ? '${s.errorMessage}  ·  Klicken → Audio-Panel'
+            : 'Fehler  ·  Klicken → Audio-Panel',
+        _ => 'Audio-Engine ist nicht gestartet  ·  Klicken → Audio-Panel',
+      };
 
   static String _maLabel(MaNodeStatus s) => switch (s.state) {
-    MaNodeState.connected => 'MA verbunden',
-    MaNodeState.error     => 'MA-Fehler',
-    _                     => 'MA getrennt',
-  };
+        MaNodeState.connected => 'MA verbunden',
+        MaNodeState.error => 'MA-Fehler',
+        _ => 'MA getrennt',
+      };
 
   static Color _maColor(MaNodeStatus s) => switch (s.state) {
-    MaNodeState.connected => ScColors.active,
-    MaNodeState.error     => ScColors.error,
-    _                     => ScColors.textDim,
-  };
+        MaNodeState.connected => ScColors.active,
+        MaNodeState.error => ScColors.error,
+        _ => ScColors.textDim,
+      };
 
   static String _maTooltip(MaNodeStatus s) => switch (s.state) {
-    MaNodeState.connected => 'GrandMA OSC verbunden  ·  Klicken → Nodes-Panel',
-    MaNodeState.error     => 'GrandMA OSC Verbindungsfehler  ·  Klicken → Nodes-Panel',
-    _                     => 'GrandMA OSC nicht verbunden  ·  Klicken → Nodes-Panel',
-  };
+        MaNodeState.connected =>
+          'GrandMA OSC verbunden  ·  Klicken → Nodes-Panel',
+        MaNodeState.error =>
+          'GrandMA OSC Verbindungsfehler  ·  Klicken → Nodes-Panel',
+        _ => 'GrandMA OSC nicht verbunden  ·  Klicken → Nodes-Panel',
+      };
 }
 
 // ── Share-Dialog Helper ───────────────────────────────────────────────────────
@@ -664,7 +678,8 @@ class _SwitchSessionDialog extends ConsumerStatefulWidget {
   const _SwitchSessionDialog({required this.onLeave});
 
   @override
-  ConsumerState<_SwitchSessionDialog> createState() => _SwitchSessionDialogState();
+  ConsumerState<_SwitchSessionDialog> createState() =>
+      _SwitchSessionDialogState();
 }
 
 class _SwitchSessionDialogState extends ConsumerState<_SwitchSessionDialog> {
@@ -746,7 +761,8 @@ class _SwitchSessionDialogState extends ConsumerState<_SwitchSessionDialog> {
               const SizedBox(height: 8),
               Text(_error!,
                   style: TextStyle(
-                      color: Theme.of(context).colorScheme.error, fontSize: 12)),
+                      color: Theme.of(context).colorScheme.error,
+                      fontSize: 12)),
             ],
           ],
         ),
@@ -799,21 +815,24 @@ class _ServiceStatusPill extends StatelessWidget {
               Icon(icon, size: 13, color: color),
               const SizedBox(width: 4),
               Container(
-                width: 5, height: 5,
+                width: 5,
+                height: 5,
                 decoration: BoxDecoration(color: color, shape: BoxShape.circle),
               ),
               if (isError) ...[
                 const SizedBox(width: 4),
                 Text(
                   label,
-                  style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                      color: color, fontSize: 10, fontWeight: FontWeight.w600),
                 ),
               ],
               if (sublabel != null) ...[
                 const SizedBox(width: 4),
                 Text(
                   sublabel!,
-                  style: TextStyle(color: color, fontSize: 9, fontWeight: FontWeight.w700),
+                  style: TextStyle(
+                      color: color, fontSize: 9, fontWeight: FontWeight.w700),
                 ),
               ],
             ],
@@ -845,7 +864,8 @@ class _InspectorPanel extends ConsumerWidget {
       return Container(
         color: ScColors.surface,
         child: Center(
-          child: Text('Cue auswählen', style: TextStyle(color: ScColors.textDim)),
+          child:
+              Text('Cue auswählen', style: TextStyle(color: ScColors.textDim)),
         ),
       );
     }
@@ -883,7 +903,7 @@ class _RightPanel extends StatelessWidget {
             unselectedLabelStyle: ScText.label,
             tabs: const [
               Tab(text: 'INSPECTOR', height: 36),
-              Tab(text: 'MONITOR',   height: 36),
+              Tab(text: 'MONITOR', height: 36),
             ],
           ),
         ),
@@ -949,7 +969,7 @@ class _BottomTabPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final domainState = ref.watch(showControlDomainProvider);
-    final notifier    = ref.read(showControlProvider.notifier);
+    final notifier = ref.read(showControlProvider.notifier);
 
     return TabBarView(
       controller: controller,
@@ -994,12 +1014,12 @@ class _BottomBar extends StatelessWidget {
             tabAlignment: TabAlignment.start,
             onTap: onTabTap,
             tabs: const [
-              Tab(text: 'PATCH',    height: 36),
-              Tab(text: 'MEDIA',    height: 36),
-              Tab(text: 'NODES',    height: 36),
-              Tab(text: 'AUDIO',    height: 36),
+              Tab(text: 'PATCH', height: 36),
+              Tab(text: 'MEDIA', height: 36),
+              Tab(text: 'NODES', height: 36),
+              Tab(text: 'AUDIO', height: 36),
               Tab(text: 'TALKBACK', height: 36),
-              Tab(text: 'GRID',     height: 36),
+              Tab(text: 'GRID', height: 36),
             ],
           ),
           const Spacer(),
@@ -1056,8 +1076,8 @@ class _DesktopTalkbackPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final buses    = domainState.patchConfig.busesOfType(AudioBusType.talkback);
-    final busIds   = buses.map((b) => b.id).toList();
+    final buses = domainState.patchConfig.busesOfType(AudioBusType.talkback);
+    final busIds = buses.map((b) => b.id).toList();
     final busNames = {for (final b in buses) b.id: b.name};
 
     return Column(
@@ -1068,12 +1088,14 @@ class _DesktopTalkbackPanel extends ConsumerWidget {
             children: [
               const Text(
                 'Talkback-Routing',
-                style: TextStyle(color: Color(0xFF888888), fontSize: 11, letterSpacing: 0.8),
+                style: TextStyle(
+                    color: Color(0xFF888888), fontSize: 11, letterSpacing: 0.8),
               ),
               const Spacer(),
               TextButton.icon(
                 onPressed: () => showBusConfigSheet(context, ref),
-                icon: const Icon(Icons.speaker_group_outlined, size: 16, color: Color(0xFF64B5F6)),
+                icon: const Icon(Icons.speaker_group_outlined,
+                    size: 16, color: Color(0xFF64B5F6)),
                 label: const Text(
                   'Buses konfigurieren',
                   style: TextStyle(color: Color(0xFF64B5F6), fontSize: 12),
@@ -1124,7 +1146,8 @@ class _StatusStrip extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dlgCtx, false),
-            child: const Text('Abbrechen', style: TextStyle(color: Color(0xFFB0B0B0))),
+            child: const Text('Abbrechen',
+                style: TextStyle(color: Color(0xFFB0B0B0))),
           ),
           TextButton(
             onPressed: () => Navigator.pop(dlgCtx, true),
@@ -1172,7 +1195,8 @@ class _StatusStrip extends StatelessWidget {
                     backgroundColor: ScColors.surface,
                     foregroundColor: ScColors.textPrimary,
                     title: const Text('Medienbibliothek',
-                        style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                        style: TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w600)),
                     elevation: 0,
                   ),
                   body: const MediaManagerScreen(),
@@ -1262,8 +1286,9 @@ class _MobileCueListState extends ConsumerState<_MobileCueList> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
       final viewportHeight = _scrollController.position.viewportDimension;
-      final target = (offset - viewportHeight / 2 + ScSpacing.rowHeightActive / 2)
-          .clamp(0.0, _scrollController.position.maxScrollExtent);
+      final target =
+          (offset - viewportHeight / 2 + ScSpacing.rowHeightActive / 2)
+              .clamp(0.0, _scrollController.position.maxScrollExtent);
       _scrollController.animateTo(
         target,
         duration: const Duration(milliseconds: 300),
@@ -1298,7 +1323,8 @@ class _MobileCueListState extends ConsumerState<_MobileCueList> {
                   icon: const Icon(Icons.playlist_add, size: 18),
                   color: ScColors.textSecondary,
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  constraints:
+                      const BoxConstraints(minWidth: 28, minHeight: 28),
                   tooltip: 'Mehrere Cues hinzufügen',
                   onPressed: () => showBulkAddCuesDialog(btnCtx, ref),
                 ),
@@ -1308,7 +1334,8 @@ class _MobileCueListState extends ConsumerState<_MobileCueList> {
                   icon: const Icon(Icons.add, size: 18),
                   color: ScColors.textSecondary,
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  constraints:
+                      const BoxConstraints(minWidth: 28, minHeight: 28),
                   tooltip: 'Cue hinzufügen',
                   onPressed: () => _addCue(btnCtx),
                 ),
@@ -1320,7 +1347,8 @@ class _MobileCueListState extends ConsumerState<_MobileCueList> {
         if (widget.cueList == null)
           Expanded(
             child: Center(
-              child: Text('Keine CueList', style: TextStyle(color: ScColors.textDim)),
+              child: Text('Keine CueList',
+                  style: TextStyle(color: ScColors.textDim)),
             ),
           )
         else
@@ -1362,10 +1390,10 @@ class _MobileCueListState extends ConsumerState<_MobileCueList> {
         child: child,
       ),
       itemBuilder: (context, i) {
-        final cue       = orderedCues[i];
+        final cue = orderedCues[i];
         final isRunning = widget.playhead.runningCueIds.contains(cue.id);
-        final isActive  = widget.playhead.activeCueId == cue.id;
-        final isPast    = !isRunning && activeIdx >= 0 && i < activeIdx;
+        final isActive = widget.playhead.activeCueId == cue.id;
+        final isPast = !isRunning && activeIdx >= 0 && i < activeIdx;
 
         final cueRow = CueListRow(
           key: ValueKey('row_${cue.id}'),
@@ -1381,7 +1409,7 @@ class _MobileCueListState extends ConsumerState<_MobileCueList> {
 
         final row = _SwipeActionsRow(
           key: ValueKey('swipe_${cue.id}'),
-          onEdit:   () => showCueDetailSheet(context, cue, widget.notifier),
+          onEdit: () => showCueDetailSheet(context, cue, widget.notifier),
           onDelete: () {
             widget.notifier.deleteCueById(cue.id);
             ScaffoldMessenger.of(context).showSnackBar(
@@ -1417,11 +1445,13 @@ class _MobileCueListState extends ConsumerState<_MobileCueList> {
                 key: ValueKey('strip_${cue.id}'),
                 cue: cue,
                 playhead: widget.playhead,
-                onFadeUp:  (ms) => widget.notifier.fadeUpAudio(cue.id, durationMs: ms),
-                onFadeOut: (ms) => widget.notifier.fadeOutAudio(cue.id, durationMs: ms),
-                onStop:    ()   => widget.notifier.stopCueAudio(cue.id),
-                onPause:   ()   => widget.notifier.pauseCueAudio(cue.id),
-                onResume:  ()   => widget.notifier.resumeCueAudio(cue.id),
+                onFadeUp: (ms) =>
+                    widget.notifier.fadeUpAudio(cue.id, durationMs: ms),
+                onFadeOut: (ms) =>
+                    widget.notifier.fadeOutAudio(cue.id, durationMs: ms),
+                onStop: () => widget.notifier.stopCueAudio(cue.id),
+                onPause: () => widget.notifier.pauseCueAudio(cue.id),
+                onResume: () => widget.notifier.resumeCueAudio(cue.id),
                 onFadeDurationSaved: (ms) {
                   if (cue.params case AudioParams p) {
                     widget.notifier.upsertDomainCue(cue.copyWith(
@@ -1480,7 +1510,8 @@ class _TalkbackSection extends StatelessWidget {
                 AnimatedRotation(
                   turns: expanded ? 0.5 : 0,
                   duration: const Duration(milliseconds: 180),
-                  child: const Icon(Icons.expand_more, size: 16, color: ScColors.textDim),
+                  child: const Icon(Icons.expand_more,
+                      size: 16, color: ScColors.textDim),
                 ),
               ],
             ),
@@ -1496,7 +1527,8 @@ class _TalkbackSection extends StatelessWidget {
                     const Divider(height: 1, color: ScColors.divider),
                     Padding(
                       padding: const EdgeInsets.all(8),
-                      child: TalkbackBar(availableBusIds: busIds, busNames: busNames),
+                      child: TalkbackBar(
+                          availableBusIds: busIds, busNames: busNames),
                     ),
                   ],
                 )
@@ -1563,8 +1595,9 @@ class _TransportControlsState extends ConsumerState<_TransportControls> {
   String _formatElapsed() {
     final started = widget.playhead.startedServerMs;
     if (started == null) return '0:00';
-    final elapsedMs     = widget.playhead.effectiveNowMs() - started;
-    final totalSeconds  = (elapsedMs / 1000).floor().clamp(0, double.maxFinite.toInt());
+    final elapsedMs = widget.playhead.effectiveNowMs() - started;
+    final totalSeconds =
+        (elapsedMs / 1000).floor().clamp(0, double.maxFinite.toInt());
     final m = totalSeconds ~/ 60;
     final s = (totalSeconds % 60).toString().padLeft(2, '0');
     return '$m:$s';
@@ -1572,11 +1605,11 @@ class _TransportControlsState extends ConsumerState<_TransportControls> {
 
   @override
   Widget build(BuildContext context) {
-    final showTimer      = widget.playhead.startedServerMs != null &&
+    final showTimer = widget.playhead.startedServerMs != null &&
         (widget.playhead.isRunning || widget.playhead.isPaused);
-    final audioStatus    = ref.watch(audioNodeProvider);
-    final audioNotifier  = ref.read(audioNodeProvider.notifier);
-    final isAudioActive  = audioStatus.state == AudioNodeState.connected;
+    final audioStatus = ref.watch(audioNodeProvider);
+    final audioNotifier = ref.read(audioNodeProvider.notifier);
+    final isAudioActive = audioStatus.state == AudioNodeState.connected;
 
     return Container(
       color: ScColors.surface,
@@ -1670,18 +1703,19 @@ class _SwipeActionsRow extends StatefulWidget {
 
 class _SwipeActionsRowState extends State<_SwipeActionsRow>
     with SingleTickerProviderStateMixin {
-  static const _panelWidth     = 116.0;
-  static const _snapThreshold  = _panelWidth * 0.35;
+  static const _panelWidth = 116.0;
+  static const _snapThreshold = _panelWidth * 0.35;
 
   late final AnimationController _ctrl;
   late Animation<double> _anim;
-  double _dragStart      = 0;
+  double _dragStart = 0;
   double _dragBaseOffset = 0;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 220));
+    _ctrl = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 220));
     _anim = Tween(begin: 0.0, end: 0.0).animate(_ctrl);
   }
 
@@ -1701,17 +1735,17 @@ class _SwipeActionsRowState extends State<_SwipeActionsRow>
   }
 
   void _close() => _animateTo(0);
-  void _open()  => _animateTo(-_panelWidth);
+  void _open() => _animateTo(-_panelWidth);
 
   void _onHorizontalDragStart(DragStartDetails d) {
     _ctrl.stop();
-    _dragStart      = d.globalPosition.dx;
+    _dragStart = d.globalPosition.dx;
     _dragBaseOffset = _currentOffset;
   }
 
   void _onHorizontalDragUpdate(DragUpdateDetails d) {
     final delta = d.globalPosition.dx - _dragStart;
-    final raw   = (_dragBaseOffset + delta).clamp(-_panelWidth, 0.0);
+    final raw = (_dragBaseOffset + delta).clamp(-_panelWidth, 0.0);
     _anim = AlwaysStoppedAnimation(raw);
     setState(() {});
   }
@@ -1737,9 +1771,9 @@ class _SwipeActionsRowState extends State<_SwipeActionsRow>
         final offset = _anim.value;
         return GestureDetector(
           behavior: HitTestBehavior.translucent,
-          onHorizontalDragStart:  _onHorizontalDragStart,
+          onHorizontalDragStart: _onHorizontalDragStart,
           onHorizontalDragUpdate: _onHorizontalDragUpdate,
-          onHorizontalDragEnd:    _onHorizontalDragEnd,
+          onHorizontalDragEnd: _onHorizontalDragEnd,
           onTap: offset < -4 ? _close : null,
           child: ClipRect(
             child: Stack(
@@ -1749,19 +1783,25 @@ class _SwipeActionsRowState extends State<_SwipeActionsRow>
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
                       GestureDetector(
-                        onTap: () { _close(); widget.onEdit(); },
+                        onTap: () {
+                          _close();
+                          widget.onEdit();
+                        },
                         child: Container(
                           width: 58,
                           color: ScColors.active.withValues(alpha: 0.85),
                           child: const Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.edit_outlined, color: Colors.white, size: 20),
+                              Icon(Icons.edit_outlined,
+                                  color: Colors.white, size: 20),
                               SizedBox(height: 2),
                               Text(
                                 'Bearbeiten',
                                 style: TextStyle(
-                                  color: Colors.white, fontSize: 9, fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ],
@@ -1769,19 +1809,25 @@ class _SwipeActionsRowState extends State<_SwipeActionsRow>
                         ),
                       ),
                       GestureDetector(
-                        onTap: () { _close(); widget.onDelete(); },
+                        onTap: () {
+                          _close();
+                          widget.onDelete();
+                        },
                         child: Container(
                           width: 58,
                           color: ScColors.error,
                           child: const Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              Icon(Icons.delete_outline, color: Colors.white, size: 20),
+                              Icon(Icons.delete_outline,
+                                  color: Colors.white, size: 20),
                               SizedBox(height: 2),
                               Text(
                                 'Löschen',
                                 style: TextStyle(
-                                  color: Colors.white, fontSize: 9, fontWeight: FontWeight.w600,
+                                  color: Colors.white,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                             ],

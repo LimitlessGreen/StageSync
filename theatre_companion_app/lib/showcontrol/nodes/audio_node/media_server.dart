@@ -91,7 +91,8 @@ class MediaServer {
       });
     }
 
-    files.sort((a, b) => (a['filename'] as String).compareTo(b['filename'] as String));
+    files.sort(
+        (a, b) => (a['filename'] as String).compareTo(b['filename'] as String));
 
     return Response.ok(
       jsonEncode(files),
@@ -110,20 +111,21 @@ class MediaServer {
 
     final bodyBytes = await req.read().expand((c) => c).toList();
     final transformer = MimeMultipartTransformer(boundary);
-    final parts = await transformer
-        .bind(Stream.fromIterable([bodyBytes]))
-        .toList();
+    final parts =
+        await transformer.bind(Stream.fromIterable([bodyBytes])).toList();
 
     if (parts.isEmpty) return Response(400, body: 'Keine Datei gefunden');
 
     final part = parts.first;
     final disposition = part.headers['content-disposition'] ?? '';
     final filename = _extractFilename(disposition);
-    if (filename == null) return Response(400, body: 'Kein Dateiname im Disposition-Header');
+    if (filename == null)
+      return Response(400, body: 'Kein Dateiname im Disposition-Header');
 
     // Sicherheit: Keine Pfad-Traversal
     final safeName = p.basename(filename);
-    if (!_isAudioExtension(p.extension(safeName).toLowerCase().replaceFirst('.', ''))) {
+    if (!_isAudioExtension(
+        p.extension(safeName).toLowerCase().replaceFirst('.', ''))) {
       return Response(400, body: 'Nicht unterstütztes Audioformat');
     }
 
@@ -181,7 +183,8 @@ class MediaServer {
         startUnixMillis: DateTime.now().millisecondsSinceEpoch + 50,
         volumeDb: 0.0,
       );
-      return Response.ok('{"status":"playing"}', headers: {'Content-Type': 'application/json'});
+      return Response.ok('{"status":"playing"}',
+          headers: {'Content-Type': 'application/json'});
     } catch (e) {
       return Response.internalServerError(
         body: '{"error":"${e.toString().replaceAll('"', "'")}"}',
@@ -192,7 +195,8 @@ class MediaServer {
 
   Future<Response> _stopPreview(Request req) async {
     await _engine.stop(_previewCueId, fadeOutMs: 300);
-    return Response.ok('{"status":"stopped"}', headers: {'Content-Type': 'application/json'});
+    return Response.ok('{"status":"stopped"}',
+        headers: {'Content-Type': 'application/json'});
   }
 
   Future<Response> _health(Request req) async =>
@@ -209,10 +213,12 @@ class MediaServer {
   /// Listet alle verfügbaren Netzwerk-Interfaces mit ihren IPv4-Adressen auf.
   static Future<List<NetworkInterfaceInfo>> listInterfaces() async {
     final result = <NetworkInterfaceInfo>[];
-    final interfaces = await NetworkInterface.list(type: InternetAddressType.IPv4);
+    final interfaces =
+        await NetworkInterface.list(type: InternetAddressType.IPv4);
     for (final iface in interfaces) {
       for (final addr in iface.addresses) {
-        result.add(NetworkInterfaceInfo(name: iface.name, address: addr.address));
+        result
+            .add(NetworkInterfaceInfo(name: iface.name, address: addr.address));
       }
     }
     return result;

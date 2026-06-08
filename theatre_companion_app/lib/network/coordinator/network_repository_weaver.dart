@@ -229,10 +229,11 @@ class NetworkRepositoryWeaver {
 
   /// Reagiert auf Großtransfer-Ankündigung der App.
   /// Setzt den Cloud-Bevorzugungs-Modus für 2 Minuten.
-  Future<void> _handleTransferAnnouncement(TransferAnnouncementCommand cmd) async {
+  Future<void> _handleTransferAnnouncement(
+      TransferAnnouncementCommand cmd) async {
     if (cmd.isLargeTransfer) {
-      _preferCloudUntilMs =
-          DateTime.now().millisecondsSinceEpoch + const Duration(minutes: 2).inMilliseconds;
+      _preferCloudUntilMs = DateTime.now().millisecondsSinceEpoch +
+          const Duration(minutes: 2).inMilliseconds;
       _emitEvent(BleStatusEvent(
         isAdvertising: true,
         isScanning: true,
@@ -346,8 +347,9 @@ class NetworkRepositoryWeaver {
     int timestampMs,
     TransportHint hint,
   ) async {
-    final effectiveHint =
-        (_isPreferringCloud && hint == TransportHint.auto) ? TransportHint.cloudOnly : hint;
+    final effectiveHint = (_isPreferringCloud && hint == TransportHint.auto)
+        ? TransportHint.cloudOnly
+        : hint;
 
     switch (effectiveHint) {
       case TransportHint.cloudOnly:
@@ -357,8 +359,8 @@ class NetworkRepositoryWeaver {
           final encrypted = await _crypto.encrypt(jsonBytes);
           _ws.send(encrypted);
         }
-        // Wenn kein Server, bleibt das Paket in der lokalen DB (unsynchronisiert).
-        // Beim nächsten Server-Reconnect wird es nachgeliefert.
+      // Wenn kein Server, bleibt das Paket in der lokalen DB (unsynchronisiert).
+      // Beim nächsten Server-Reconnect wird es nachgeliefert.
 
       case TransportHint.preferBle:
         // BLE zuerst, danach Cloud als zusätzliche Sicherung.
@@ -401,7 +403,8 @@ class NetworkRepositoryWeaver {
     }
   }
 
-  Future<void> _gossipDataPacket(InventoryItemCrdt crdt, int timestampMs) async {
+  Future<void> _gossipDataPacket(
+      InventoryItemCrdt crdt, int timestampMs) async {
     final packet = BleDataPacket.create(
       sourceDeviceShortId: _localShortId,
       itemShortId: shortIdFromString(crdt.itemId),
@@ -721,21 +724,24 @@ class NetworkRepositoryWeaver {
     final pending = await _queueDao.pendingCount();
     final breakdown = await _election.computeScoreBreakdown();
 
-    final peerInfos = _peers.alivePeers.map((p) => PeerStatusInfo(
-          deviceId: p.deviceId,
-          deviceShortId: p.deviceShortId,
-          rssi: p.rssi,
-          electionScore: p.electionScore,
-          isLeader: p.isLeader,
-          hasInternet: p.hasInternet,
-          lastSeenMs: p.lastSeenMs,
-        )).toList()
-          ..sort((a, b) => b.rssi.compareTo(a.rssi));
+    final peerInfos = _peers.alivePeers
+        .map((p) => PeerStatusInfo(
+              deviceId: p.deviceId,
+              deviceShortId: p.deviceShortId,
+              rssi: p.rssi,
+              electionScore: p.electionScore,
+              isLeader: p.isLeader,
+              hasInternet: p.hasInternet,
+              lastSeenMs: p.lastSeenMs,
+            ))
+        .toList()
+      ..sort((a, b) => b.rssi.compareTo(a.rssi));
 
     _emitEvent(NetworkStatusEvent(
       connectedPeerCount: _peers.aliveCount,
       pendingQueuedPackets: pending,
-      hasServerConnection: _ws.isConnected || (_cloudService?.isConnected ?? false),
+      hasServerConnection:
+          _ws.isConnected || (_cloudService?.isConnected ?? false),
       currentLeaderId: _election.currentLeaderId,
       localElectionScore: breakdown.total,
       syncStatus: _determineSyncStatus(),

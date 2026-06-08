@@ -13,6 +13,7 @@ class ScSplitView extends StatefulWidget {
   final double minFraction;
   final double maxFraction;
   final ValueChanged<double>? onFractionChanged;
+
   /// SharedPreferences key for persisting the divider position.
   /// If null, position is only kept in memory.
   final String? persistKey;
@@ -64,7 +65,7 @@ class _ScSplitViewState extends State<ScSplitView> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final totalW = constraints.maxWidth;
-        final leftW  = (totalW * _fraction).clamp(
+        final leftW = (totalW * _fraction).clamp(
           totalW * widget.minFraction,
           totalW * widget.maxFraction,
         );
@@ -75,11 +76,10 @@ class _ScSplitViewState extends State<ScSplitView> {
             _Divider(
               onDrag: (dx) {
                 setState(() {
-                  _fraction =
-                      ((_fraction * totalW + dx) / totalW).clamp(
-                        widget.minFraction,
-                        widget.maxFraction,
-                      );
+                  _fraction = ((_fraction * totalW + dx) / totalW).clamp(
+                    widget.minFraction,
+                    widget.maxFraction,
+                  );
                 });
                 widget.onFractionChanged?.call(_fraction);
                 if (widget.persistKey != null) _persistFraction(_fraction);
@@ -126,6 +126,7 @@ class ScThreePaneView extends StatefulWidget {
   final Widget right;
   final double leftWidth;
   final double rightWidth;
+
   /// SharedPreferences key prefix for persisting both divider positions.
   /// Saves as <persistKey>.left and <persistKey>.right.
   final String? persistKey;
@@ -151,18 +152,18 @@ class _ScThreePaneViewState extends State<ScThreePaneView> {
   @override
   void initState() {
     super.initState();
-    _leftW  = widget.leftWidth;
+    _leftW = widget.leftWidth;
     _rightW = widget.rightWidth;
     if (widget.persistKey != null) _loadPersistedWidths();
   }
 
   Future<void> _loadPersistedWidths() async {
     final prefs = await SharedPreferences.getInstance();
-    final left  = prefs.getDouble('${widget.persistKey}.left');
+    final left = prefs.getDouble('${widget.persistKey}.left');
     final right = prefs.getDouble('${widget.persistKey}.right');
     if (mounted) {
       setState(() {
-        if (left  != null) _leftW  = left.clamp(160.0, 480.0);
+        if (left != null) _leftW = left.clamp(160.0, 480.0);
         if (right != null) _rightW = right.clamp(160.0, 400.0);
       });
     }
@@ -171,7 +172,7 @@ class _ScThreePaneViewState extends State<ScThreePaneView> {
   Future<void> _persistWidths() async {
     final prefs = await SharedPreferences.getInstance();
     await Future.wait([
-      prefs.setDouble('${widget.persistKey}.left',  _leftW),
+      prefs.setDouble('${widget.persistKey}.left', _leftW),
       prefs.setDouble('${widget.persistKey}.right', _rightW),
     ]);
   }
@@ -180,7 +181,7 @@ class _ScThreePaneViewState extends State<ScThreePaneView> {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        SizedBox(width: _leftW,  child: widget.left),
+        SizedBox(width: _leftW, child: widget.left),
         _ThreePaneDivider(onDrag: (dx) {
           setState(() => _leftW = (_leftW + dx).clamp(160, 480));
           if (widget.persistKey != null) _persistWidths();
@@ -209,7 +210,8 @@ class _ThreePaneDivider extends StatelessWidget {
           child: Container(
             width: 5,
             color: Colors.transparent,
-            child: Center(child: Container(width: 1, color: const Color(0xFF2A2A2A))),
+            child: Center(
+                child: Container(width: 1, color: const Color(0xFF2A2A2A))),
           ),
         ),
       );

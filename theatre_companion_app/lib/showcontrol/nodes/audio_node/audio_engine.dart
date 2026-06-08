@@ -100,7 +100,8 @@ class AudioEngine implements AbstractAudioEngine {
             return;
           }
         } catch (e) {
-          debugPrint('[AudioEngine] init mit "${device.name}" fehlgeschlagen: $e');
+          debugPrint(
+              '[AudioEngine] init mit "${device.name}" fehlgeschlagen: $e');
           if (_soloud.isInitialized) _soloud.deinit();
         }
       }
@@ -124,12 +125,14 @@ class AudioEngine implements AbstractAudioEngine {
     try {
       final soloudDevices = _soloud.listPlaybackDevices();
       if (soloudDevices.isNotEmpty) {
-        await _soloud.init(device: soloudDevices.first, bufferSize: _bufferSize);
+        await _soloud.init(
+            device: soloudDevices.first, bufferSize: _bufferSize);
         if (_soloud.isInitialized) {
           _initialized = true;
           _soloudDevice = soloudDevices.first;
           _selectedDevice = _toAudioDevice(soloudDevices.first);
-          debugPrint('[AudioEngine] init OK device=${soloudDevices.first.name} (Windows-Fallback)');
+          debugPrint(
+              '[AudioEngine] init OK device=${soloudDevices.first.name} (Windows-Fallback)');
           return;
         }
       }
@@ -198,7 +201,8 @@ class AudioEngine implements AbstractAudioEngine {
     } catch (e) {
       debugPrint('[AudioEngine] switchDevice init fehlgeschlagen: $e');
     }
-    debugPrint('[AudioEngine] switchDevice Ergebnis: ${_selectedDevice?.name ?? "Default"}');
+    debugPrint(
+        '[AudioEngine] switchDevice Ergebnis: ${_selectedDevice?.name ?? "Default"}');
     return _selectedDevice;
   }
 
@@ -287,10 +291,12 @@ class AudioEngine implements AbstractAudioEngine {
         await _waitUntilServerMillis(startUnixMillis);
       }
       _soloud.setPause(handle, false);
-      debugPrint('[AudioEngine] play OK: $cueId lead=${lead}ms start=${startTimeMs}ms');
+      debugPrint(
+          '[AudioEngine] play OK: $cueId lead=${lead}ms start=${startTimeMs}ms');
 
       if (fadeInMs > 0) {
-        _soloud.fadeVolume(handle, volume, Duration(milliseconds: fadeInMs.round()));
+        _soloud.fadeVolume(
+            handle, volume, Duration(milliseconds: fadeInMs.round()));
       }
 
       // endTimeMs: Stop-Scheduling mit optionalem Fade-Out.
@@ -378,12 +384,14 @@ class AudioEngine implements AbstractAudioEngine {
 
   /// Lädt WAV-Bytes direkt (ohne Datei) und spielt ab.
   @override
-  Future<void> playWavBytes(String cueId, List<int> wavBytes, {double volumeDb = 0.0}) async {
+  Future<void> playWavBytes(String cueId, List<int> wavBytes,
+      {double volumeDb = 0.0}) async {
     if (!_initialized) await init();
     await _stopHandleNow(cueId); // Re-Trigger ersetzt vorherige Instanz
     await _disposeSource(cueId);
     try {
-      _sources[cueId] = await _soloud.loadMem(cueId, Uint8List.fromList(wavBytes));
+      _sources[cueId] =
+          await _soloud.loadMem(cueId, Uint8List.fromList(wavBytes));
       final volume = _dbToLinear(volumeDb);
       _targetVolumes[cueId] = volume;
       // flutter_soloud v4+: play() ist synchron (kein await).
@@ -416,7 +424,8 @@ class AudioEngine implements AbstractAudioEngine {
     _fadeGen[cueId] = gen;
 
     if (fadeOutMs > 0) {
-      _soloud.fadeVolume(handle, 0.0, Duration(milliseconds: fadeOutMs.round()));
+      _soloud.fadeVolume(
+          handle, 0.0, Duration(milliseconds: fadeOutMs.round()));
       await Future.delayed(Duration(milliseconds: fadeOutMs.round()));
       // Inzwischen resume/stop/neuer Play? → diese Pause verwerfen.
       if (_fadeGen[cueId] != gen || _handles[cueId] != handle) return;
@@ -445,7 +454,8 @@ class AudioEngine implements AbstractAudioEngine {
     _soloud.setPause(handle, false);
     if (fadeInMs > 0) {
       _soloud.setVolume(handle, 0.0);
-      _soloud.fadeVolume(handle, target, Duration(milliseconds: fadeInMs.round()));
+      _soloud.fadeVolume(
+          handle, target, Duration(milliseconds: fadeInMs.round()));
     } else {
       _soloud.setVolume(handle, target);
     }
@@ -463,7 +473,8 @@ class AudioEngine implements AbstractAudioEngine {
     if (handle == null || !_soloud.getIsValidVoiceHandle(handle)) return;
     final gen = (_fadeGen[cueId] ?? 0) + 1;
     _fadeGen[cueId] = gen;
-    _soloud.fadeVolume(handle, targetLinear, Duration(milliseconds: durationMs.round()));
+    _soloud.fadeVolume(
+        handle, targetLinear, Duration(milliseconds: durationMs.round()));
     if (stopWhenDone || pauseWhenDone) {
       Future.delayed(Duration(milliseconds: durationMs.round()), () {
         if (_fadeGen[cueId] != gen) return; // superseded
@@ -480,7 +491,9 @@ class AudioEngine implements AbstractAudioEngine {
     _loadedPaths.remove(cueId);
     final existing = _sources.remove(cueId);
     if (existing != null) {
-      try { await _soloud.disposeSource(existing); } catch (_) {}
+      try {
+        await _soloud.disposeSource(existing);
+      } catch (_) {}
     }
   }
 
@@ -495,7 +508,9 @@ class AudioEngine implements AbstractAudioEngine {
     }
     _handles.clear();
     for (final source in _sources.values) {
-      try { await _soloud.disposeSource(source); } catch (_) {}
+      try {
+        await _soloud.disposeSource(source);
+      } catch (_) {}
     }
     _sources.clear();
     _loadedPaths.clear();
@@ -522,6 +537,14 @@ class AudioEngine implements AbstractAudioEngine {
     return math.pow(10.0, db / 20.0).toDouble();
   }
 
+  @override
+  Future<({double startMs, double endMs})?> detectSilence(
+    String filePath, {
+    double thresholdDb = -60.0,
+    double padMs = 50.0,
+  }) async =>
+      null;
+
   /// Wartet präzise bis [targetServerMs] (Serverzeit erreicht). Grob via Timer,
   /// die letzten [_spinThresholdMs] werden aktiv gepollt — das eliminiert den
   /// Event-Loop-Jitter, der sonst hörbaren Versatz zwischen Geräten erzeugt.
@@ -530,9 +553,11 @@ class AudioEngine implements AbstractAudioEngine {
       final remaining = targetServerMs - ClockSync.instance.serverNow();
       if (remaining <= 0) return;
       if (remaining > _spinThresholdMs) {
-        await Future.delayed(Duration(milliseconds: remaining - _spinThresholdMs));
+        await Future.delayed(
+            Duration(milliseconds: remaining - _spinThresholdMs));
       } else {
-        await Future.delayed(Duration.zero); // eng pollen ohne CPU zu blockieren
+        await Future.delayed(
+            Duration.zero); // eng pollen ohne CPU zu blockieren
       }
     }
   }

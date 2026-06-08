@@ -1,4 +1,4 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -16,13 +16,21 @@ import 'package:theatre_companion_app/network/platform/abstract_ble_service.dart
 import 'package:theatre_companion_app/network/routing/leader_election_engine.dart';
 import 'package:theatre_companion_app/network/routing/peer_registry.dart';
 import 'package:theatre_companion_app/network/server/websocket_service.dart';
+
 class MockGossipEngine extends Mock implements GossipEngine {}
+
 class MockWebSocketService extends Mock implements WebSocketService {}
+
 class MockInventoryDao extends Mock implements InventoryDao {}
+
 class MockPacketQueueDao extends Mock implements PacketQueueDao {}
+
 class MockChatDao extends Mock implements ChatDao {}
+
 class MockLeaderElectionEngine extends Mock implements LeaderElectionEngine {}
+
 class MockAesGcmService extends Mock implements AesGcmService {}
+
 class FakeBleService extends Mock implements AbstractBleService {
   final _controller = StreamController<IncomingBlePacket>.broadcast();
   @override
@@ -30,7 +38,9 @@ class FakeBleService extends Mock implements AbstractBleService {
   void injectPacket(IncomingBlePacket p) => _controller.add(p);
   Future<void> dispose() => _controller.close();
 }
-InventoryItemCrdt makeTestCrdt({String itemId = 'item-test-001', int statusId = 1}) {
+
+InventoryItemCrdt makeTestCrdt(
+    {String itemId = 'item-test-001', int statusId = 1}) {
   return InventoryItemCrdt.create(
     itemId: itemId,
     deviceId: 'local-device',
@@ -40,6 +50,7 @@ InventoryItemCrdt makeTestCrdt({String itemId = 'item-test-001', int statusId = 
     wallClockMs: 1000000,
   );
 }
+
 /// Erstellt ein echtes Drift-InventoryItem aus einem CRDT fuer Tests.
 InventoryItem inventoryItemFromCrdt(InventoryItemCrdt crdt) {
   return InventoryItem(
@@ -53,6 +64,7 @@ InventoryItem inventoryItemFromCrdt(InventoryItemCrdt crdt) {
     isSyncedToServer: false,
   );
 }
+
 void main() {
   late FakeBleService ble;
   late MockGossipEngine gossip;
@@ -69,19 +81,27 @@ void main() {
     registerFallbackValue(Uint8List(0));
     registerFallbackValue(makeTestCrdt());
     registerFallbackValue(BleDataPacket.create(
-      sourceDeviceShortId: 0, itemShortId: 0, statusId: 0, timestampSec: 0,
+      sourceDeviceShortId: 0,
+      itemShortId: 0,
+      statusId: 0,
+      timestampSec: 0,
     ));
     registerFallbackValue(BleChatTextPacket.create(
-      sourceDeviceShortId: 0, messageId: 0, text: '',
+      sourceDeviceShortId: 0,
+      messageId: 0,
+      text: '',
     ));
     registerFallbackValue(BleHeartbeatPacket.create(
-      sourceDeviceShortId: 0, sequenceNum: 0,
+      sourceDeviceShortId: 0,
+      sequenceNum: 0,
     ));
     registerFallbackValue(BleElectionBidPacket.create(
-      sourceDeviceShortId: 0, score: 0,
+      sourceDeviceShortId: 0,
+      score: 0,
     ));
     registerFallbackValue(BleAckPacket.create(
-      sourceDeviceShortId: 0, ackedPacketShortId: 0,
+      sourceDeviceShortId: 0,
+      ackedPacketShortId: 0,
     ));
   });
   setUp(() {
@@ -96,17 +116,28 @@ void main() {
     peers = PeerRegistry();
     emittedEvents = [];
     weaver = NetworkRepositoryWeaver(
-      ble: ble, gossip: gossip, ws: ws,
-      inventoryDao: inventoryDao, queueDao: queueDao, chatDao: chatDao,
-      election: election, crypto: crypto, peers: peers,
+      ble: ble,
+      gossip: gossip,
+      ws: ws,
+      inventoryDao: inventoryDao,
+      queueDao: queueDao,
+      chatDao: chatDao,
+      election: election,
+      crypto: crypto,
+      peers: peers,
       emitEvent: (e) => emittedEvents.add(e),
-      localDeviceId: 'local-device', localShortId: 0xAAAA,
+      localDeviceId: 'local-device',
+      localShortId: 0xAAAA,
     );
     when(() => election.isLeader).thenReturn(false);
     when(() => election.currentLeaderId).thenReturn(null);
     when(() => election.computeScoreBreakdown()).thenAnswer((_) async =>
-        const NetworkScoreBreakdown(hasNetwork: false, isCharging: false,
-            batteryPercent: 50, isMoving: false, total: 50));
+        const NetworkScoreBreakdown(
+            hasNetwork: false,
+            isCharging: false,
+            batteryPercent: 50,
+            isMoving: false,
+            total: 50));
     when(() => election.startElectionRound()).thenAnswer((_) async {});
     when(() => election.start()).thenAnswer((_) async {});
     when(() => election.stop()).thenAnswer((_) async {});
@@ -120,8 +151,8 @@ void main() {
     when(() => inventoryDao.getByItemId(any())).thenAnswer((_) async => null);
     when(() => inventoryDao.upsertCrdt(any())).thenAnswer((_) async => 1);
     when(() => inventoryDao.getByShortId(any())).thenAnswer((_) async => null);
-    when(() => inventoryDao.mergeRemote(any()))
-        .thenAnswer((inv) async => inv.positionalArguments[0] as InventoryItemCrdt);
+    when(() => inventoryDao.mergeRemote(any())).thenAnswer(
+        (inv) async => inv.positionalArguments[0] as InventoryItemCrdt);
     when(() => inventoryDao.markSynced(any())).thenAnswer((_) async {});
     when(() => queueDao.pendingCount()).thenAnswer((_) async => 0);
     when(() => queueDao.purgeDelivered()).thenAnswer((_) async => 0);
@@ -137,42 +168,46 @@ void main() {
         )).thenAnswer((_) async {});
     when(() => gossip.originateDataPacket(any())).thenAnswer((_) async {});
     when(() => gossip.originateChatPacket(any())).thenAnswer((_) async {});
-    when(() => gossip.onDataPacketReceived(any(), any())).thenAnswer((_) async {});
-    when(() => gossip.onChatPacketReceived(any(), any())).thenAnswer((_) async {});
+    when(() => gossip.onDataPacketReceived(any(), any()))
+        .thenAnswer((_) async {});
+    when(() => gossip.onChatPacketReceived(any(), any()))
+        .thenAnswer((_) async {});
     when(() => gossip.drainQueueForPeer(any())).thenAnswer((_) async {});
     when(() => gossip.broadcastControlPacket(any())).thenAnswer((_) async {});
     when(() => crypto.encrypt(any()))
         .thenAnswer((_) async => Uint8List.fromList([0x01, 0x02]));
-    when(() => crypto.decrypt(any()))
-        .thenAnswer((_) async => Uint8List.fromList(makeTestCrdt().toJsonString().codeUnits));
+    when(() => crypto.decrypt(any())).thenAnswer((_) async =>
+        Uint8List.fromList(makeTestCrdt().toJsonString().codeUnits));
   });
   tearDown(() async {
     await ble.dispose();
   });
   // --- ScanItemCommand - Follower ---
   group('ScanItemCommand - Follower-Pfad', () {
-    test('neues Item wird in DB persistiert und via Gossip weitergeleitet', () async {
+    test('neues Item wird in DB persistiert und via Gossip weitergeleitet',
+        () async {
       await weaver.handleCommand(ScanItemCommand(
-        itemId: 'item-scan-001', statusId: 2, timestampMs: 2000000));
+          itemId: 'item-scan-001', statusId: 2, timestampMs: 2000000));
       verify(() => inventoryDao.upsertCrdt(any())).called(1);
       verify(() => gossip.originateDataPacket(any())).called(1);
       verifyNever(() => ws.send(any()));
     });
     test('emittiert sofortiges ItemUpdatedEvent', () async {
       await weaver.handleCommand(ScanItemCommand(
-        itemId: 'item-scan-002', statusId: 3, timestampMs: 1500000));
+          itemId: 'item-scan-002', statusId: 3, timestampMs: 1500000));
       final updates = emittedEvents.whereType<ItemUpdatedEvent>().toList();
       expect(updates, hasLength(1));
       expect(updates.first.itemId, equals('item-scan-002'));
       expect(updates.first.statusId, equals(3));
       expect(updates.first.isSyncedToServer, isFalse);
     });
-    test('vorhandenes Item wird via getByItemId geladen und aktualisiert', () async {
+    test('vorhandenes Item wird via getByItemId geladen und aktualisiert',
+        () async {
       final existingCrdt = makeTestCrdt(itemId: 'item-existing', statusId: 1);
       when(() => inventoryDao.getByItemId('item-existing'))
           .thenAnswer((_) async => inventoryItemFromCrdt(existingCrdt));
       await weaver.handleCommand(ScanItemCommand(
-        itemId: 'item-existing', statusId: 5, timestampMs: 3000000));
+          itemId: 'item-existing', statusId: 5, timestampMs: 3000000));
       verify(() => inventoryDao.upsertCrdt(any())).called(1);
     });
   });
@@ -182,7 +217,7 @@ void main() {
       when(() => election.isLeader).thenReturn(true);
       when(() => ws.isConnected).thenReturn(true);
       await weaver.handleCommand(ScanItemCommand(
-        itemId: 'item-leader-scan', statusId: 1, timestampMs: 1000000));
+          itemId: 'item-leader-scan', statusId: 1, timestampMs: 1000000));
       verify(() => ws.send(any())).called(1);
       verifyNever(() => gossip.originateDataPacket(any()));
     });
@@ -190,7 +225,7 @@ void main() {
       when(() => election.isLeader).thenReturn(true);
       when(() => ws.isConnected).thenReturn(false);
       await weaver.handleCommand(ScanItemCommand(
-        itemId: 'item-leader-offline', statusId: 2, timestampMs: 1000000));
+          itemId: 'item-leader-offline', statusId: 2, timestampMs: 1000000));
       verifyNever(() => ws.send(any()));
       verify(() => gossip.originateDataPacket(any())).called(1);
     });
@@ -210,22 +245,27 @@ void main() {
         packet: BleDataPacket.create(
           sourceDeviceShortId: 0xBBBB,
           itemShortId: shortIdFromString(knownItemId),
-          statusId: 3, timestampSec: 2000,
+          statusId: 3,
+          timestampSec: 2000,
         ),
       ));
       await Future.delayed(const Duration(milliseconds: 50));
       verify(() => inventoryDao.mergeRemote(any())).called(1);
       expect(emittedEvents.whereType<ItemUpdatedEvent>(), isNotEmpty);
     });
-    test('unbekanntes Item - Preview-ItemUpdatedEvent mit ~XXXX-Prefix', () async {
+    test('unbekanntes Item - Preview-ItemUpdatedEvent mit ~XXXX-Prefix',
+        () async {
       await weaver.start();
       addTearDown(weaver.stop);
-      when(() => inventoryDao.getByShortId(any())).thenAnswer((_) async => null);
+      when(() => inventoryDao.getByShortId(any()))
+          .thenAnswer((_) async => null);
       ble.injectPacket(IncomingBlePacket(
         senderDeviceId: 'peer-sender',
         packet: BleDataPacket.create(
-          sourceDeviceShortId: 0xBBBB, itemShortId: 0x1234,
-          statusId: 2, timestampSec: 1000,
+          sourceDeviceShortId: 0xBBBB,
+          itemShortId: 0x1234,
+          statusId: 2,
+          timestampSec: 1000,
         ),
       ));
       await Future.delayed(const Duration(milliseconds: 50));
@@ -240,7 +280,7 @@ void main() {
       ble.injectPacket(IncomingBlePacket(
         senderDeviceId: 'peer-leader',
         packet: BleHeartbeatPacket.create(
-          sourceDeviceShortId: 0x9999, sequenceNum: 1),
+            sourceDeviceShortId: 0x9999, sequenceNum: 1),
       ));
       await Future.delayed(const Duration(milliseconds: 20));
       verify(() => election.onHeartbeatReceived('peer-leader')).called(1);
@@ -251,7 +291,7 @@ void main() {
       ble.injectPacket(IncomingBlePacket(
         senderDeviceId: 'peer-bidder',
         packet: BleElectionBidPacket.create(
-          sourceDeviceShortId: 0x7777, score: 200),
+            sourceDeviceShortId: 0x7777, score: 200),
       ));
       await Future.delayed(const Duration(milliseconds: 20));
       verify(() => election.onBidReceived('peer-bidder', 200)).called(1);
@@ -263,7 +303,9 @@ void main() {
       await weaver.start();
       addTearDown(weaver.stop);
       peers.upsert(PeerInfo(
-        deviceId: 'new-peer-002', deviceShortId: 2, rssi: -65,
+        deviceId: 'new-peer-002',
+        deviceShortId: 2,
+        rssi: -65,
         lastSeenMs: DateTime.now().millisecondsSinceEpoch,
       ));
       await Future.delayed(const Duration(milliseconds: 20));
@@ -274,7 +316,9 @@ void main() {
   group('handleLeadershipChange', () {
     test('emittiert LeaderChangedEvent', () {
       weaver.handleLeadershipChange(
-        newLeaderId: 'device-leader', isThisDeviceLeader: true, winningScore: 180);
+          newLeaderId: 'device-leader',
+          isThisDeviceLeader: true,
+          winningScore: 180);
       final events = emittedEvents.whereType<LeaderChangedEvent>().toList();
       expect(events, hasLength(1));
       expect(events.first.newLeaderDeviceId, equals('device-leader'));
@@ -293,20 +337,24 @@ void main() {
   group('ConnectToServerCommand', () {
     test('wird von Follower ignoriert', () async {
       when(() => ws.connect(any())).thenAnswer((_) async {});
-      await weaver.handleCommand(ConnectToServerCommand('wss://server.example.com'));
+      await weaver
+          .handleCommand(ConnectToServerCommand('wss://server.example.com'));
       verifyNever(() => ws.connect(any()));
     });
     test('Leader verbindet zum Server', () async {
       when(() => election.isLeader).thenReturn(true);
       when(() => ws.connect(any())).thenAnswer((_) async {});
-      await weaver.handleCommand(ConnectToServerCommand('wss://server.example.com'));
+      await weaver
+          .handleCommand(ConnectToServerCommand('wss://server.example.com'));
       verify(() => ws.connect('wss://server.example.com')).called(1);
     });
   });
   // --- SendChatMessageCommand ---
   group('SendChatMessageCommand', () {
-    test('persistiert Nachricht und emittiert ChatMessageReceivedEvent', () async {
-      await weaver.handleCommand(SendChatMessageCommand(content: 'Hallo Buehne!'));
+    test('persistiert Nachricht und emittiert ChatMessageReceivedEvent',
+        () async {
+      await weaver
+          .handleCommand(SendChatMessageCommand(content: 'Hallo Buehne!'));
       verify(() => chatDao.insertMessage(
             messageId: any(named: 'messageId'),
             senderDeviceId: any(named: 'senderDeviceId'),

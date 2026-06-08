@@ -129,8 +129,7 @@ class HomeScreen extends ConsumerWidget {
                 // ── Show Control Karte ────────────────────────────────────
                 _ShowControlCard(
                   session: ref.watch(sessionProvider),
-                  onTap: () =>
-                      ref.read(selectedTabProvider.notifier).state = 4,
+                  onTap: () => ref.read(selectedTabProvider.notifier).state = 4,
                 ),
                 const SizedBox(height: 8),
 
@@ -310,8 +309,7 @@ class _ScoreRow extends StatelessWidget {
             color: active ? activeColor : Colors.grey,
           ),
           const SizedBox(width: 8),
-          Text(label,
-              style: TextStyle(color: active ? null : Colors.grey)),
+          Text(label, style: TextStyle(color: active ? null : Colors.grey)),
           const Spacer(),
           Text(
             value,
@@ -381,9 +379,7 @@ class _ShowControlCard extends StatelessWidget {
     final color = isActive ? const Color(0xFF00C853) : Colors.white38;
 
     return Card(
-      color: isActive
-          ? const Color(0xFF00C853).withValues(alpha: 0.12)
-          : null,
+      color: isActive ? const Color(0xFF00C853).withValues(alpha: 0.12) : null,
       child: ListTile(
         leading: Icon(
           isActive ? Icons.play_circle : Icons.play_circle_outline,

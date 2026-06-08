@@ -10,4 +10,3 @@ import 'package:drift/drift.dart';
 /// Öffnet die Drift-Datenbank unter dem angegebenen Dateipfad [path].
 QueryExecutor openDatabaseForPlatform(String path) =>
     NativeDatabase(File(path), logStatements: false);
-

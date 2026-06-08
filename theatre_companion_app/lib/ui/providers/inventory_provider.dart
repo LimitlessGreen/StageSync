@@ -147,7 +147,8 @@ class InventoryNotifier extends StateNotifier<List<InventoryItemDisplay>> {
     manager.send(ScanItemCommand(
       itemId: itemId.trim(),
       statusId: statusId,
-      locationTag: locationTag?.trim().isEmpty == true ? null : locationTag?.trim(),
+      locationTag:
+          locationTag?.trim().isEmpty == true ? null : locationTag?.trim(),
       timestampMs: DateTime.now().millisecondsSinceEpoch,
     ));
   }
@@ -178,4 +179,3 @@ final filteredInventoryProvider = Provider<List<InventoryItemDisplay>>((ref) {
   if (filter == null) return all;
   return all.where((i) => i.statusId == filter.code).toList();
 });
-

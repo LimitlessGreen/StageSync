@@ -30,7 +30,8 @@ final standaloneBootstrapProvider = FutureProvider<bool>((ref) async {
 
   // 1. Embedded server hochfahren lassen.
   final serverOk = await ref.watch(embeddedServerProvider.future);
-  if (!serverOk) throw Exception('Embedded server konnte nicht gestartet werden.');
+  if (!serverOk)
+    throw Exception('Embedded server konnte nicht gestartet werden.');
 
   // 2. Geräte-Identität laden.
   final prefs = await DevicePreferences.loadConnectDefaults();
@@ -45,17 +46,17 @@ final standaloneBootstrapProvider = FutureProvider<bool>((ref) async {
 
   // 4. Lokale Session erstellen (Master + Audio).
   await ref.read(sessionProvider.notifier).createSession(
-    host: '127.0.0.1',
-    port: port,
-    sessionName: 'Lokale Session',
-    showName: 'Meine Show',
-    deviceName: deviceName,
-    nodeType: NodeType.NODE_TYPE_MASTER,
-    tasks: [NodeTask.NODE_TASK_MASTER, NodeTask.NODE_TASK_AUDIO_OUTPUT],
-    password: '',
-    persistent: false,
-    deviceId: deviceId,
-  );
+        host: '127.0.0.1',
+        port: port,
+        sessionName: 'Lokale Session',
+        showName: 'Meine Show',
+        deviceName: deviceName,
+        nodeType: NodeType.NODE_TYPE_MASTER,
+        tasks: [NodeTask.NODE_TASK_MASTER, NodeTask.NODE_TASK_AUDIO_OUTPUT],
+        password: '',
+        persistent: false,
+        deviceId: deviceId,
+      );
 
   final session = ref.read(sessionProvider);
   if (!session.isInSession) {
@@ -74,7 +75,9 @@ final standaloneBootstrapProvider = FutureProvider<bool>((ref) async {
 });
 
 String _defaultDeviceName(String deviceId) {
-  final suffix = deviceId.substring(deviceId.length.clamp(4, deviceId.length) - 4).toUpperCase();
+  final suffix = deviceId
+      .substring(deviceId.length.clamp(4, deviceId.length) - 4)
+      .toUpperCase();
   try {
     return '${Platform.localHostname} ($suffix)';
   } catch (_) {

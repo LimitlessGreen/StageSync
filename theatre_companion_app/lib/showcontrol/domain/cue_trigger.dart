@@ -2,7 +2,7 @@ import 'package:meta/meta.dart';
 
 enum TriggerType {
   manual,
-  follow,    // Auto-start after previous cue completes
+  follow, // Auto-start after previous cue completes
   timecode,
   osc,
   midi,

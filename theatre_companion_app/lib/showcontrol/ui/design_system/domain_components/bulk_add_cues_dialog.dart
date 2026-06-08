@@ -45,8 +45,10 @@ class _BulkAddCuesDialogState extends State<_BulkAddCuesDialog> {
   final Map<String, _ItemStatus> _statusMap = {};
   bool _hasErrors = false;
 
-  List<Asset> get _audioAssets =>
-      widget.ref.read(enrichedAssetsProvider).where((a) => a.audio != null).toList();
+  List<Asset> get _audioAssets => widget.ref
+      .read(enrichedAssetsProvider)
+      .where((a) => a.audio != null)
+      .toList();
 
   List<Asset> get _filtered {
     final audioOnly = _audioAssets;
@@ -86,12 +88,26 @@ class _BulkAddCuesDialogState extends State<_BulkAddCuesDialog> {
         );
         if (id != null) {
           prevId = id;
-          if (mounted) setState(() { _statusMap[asset.id] = _ItemStatus.ok; _done++; });
+          if (mounted)
+            setState(() {
+              _statusMap[asset.id] = _ItemStatus.ok;
+              _done++;
+            });
         } else {
-          if (mounted) setState(() { _statusMap[asset.id] = _ItemStatus.error; _done++; _hasErrors = true; });
+          if (mounted)
+            setState(() {
+              _statusMap[asset.id] = _ItemStatus.error;
+              _done++;
+              _hasErrors = true;
+            });
         }
       } catch (_) {
-        if (mounted) setState(() { _statusMap[asset.id] = _ItemStatus.error; _done++; _hasErrors = true; });
+        if (mounted)
+          setState(() {
+            _statusMap[asset.id] = _ItemStatus.error;
+            _done++;
+            _hasErrors = true;
+          });
       }
     }
 
@@ -102,7 +118,8 @@ class _BulkAddCuesDialogState extends State<_BulkAddCuesDialog> {
   }
 
   bool get _allFilteredSelected =>
-      _filtered.isNotEmpty && _selectedIds.containsAll(_filtered.map((a) => a.id));
+      _filtered.isNotEmpty &&
+      _selectedIds.containsAll(_filtered.map((a) => a.id));
 
   void _toggleAll() {
     setState(() {
@@ -141,7 +158,9 @@ class _BulkAddCuesDialogState extends State<_BulkAddCuesDialog> {
                               ? 'ABGESCHLOSSEN MIT FEHLERN'
                               : 'CUES IN BULK HINZUFÜGEN',
                       style: TextStyle(
-                        color: isDone && _hasErrors ? ScColors.error : ScColors.textPrimary,
+                        color: isDone && _hasErrors
+                            ? ScColors.error
+                            : ScColors.textPrimary,
                         fontSize: 12,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 1.0,
@@ -186,10 +205,12 @@ class _BulkAddCuesDialogState extends State<_BulkAddCuesDialog> {
                   decoration: InputDecoration(
                     hintText: 'Suchen…',
                     hintStyle: ScText.label.copyWith(color: ScColors.textDim),
-                    prefixIcon: const Icon(Icons.search, size: 16, color: ScColors.textDim),
+                    prefixIcon: const Icon(Icons.search,
+                        size: 16, color: ScColors.textDim),
                     prefixIconConstraints: const BoxConstraints(minWidth: 32),
                     isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(6),
                       borderSide: const BorderSide(color: ScColors.divider),
@@ -212,7 +233,8 @@ class _BulkAddCuesDialogState extends State<_BulkAddCuesDialog> {
                 InkWell(
                   onTap: _toggleAll,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                     child: Row(
                       children: [
                         Checkbox(
@@ -225,7 +247,8 @@ class _BulkAddCuesDialogState extends State<_BulkAddCuesDialog> {
                         const SizedBox(width: 8),
                         Text(
                           'Alle auswählen',
-                          style: ScText.label.copyWith(color: ScColors.textSecondary),
+                          style: ScText.label
+                              .copyWith(color: ScColors.textSecondary),
                         ),
                       ],
                     ),
@@ -253,37 +276,47 @@ class _BulkAddCuesDialogState extends State<_BulkAddCuesDialog> {
                     Expanded(
                       child: Text(
                         '${_statusMap.values.where((s) => s == _ItemStatus.error).length} Fehler — Session verbunden?',
-                        style: ScText.label.copyWith(color: ScColors.error, fontSize: 10),
+                        style: ScText.label
+                            .copyWith(color: ScColors.error, fontSize: 10),
                       ),
                     ),
                   TextButton(
-                    onPressed: inProgress ? null : () => Navigator.of(context).pop(),
+                    onPressed:
+                        inProgress ? null : () => Navigator.of(context).pop(),
                     child: Text(
                       isDone ? 'Schließen' : 'Abbrechen',
-                      style: ScText.label.copyWith(color: ScColors.textSecondary),
+                      style:
+                          ScText.label.copyWith(color: ScColors.textSecondary),
                     ),
                   ),
                   if (!isDone) ...[
                     const SizedBox(width: 8),
                     FilledButton(
                       style: FilledButton.styleFrom(
-                        backgroundColor: _selectedIds.isEmpty ? ScColors.textDim : ScColors.active,
+                        backgroundColor: _selectedIds.isEmpty
+                            ? ScColors.textDim
+                            : ScColors.active,
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6)),
                       ),
-                      onPressed: inProgress || _selectedIds.isEmpty ? null : _confirm,
+                      onPressed:
+                          inProgress || _selectedIds.isEmpty ? null : _confirm,
                       child: inProgress
                           ? const SizedBox(
                               width: 14,
                               height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white),
                             )
                           : Text(
                               _selectedIds.isEmpty
                                   ? 'Cues erstellen'
                                   : '${_selectedIds.length} Cue${_selectedIds.length > 1 ? 's' : ''} erstellen',
-                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                              style: const TextStyle(
+                                  fontSize: 12, fontWeight: FontWeight.w600),
                             ),
                     ),
                   ],
@@ -299,10 +332,12 @@ class _BulkAddCuesDialogState extends State<_BulkAddCuesDialog> {
   Widget _buildList(List<Asset> filtered, bool inProgress, bool isDone) {
     // During/after progress: show only selected assets with status
     if (inProgress || isDone) {
-      final assets = _audioAssets.where((a) => _selectedIds.contains(a.id)).toList();
+      final assets =
+          _audioAssets.where((a) => _selectedIds.contains(a.id)).toList();
       if (assets.isEmpty) {
         return Center(
-          child: Text('Keine Assets ausgewählt', style: ScText.label.copyWith(color: ScColors.textDim)),
+          child: Text('Keine Assets ausgewählt',
+              style: ScText.label.copyWith(color: ScColors.textDim)),
         );
       }
       return ListView.builder(
@@ -318,9 +353,12 @@ class _BulkAddCuesDialogState extends State<_BulkAddCuesDialog> {
                   width: 18,
                   height: 18,
                   child: switch (status) {
-                    _ItemStatus.ok      => const Icon(Icons.check_circle_outline, size: 16, color: ScColors.active),
-                    _ItemStatus.error   => const Icon(Icons.error_outline, size: 16, color: ScColors.error),
-                    _ItemStatus.pending => const CircularProgressIndicator(strokeWidth: 2, color: ScColors.active),
+                    _ItemStatus.ok => const Icon(Icons.check_circle_outline,
+                        size: 16, color: ScColors.active),
+                    _ItemStatus.error => const Icon(Icons.error_outline,
+                        size: 16, color: ScColors.error),
+                    _ItemStatus.pending => const CircularProgressIndicator(
+                        strokeWidth: 2, color: ScColors.active),
                   },
                 ),
                 const SizedBox(width: 10),
@@ -329,8 +367,8 @@ class _BulkAddCuesDialogState extends State<_BulkAddCuesDialog> {
                     a.name,
                     style: ScText.label.copyWith(
                       color: switch (status) {
-                        _ItemStatus.ok      => ScColors.textSecondary,
-                        _ItemStatus.error   => ScColors.error,
+                        _ItemStatus.ok => ScColors.textSecondary,
+                        _ItemStatus.error => ScColors.error,
                         _ItemStatus.pending => ScColors.textPrimary,
                       },
                     ),
@@ -347,7 +385,8 @@ class _BulkAddCuesDialogState extends State<_BulkAddCuesDialog> {
     // Selection mode
     if (filtered.isEmpty) {
       return Center(
-        child: Text('Keine Audio-Dateien vorhanden', style: ScText.label.copyWith(color: ScColors.textDim)),
+        child: Text('Keine Audio-Dateien vorhanden',
+            style: ScText.label.copyWith(color: ScColors.textDim)),
       );
     }
 
@@ -365,7 +404,10 @@ class _BulkAddCuesDialogState extends State<_BulkAddCuesDialog> {
 
         return InkWell(
           onTap: () => setState(() {
-            if (selected) _selectedIds.remove(a.id); else _selectedIds.add(a.id);
+            if (selected)
+              _selectedIds.remove(a.id);
+            else
+              _selectedIds.add(a.id);
           }),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -374,7 +416,10 @@ class _BulkAddCuesDialogState extends State<_BulkAddCuesDialog> {
                 Checkbox(
                   value: selected,
                   onChanged: (_) => setState(() {
-                    if (selected) _selectedIds.remove(a.id); else _selectedIds.add(a.id);
+                    if (selected)
+                      _selectedIds.remove(a.id);
+                    else
+                      _selectedIds.add(a.id);
                   }),
                   activeColor: ScColors.active,
                   side: const BorderSide(color: ScColors.textDim),
@@ -388,14 +433,16 @@ class _BulkAddCuesDialogState extends State<_BulkAddCuesDialog> {
                       Text(
                         a.name,
                         style: ScText.label.copyWith(
-                          color: selected ? ScColors.active : ScColors.textPrimary,
+                          color:
+                              selected ? ScColors.active : ScColors.textPrimary,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
                       if (info.isNotEmpty)
                         Text(
                           info,
-                          style: ScText.label.copyWith(color: ScColors.textDim, fontSize: 10),
+                          style: ScText.label
+                              .copyWith(color: ScColors.textDim, fontSize: 10),
                         ),
                     ],
                   ),

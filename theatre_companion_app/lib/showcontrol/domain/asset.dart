@@ -23,16 +23,16 @@ enum AssetReadiness {
 
 @immutable
 class AudioMetadata {
-  final double declaredDurationMs;  // from file header
-  final int channelCount;           // 1=mono, 2=stereo, 6=5.1, etc.
-  final int sampleRateHz;           // 44100, 48000, 96000, etc.
+  final double declaredDurationMs; // from file header
+  final int channelCount; // 1=mono, 2=stereo, 6=5.1, etc.
+  final int sampleRateHz; // 44100, 48000, 96000, etc.
 
   /// Integrated loudness in LUFS (EBU R128).
   /// null = not yet measured; requires server-side ffprobe analysis on upload.
   final double? loudnessLufs;
 
-  final String codec;    // wav, flac, mp3, aac, ogg, m4a, aiff
-  final int bitDepth;    // 16, 24, 32
+  final String codec; // wav, flac, mp3, aac, ogg, m4a, aiff
+  final int bitDepth; // 16, 24, 32
 
   const AudioMetadata({
     required this.declaredDurationMs,
@@ -100,9 +100,9 @@ class Asset {
   bool get isFullyReady => readiness == AssetReadiness.patched;
 
   String get readinessLabel => switch (readiness) {
-        AssetReadiness.present    => 'Vorhanden',
-        AssetReadiness.validated  => 'Verifiziert',
+        AssetReadiness.present => 'Vorhanden',
+        AssetReadiness.validated => 'Verifiziert',
         AssetReadiness.renderable => 'Abspielbar',
-        AssetReadiness.patched    => 'Bereit',
+        AssetReadiness.patched => 'Bereit',
       };
 }

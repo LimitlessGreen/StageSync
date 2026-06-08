@@ -36,9 +36,11 @@ import 'audio_cue_minibar.dart';
 class CueInspector extends StatefulWidget {
   final Cue cue;
   final ShowControlNotifier notifier;
+
   /// Optional scroll controller — pass the DraggableScrollableSheet controller
   /// when embedding inside a bottom sheet so drag-to-resize works correctly.
   final ScrollController? scrollController;
+
   /// Whether to show the ScPanel title bar. Set to false when the parent
   /// already provides a header (e.g. inside a bottom sheet).
   final bool showHeader;
@@ -58,7 +60,7 @@ class CueInspector extends StatefulWidget {
 class _CueInspectorState extends State<CueInspector> {
   late Cue _draft;
   bool _saving = false;
-  bool _dirty  = false;
+  bool _dirty = false;
   Timer? _debounce;
 
   final Map<Type, CueParams> _paramsCache = {};
@@ -75,7 +77,11 @@ class _CueInspectorState extends State<CueInspector> {
     if (old.cue.id != widget.cue.id) {
       _debounce?.cancel();
       _paramsCache.clear();
-      setState(() { _draft = widget.cue; _saving = false; _dirty = false; });
+      setState(() {
+        _draft = widget.cue;
+        _saving = false;
+        _dirty = false;
+      });
     } else if (!_dirty && !_saving && _debounce?.isActive != true) {
       setState(() => _draft = widget.cue);
     }
@@ -113,7 +119,9 @@ class _CueInspectorState extends State<CueInspector> {
           newParams is AudioParams &&
           newParams.assetId.isNotEmpty &&
           (_draft.label == 'Neue Cue' || _draft.label.isEmpty)) {
-        final baseName = name.contains('.') ? name.substring(0, name.lastIndexOf('.')) : name;
+        final baseName = name.contains('.')
+            ? name.substring(0, name.lastIndexOf('.'))
+            : name;
         updated = updated.copyWith(label: baseName);
         _pendingAssetName = null;
       }
@@ -126,7 +134,11 @@ class _CueInspectorState extends State<CueInspector> {
     if (!mounted) return;
     setState(() => _saving = true);
     await widget.notifier.upsertDomainCue(_draft);
-    if (mounted) setState(() { _saving = false; _dirty = false; });
+    if (mounted)
+      setState(() {
+        _saving = false;
+        _dirty = false;
+      });
   }
 
   @override
@@ -135,8 +147,10 @@ class _CueInspectorState extends State<CueInspector> {
       title: widget.showHeader ? '${_draft.number} · ${_draft.label}' : null,
       trailing: _saving
           ? const SizedBox(
-              width: 12, height: 12,
-              child: CircularProgressIndicator(strokeWidth: 1.5, color: ScColors.active),
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(
+                  strokeWidth: 1.5, color: ScColors.active),
             )
           : null,
       child: SingleChildScrollView(
@@ -150,7 +164,8 @@ class _CueInspectorState extends State<CueInspector> {
                 label: 'Nummer',
                 value: _draft.number,
                 readOnly: true,
-                tooltip: 'Nummern werden automatisch aus der Reihenfolge vergeben.',
+                tooltip:
+                    'Nummern werden automatisch aus der Reihenfolge vergeben.',
               ),
               const SizedBox(height: 6),
               ScInlineField(
@@ -166,10 +181,13 @@ class _CueInspectorState extends State<CueInspector> {
                 value: (_draft.timing.preWaitMs / 1000).toStringAsFixed(2),
                 suffix: 's',
                 tooltip: '${_draft.timing.preWaitMs.toStringAsFixed(0)} ms',
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
                 onChanged: (v) => _update(_draft.copyWith(
                   timing: _draft.timing.copyWith(
-                    preWaitMs: (double.tryParse(v) ?? _draft.timing.preWaitMs / 1000) * 1000,
+                    preWaitMs:
+                        (double.tryParse(v) ?? _draft.timing.preWaitMs / 1000) *
+                            1000,
                   ),
                 )),
               ),
@@ -179,10 +197,13 @@ class _CueInspectorState extends State<CueInspector> {
                 value: (_draft.timing.postWaitMs / 1000).toStringAsFixed(2),
                 suffix: 's',
                 tooltip: '${_draft.timing.postWaitMs.toStringAsFixed(0)} ms',
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
                 onChanged: (v) => _update(_draft.copyWith(
                   timing: _draft.timing.copyWith(
-                    postWaitMs: (double.tryParse(v) ?? _draft.timing.postWaitMs / 1000) * 1000,
+                    postWaitMs: (double.tryParse(v) ??
+                            _draft.timing.postWaitMs / 1000) *
+                        1000,
                   ),
                 )),
               ),
@@ -196,7 +217,10 @@ class _CueInspectorState extends State<CueInspector> {
               ),
             ]),
             const SizedBox(height: 12),
-            _ParamsSection(params: _draft.params, onChanged: _onParamsChanged, onAssetPicked: _onAssetPicked),
+            _ParamsSection(
+                params: _draft.params,
+                onChanged: _onParamsChanged,
+                onAssetPicked: _onAssetPicked),
           ],
         ),
       ),
@@ -282,7 +306,9 @@ class _EnumField<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        SizedBox(width: ScSpacing.inspectorLabelWidth, child: Text(label, style: ScText.label)),
+        SizedBox(
+            width: ScSpacing.inspectorLabelWidth,
+            child: Text(label, style: ScText.label)),
         const SizedBox(width: 6),
         Expanded(
           child: Container(
@@ -299,8 +325,13 @@ class _EnumField<T> extends StatelessWidget {
                 isExpanded: true,
                 dropdownColor: ScColors.surface2,
                 style: ScText.cueLabel.copyWith(fontSize: 13),
-                items: items.map((e) => DropdownMenuItem(value: e.$1, child: Text(e.$2))).toList(),
-                onChanged: (v) { if (v != null) onChanged(v); },
+                items: items
+                    .map(
+                        (e) => DropdownMenuItem(value: e.$1, child: Text(e.$2)))
+                    .toList(),
+                onChanged: (v) {
+                  if (v != null) onChanged(v);
+                },
               ),
             ),
           ),
@@ -317,7 +348,8 @@ class _ParamsSection extends StatelessWidget {
   final ValueChanged<CueParams> onChanged;
   final ValueChanged<String>? onAssetPicked;
 
-  const _ParamsSection({required this.params, required this.onChanged, this.onAssetPicked});
+  const _ParamsSection(
+      {required this.params, required this.onChanged, this.onAssetPicked});
 
   @override
   Widget build(BuildContext context) {
@@ -327,13 +359,14 @@ class _ParamsSection extends StatelessWidget {
         _CueTypeSwitcher(current: params, onSwitch: onChanged),
         const SizedBox(height: 12),
         switch (params) {
-          AudioParams p => _AudioParamsEditor(params: p, onChanged: onChanged, onAssetPicked: onAssetPicked),
-          WaitParams  p => _WaitParamsEditor(params: p, onChanged: onChanged),
+          AudioParams p => _AudioParamsEditor(
+              params: p, onChanged: onChanged, onAssetPicked: onAssetPicked),
+          WaitParams p => _WaitParamsEditor(params: p, onChanged: onChanged),
           MaOscParams p => _MaOscParamsEditor(params: p, onChanged: onChanged),
-          GotoParams  p => _GotoParamsEditor(params: p, onChanged: onChanged),
-          NoteParams  p => _NoteParamsEditor(params: p, onChanged: onChanged),
-          FadeParams  p => _FadeParamsEditor(params: p, onChanged: onChanged),
-          _             => const SizedBox.shrink(),
+          GotoParams p => _GotoParamsEditor(params: p, onChanged: onChanged),
+          NoteParams p => _NoteParamsEditor(params: p, onChanged: onChanged),
+          FadeParams p => _FadeParamsEditor(params: p, onChanged: onChanged),
+          _ => const SizedBox.shrink(),
         },
       ],
     );
@@ -349,36 +382,36 @@ class _CueTypeSwitcher extends StatelessWidget {
   const _CueTypeSwitcher({required this.current, required this.onSwitch});
 
   static const _types = [
-    (icon: Icons.volume_up,             label: 'Audio', key: 'audio'),
-    (icon: Icons.timer_outlined,        label: 'Wait',  key: 'wait'),
-    (icon: Icons.tune,                  label: 'Fade',  key: 'fade'),
-    (icon: Icons.settings_remote,       label: 'MA',    key: 'maOsc'),
-    (icon: Icons.redo,                  label: 'GOTO',  key: 'goto'),
+    (icon: Icons.volume_up, label: 'Audio', key: 'audio'),
+    (icon: Icons.timer_outlined, label: 'Wait', key: 'wait'),
+    (icon: Icons.tune, label: 'Fade', key: 'fade'),
+    (icon: Icons.settings_remote, label: 'MA', key: 'maOsc'),
+    (icon: Icons.redo, label: 'GOTO', key: 'goto'),
     (icon: Icons.account_tree_outlined, label: 'Group', key: 'group'),
-    (icon: Icons.text_fields,           label: 'Note',  key: 'note'),
+    (icon: Icons.text_fields, label: 'Note', key: 'note'),
   ];
 
   String get _currentKey => switch (current) {
-    AudioParams() => 'audio',
-    WaitParams()  => 'wait',
-    MaOscParams() => 'maOsc',
-    GotoParams()  => 'goto',
-    GroupParams() => 'group',
-    NoteParams()  => 'note',
-    FadeParams()  => 'fade',
-    _             => '',
-  };
+        AudioParams() => 'audio',
+        WaitParams() => 'wait',
+        MaOscParams() => 'maOsc',
+        GotoParams() => 'goto',
+        GroupParams() => 'group',
+        NoteParams() => 'note',
+        FadeParams() => 'fade',
+        _ => '',
+      };
 
   CueParams _defaultFor(String key) => switch (key) {
-    'audio' => const AudioParams(assetId: ''),
-    'wait'  => const WaitParams(durationMs: 5000),
-    'maOsc' => const MaOscParams(oscAddress: '/gma2/cmd'),
-    'goto'  => const GotoParams(targetCueId: ''),
-    'group' => const GroupParams(childCueIds: [], sequential: false),
-    'note'  => const NoteParams(text: ''),
-    'fade'  => const FadeParams(),
-    _       => const AudioParams(assetId: ''),
-  };
+        'audio' => const AudioParams(assetId: ''),
+        'wait' => const WaitParams(durationMs: 5000),
+        'maOsc' => const MaOscParams(oscAddress: '/gma2/cmd'),
+        'goto' => const GotoParams(targetCueId: ''),
+        'group' => const GroupParams(childCueIds: [], sequential: false),
+        'note' => const NoteParams(text: ''),
+        'fade' => const FadeParams(),
+        _ => const AudioParams(assetId: ''),
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -394,21 +427,27 @@ class _CueTypeSwitcher extends StatelessWidget {
               duration: const Duration(milliseconds: 120),
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               decoration: BoxDecoration(
-                color: isSelected ? ScColors.active.withValues(alpha: 0.15) : Colors.transparent,
-                border: Border.all(color: isSelected ? ScColors.active : ScColors.divider),
+                color: isSelected
+                    ? ScColors.active.withValues(alpha: 0.15)
+                    : Colors.transparent,
+                border: Border.all(
+                    color: isSelected ? ScColors.active : ScColors.divider),
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(t.icon, size: 12, color: isSelected ? ScColors.active : ScColors.textDim),
+                  Icon(t.icon,
+                      size: 12,
+                      color: isSelected ? ScColors.active : ScColors.textDim),
                   const SizedBox(width: 4),
                   Text(
                     t.label,
                     style: TextStyle(
                       color: isSelected ? ScColors.active : ScColors.textDim,
                       fontSize: 10,
-                      fontWeight: isSelected ? FontWeight.w700 : FontWeight.normal,
+                      fontWeight:
+                          isSelected ? FontWeight.w700 : FontWeight.normal,
                       letterSpacing: 0.5,
                     ),
                   ),
@@ -431,7 +470,8 @@ class _AudioParamsEditor extends ConsumerStatefulWidget {
   final ValueChanged<CueParams> onChanged;
   final ValueChanged<String>? onAssetPicked;
 
-  const _AudioParamsEditor({required this.params, required this.onChanged, this.onAssetPicked});
+  const _AudioParamsEditor(
+      {required this.params, required this.onChanged, this.onAssetPicked});
 
   @override
   ConsumerState<_AudioParamsEditor> createState() => _AudioParamsEditorState();
@@ -440,7 +480,8 @@ class _AudioParamsEditor extends ConsumerStatefulWidget {
 class _AudioParamsEditorState extends ConsumerState<_AudioParamsEditor> {
   bool _isDragOver = false;
 
-  static double _autoVolume(double lufs) => (_kTargetLufs - lufs).clamp(-40.0, 20.0);
+  static double _autoVolume(double lufs) =>
+      (_kTargetLufs - lufs).clamp(-40.0, 20.0);
 
   AudioParams get params => widget.params;
   ValueChanged<CueParams> get onChanged => widget.onChanged;
@@ -456,12 +497,21 @@ class _AudioParamsEditorState extends ConsumerState<_AudioParamsEditor> {
     ));
   }
 
-  static const _audioExtensions = {'wav', 'mp3', 'flac', 'aac', 'ogg', 'm4a', 'aiff'};
+  static const _audioExtensions = {
+    'wav',
+    'mp3',
+    'flac',
+    'aac',
+    'ogg',
+    'm4a',
+    'aiff'
+  };
 
   Future<void> _onDrop(DropDoneDetails details) async {
     setState(() => _isDragOver = false);
     final files = details.files
-        .where((f) => _audioExtensions.contains(f.name.split('.').last.toLowerCase()))
+        .where((f) =>
+            _audioExtensions.contains(f.name.split('.').last.toLowerCase()))
         .toList();
     if (files.isEmpty) return;
     final f = files.first;
@@ -492,27 +542,30 @@ class _AudioParamsEditorState extends ConsumerState<_AudioParamsEditor> {
 
   @override
   Widget build(BuildContext context) {
-    final audioNotifier    = ref.read(audioNodeProvider.notifier);
-    final isAudioConnected = ref.watch(audioNodeProvider).state == AudioNodeState.connected;
-    final asset     = ref.watch(assetWithReadinessProvider(params.assetId));
-    final allAssets = ref.watch(enrichedAssetsProvider)
+    final audioNotifier = ref.read(audioNodeProvider.notifier);
+    final isAudioConnected =
+        ref.watch(audioNodeProvider).state == AudioNodeState.connected;
+    final asset = ref.watch(assetWithReadinessProvider(params.assetId));
+    final allAssets = ref
+        .watch(enrichedAssetsProvider)
         .where((a) => a.mimeType.startsWith('audio/'))
         .toList();
     final waveformAsync = ref.watch(waveformProvider(params.assetId));
 
-    final lufs      = asset?.audio?.loudnessLufs;
+    final lufs = asset?.audio?.loudnessLufs;
     final autoVolDb = lufs != null ? _autoVolume(lufs) : null;
-    final isAutoVol = autoVolDb != null && (params.volumeDb - autoVolDb).abs() < 0.05;
+    final isAutoVol =
+        autoVolDb != null && (params.volumeDb - autoVolDb).abs() < 0.05;
 
     // Duration for dynamic max values — prefer live waveform data, fall back
     // to declared duration stored in params, then a generous default.
-    final wfDurMs   = waveformAsync.valueOrNull?.durationMs;
-    final durMs     = (wfDurMs != null && wfDurMs > 0)
+    final wfDurMs = waveformAsync.valueOrNull?.durationMs;
+    final durMs = (wfDurMs != null && wfDurMs > 0)
         ? wfDurMs
         : (params.declaredDurationMs ?? 120000.0);
-    final fadeMax       = durMs;
-    final seekMax       = durMs;
-    final pauseFadeMax  = (durMs / 4).clamp(500.0, 10000.0);
+    final fadeMax = durMs;
+    final seekMax = durMs;
+    final pauseFadeMax = (durMs / 4).clamp(500.0, 10000.0);
 
     final audioSection = _Section(title: 'AUDIO', children: [
       if (asset != null) _AssetReadinessBadge(asset: asset),
@@ -535,7 +588,8 @@ class _AudioParamsEditorState extends ConsumerState<_AudioParamsEditor> {
         const SizedBox(height: 4),
         ScInlineField(
           label: 'Format',
-          value: '${asset!.audio!.channelLabel}  ${asset.audio!.sampleRateHz} Hz  ${asset.audio!.codec.toUpperCase()}',
+          value:
+              '${asset!.audio!.channelLabel}  ${asset.audio!.sampleRateHz} Hz  ${asset.audio!.codec.toUpperCase()}',
           readOnly: true,
         ),
       ],
@@ -546,8 +600,11 @@ class _AudioParamsEditorState extends ConsumerState<_AudioParamsEditor> {
             child: ScDragField(
               label: 'Volume',
               value: params.volumeDb,
-              min: -40, max: 20, step: 0.2,
-              suffix: 'dB', decimalPlaces: 1,
+              min: -40,
+              max: 20,
+              step: 0.2,
+              suffix: 'dB',
+              decimalPlaces: 1,
               onChanged: (v) => onChanged(params.copyWith(volumeDb: v)),
             ),
           ),
@@ -561,19 +618,31 @@ class _AudioParamsEditorState extends ConsumerState<_AudioParamsEditor> {
                   color: ScColors.active.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(4),
                 ),
-                child: Text('EBU', style: ScText.label.copyWith(color: ScColors.active, fontSize: 9, fontWeight: FontWeight.w800)),
+                child: Text('EBU',
+                    style: ScText.label.copyWith(
+                        color: ScColors.active,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800)),
               ),
             ),
           ] else if (autoVolDb != null) ...[
             const SizedBox(width: 6),
             Tooltip(
-              message: 'Auf EBU R128 normieren (${autoVolDb.toStringAsFixed(1)} dB)',
+              message:
+                  'Auf EBU R128 normieren (${autoVolDb.toStringAsFixed(1)} dB)',
               child: GestureDetector(
                 onTap: () => onChanged(params.copyWith(volumeDb: autoVolDb)),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                  decoration: BoxDecoration(border: Border.all(color: ScColors.textDim), borderRadius: BorderRadius.circular(4)),
-                  child: Text('EBU', style: ScText.label.copyWith(color: ScColors.textDim, fontSize: 9, fontWeight: FontWeight.w700)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                  decoration: BoxDecoration(
+                      border: Border.all(color: ScColors.textDim),
+                      borderRadius: BorderRadius.circular(4)),
+                  child: Text('EBU',
+                      style: ScText.label.copyWith(
+                          color: ScColors.textDim,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w700)),
                 ),
               ),
             ),
@@ -581,9 +650,25 @@ class _AudioParamsEditorState extends ConsumerState<_AudioParamsEditor> {
         ],
       ),
       const SizedBox(height: 6),
-      ScDragField(label: 'Fade In',  value: params.fadeInMs,  min: 0, max: fadeMax, step: 10, suffix: 'ms', decimalPlaces: 0, onChanged: (v) => onChanged(params.copyWith(fadeInMs: v))),
+      ScDragField(
+          label: 'Fade In',
+          value: params.fadeInMs,
+          min: 0,
+          max: fadeMax,
+          step: 10,
+          suffix: 'ms',
+          decimalPlaces: 0,
+          onChanged: (v) => onChanged(params.copyWith(fadeInMs: v))),
       const SizedBox(height: 6),
-      ScDragField(label: 'Fade Out', value: params.fadeOutMs, min: 0, max: fadeMax, step: 10, suffix: 'ms', decimalPlaces: 0, onChanged: (v) => onChanged(params.copyWith(fadeOutMs: v))),
+      ScDragField(
+          label: 'Fade Out',
+          value: params.fadeOutMs,
+          min: 0,
+          max: fadeMax,
+          step: 10,
+          suffix: 'ms',
+          decimalPlaces: 0,
+          onChanged: (v) => onChanged(params.copyWith(fadeOutMs: v))),
       const SizedBox(height: 6),
       _SilenceSkipField(
         startTimeMs: params.startTimeMs,
@@ -592,9 +677,20 @@ class _AudioParamsEditorState extends ConsumerState<_AudioParamsEditor> {
         onChanged: (v) => onChanged(params.copyWith(startTimeMs: v)),
       ),
       const SizedBox(height: 6),
-      ScDragField(label: 'End', value: params.endTimeMs, min: 0, max: seekMax, step: 10, suffix: 'ms', decimalPlaces: 0, onChanged: (v) => onChanged(params.copyWith(endTimeMs: v))),
+      ScDragField(
+          label: 'End',
+          value: params.endTimeMs,
+          min: 0,
+          max: seekMax,
+          step: 10,
+          suffix: 'ms',
+          decimalPlaces: 0,
+          onChanged: (v) => onChanged(params.copyWith(endTimeMs: v))),
       const SizedBox(height: 6),
-      _BoolField(label: 'Loop', value: params.loop, onChanged: (v) => onChanged(params.copyWith(loop: v))),
+      _BoolField(
+          label: 'Loop',
+          value: params.loop,
+          onChanged: (v) => onChanged(params.copyWith(loop: v))),
       const SizedBox(height: 12),
       // ── Waveform ─────────────────────────────────────────────────────────
       if (params.assetId.isNotEmpty)
@@ -609,12 +705,23 @@ class _AudioParamsEditorState extends ConsumerState<_AudioParamsEditor> {
         _EnumField<PauseBehavior>(
           label: 'Bei Pause',
           value: params.pauseBehavior,
-          items: const [(PauseBehavior.hard, 'Hart (sofort)'), (PauseBehavior.fadeOut, 'Ausblenden')],
+          items: const [
+            (PauseBehavior.hard, 'Hart (sofort)'),
+            (PauseBehavior.fadeOut, 'Ausblenden')
+          ],
           onChanged: (v) => onChanged(params.copyWith(pauseBehavior: v)),
         ),
         if (params.pauseBehavior == PauseBehavior.fadeOut) ...[
           const SizedBox(height: 6),
-          ScDragField(label: 'Pause-Fade', value: params.pauseFadeMs, min: 0, max: pauseFadeMax, step: 50, suffix: 'ms', decimalPlaces: 0, onChanged: (v) => onChanged(params.copyWith(pauseFadeMs: v))),
+          ScDragField(
+              label: 'Pause-Fade',
+              value: params.pauseFadeMs,
+              min: 0,
+              max: pauseFadeMax,
+              step: 50,
+              suffix: 'ms',
+              decimalPlaces: 0,
+              onChanged: (v) => onChanged(params.copyWith(pauseFadeMs: v))),
         ],
         const SizedBox(height: 6),
         _EnumField<ResumeBehavior>(
@@ -622,14 +729,22 @@ class _AudioParamsEditorState extends ConsumerState<_AudioParamsEditor> {
           value: params.resumeBehavior,
           items: const [
             (ResumeBehavior.continuePlaying, 'Nahtlos weiter'),
-            (ResumeBehavior.fadeIn,          'Einblenden'),
-            (ResumeBehavior.fromStart,       'Von vorne'),
+            (ResumeBehavior.fadeIn, 'Einblenden'),
+            (ResumeBehavior.fromStart, 'Von vorne'),
           ],
           onChanged: (v) => onChanged(params.copyWith(resumeBehavior: v)),
         ),
         if (params.resumeBehavior == ResumeBehavior.fadeIn) ...[
           const SizedBox(height: 6),
-          ScDragField(label: 'Resume-Fade', value: params.resumeFadeMs, min: 0, max: pauseFadeMax, step: 50, suffix: 'ms', decimalPlaces: 0, onChanged: (v) => onChanged(params.copyWith(resumeFadeMs: v))),
+          ScDragField(
+              label: 'Resume-Fade',
+              value: params.resumeFadeMs,
+              min: 0,
+              max: pauseFadeMax,
+              step: 50,
+              suffix: 'ms',
+              decimalPlaces: 0,
+              onChanged: (v) => onChanged(params.copyWith(resumeFadeMs: v))),
         ],
       ]),
       const SizedBox(height: 8),
@@ -640,15 +755,21 @@ class _AudioParamsEditorState extends ConsumerState<_AudioParamsEditor> {
           Tooltip(
             message: !isAudioConnected
                 ? 'Audio-Engine starten (Audio-Tab → Starten)'
-                : params.assetId.isEmpty ? 'Kein Asset ausgewählt' : '',
+                : params.assetId.isEmpty
+                    ? 'Kein Asset ausgewählt'
+                    : '',
             child: ScButton(
               label: 'Vorhören',
               icon: Icons.headphones,
               variant: ScButtonVariant.secondary,
               size: ScButtonSize.compact,
-              onPressed: isAudioConnected && params.assetId.isNotEmpty && asset != null
-                  ? () => audioNotifier.auditionPlay(assetId: asset.name, volumeDb: params.volumeDb, startMs: params.startTimeMs)
-                  : null,
+              onPressed:
+                  isAudioConnected && params.assetId.isNotEmpty && asset != null
+                      ? () => audioNotifier.auditionPlay(
+                          assetId: asset.name,
+                          volumeDb: params.volumeDb,
+                          startMs: params.startTimeMs)
+                      : null,
             ),
           ),
           const SizedBox(width: 8),
@@ -657,7 +778,8 @@ class _AudioParamsEditorState extends ConsumerState<_AudioParamsEditor> {
             icon: Icons.stop,
             variant: ScButtonVariant.ghost,
             size: ScButtonSize.compact,
-            onPressed: isAudioConnected ? () => audioNotifier.auditionStop() : null,
+            onPressed:
+                isAudioConnected ? () => audioNotifier.auditionStop() : null,
           ),
         ],
       ),
@@ -665,8 +787,8 @@ class _AudioParamsEditorState extends ConsumerState<_AudioParamsEditor> {
 
     return DropTarget(
       onDragEntered: (_) => setState(() => _isDragOver = true),
-      onDragExited:  (_) => setState(() => _isDragOver = false),
-      onDragDone:    _onDrop,
+      onDragExited: (_) => setState(() => _isDragOver = false),
+      onDragDone: _onDrop,
       child: Stack(
         children: [
           audioSection,
@@ -686,7 +808,10 @@ class _AudioParamsEditorState extends ConsumerState<_AudioParamsEditor> {
                       SizedBox(height: 6),
                       Text(
                         'Audio-Datei ablegen',
-                        style: TextStyle(color: ScColors.active, fontSize: 12, fontWeight: FontWeight.w600),
+                        style: TextStyle(
+                            color: ScColors.active,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600),
                       ),
                     ],
                   ),
@@ -748,12 +873,15 @@ class _AssetPicker extends StatelessWidget {
                     child: Text(
                       current?.name ?? 'Asset auswählen…',
                       style: ScText.label.copyWith(
-                        color: current != null ? ScColors.textPrimary : ScColors.textDim,
+                        color: current != null
+                            ? ScColors.textPrimary
+                            : ScColors.textDim,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const Icon(Icons.unfold_more, size: 16, color: ScColors.textDim),
+                  const Icon(Icons.unfold_more,
+                      size: 16, color: ScColors.textDim),
                 ],
               ),
             ),
@@ -763,7 +891,10 @@ class _AssetPicker extends StatelessWidget {
           const SizedBox(width: 6),
           Tooltip(
             message: 'Asset entfernen',
-            child: GestureDetector(onTap: onClear, child: const Icon(Icons.close, size: 14, color: ScColors.textDim)),
+            child: GestureDetector(
+                onTap: onClear,
+                child:
+                    const Icon(Icons.close, size: 14, color: ScColors.textDim)),
           ),
         ],
       ],
@@ -814,10 +945,12 @@ class _AssetSearchDialogState extends State<_AssetSearchDialog> {
                 decoration: InputDecoration(
                   hintText: 'Suchen…',
                   hintStyle: ScText.label.copyWith(color: ScColors.textDim),
-                  prefixIcon: const Icon(Icons.search, size: 16, color: ScColors.textDim),
+                  prefixIcon: const Icon(Icons.search,
+                      size: 16, color: ScColors.textDim),
                   prefixIconConstraints: const BoxConstraints(minWidth: 32),
                   isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(6),
                     borderSide: const BorderSide(color: ScColors.divider),
@@ -856,14 +989,16 @@ class _AssetSearchDialogState extends State<_AssetSearchDialog> {
                     final lufs = a.audio?.loudnessLufs;
                     final info = [
                       if (a.audio != null) a.audio!.channelLabel,
-                      if (a.audio?.sampleRateHz != null) '${a.audio!.sampleRateHz} Hz',
+                      if (a.audio?.sampleRateHz != null)
+                        '${a.audio!.sampleRateHz} Hz',
                       if (lufs != null) '${lufs.toStringAsFixed(1)} LUFS',
                     ].join(' · ');
                     return ListTile(
                       dense: true,
                       selected: isCurrent,
                       selectedColor: ScColors.active,
-                      selectedTileColor: ScColors.active.withValues(alpha: 0.08),
+                      selectedTileColor:
+                          ScColors.active.withValues(alpha: 0.08),
                       leading: Icon(
                         Icons.audio_file,
                         size: 16,
@@ -872,7 +1007,9 @@ class _AssetSearchDialogState extends State<_AssetSearchDialog> {
                       title: Text(
                         a.name,
                         style: ScText.label.copyWith(
-                          color: isCurrent ? ScColors.active : ScColors.textPrimary,
+                          color: isCurrent
+                              ? ScColors.active
+                              : ScColors.textPrimary,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -906,16 +1043,34 @@ class _AssetReadinessBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (color, icon, label) = switch (asset.readiness) {
-      AssetReadiness.patched    => (ScColors.active, Icons.check_circle_outline, asset.readinessLabel),
-      AssetReadiness.renderable => (ScColors.active, Icons.play_circle_outline, asset.readinessLabel),
-      AssetReadiness.validated  => (ScColors.warn,   Icons.verified_outlined, asset.readinessLabel),
-      AssetReadiness.present    => (ScColors.warn,   Icons.download_done_outlined, asset.readinessLabel),
+      AssetReadiness.patched => (
+          ScColors.active,
+          Icons.check_circle_outline,
+          asset.readinessLabel
+        ),
+      AssetReadiness.renderable => (
+          ScColors.active,
+          Icons.play_circle_outline,
+          asset.readinessLabel
+        ),
+      AssetReadiness.validated => (
+          ScColors.warn,
+          Icons.verified_outlined,
+          asset.readinessLabel
+        ),
+      AssetReadiness.present => (
+          ScColors.warn,
+          Icons.download_done_outlined,
+          asset.readinessLabel
+        ),
     };
     return Row(
       children: [
         Icon(icon, size: 13, color: color),
         const SizedBox(width: 5),
-        Text('${asset.name}  ·  $label', style: ScText.label.copyWith(color: color), overflow: TextOverflow.ellipsis),
+        Text('${asset.name}  ·  $label',
+            style: ScText.label.copyWith(color: color),
+            overflow: TextOverflow.ellipsis),
       ],
     );
   }
@@ -931,7 +1086,15 @@ class _WaitParamsEditor extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _Section(title: 'WAIT', children: [
-      ScDragField(label: 'Dauer', value: params.durationMs, min: 0, max: 3600000, step: 50, suffix: 'ms', decimalPlaces: 0, onChanged: (v) => onChanged(params.copyWith(durationMs: v))),
+      ScDragField(
+          label: 'Dauer',
+          value: params.durationMs,
+          min: 0,
+          max: 3600000,
+          step: 50,
+          suffix: 'ms',
+          decimalPlaces: 0,
+          onChanged: (v) => onChanged(params.copyWith(durationMs: v))),
     ]);
   }
 }
@@ -946,13 +1109,29 @@ class _MaOscParamsEditor extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _Section(title: 'GrandMA OSC', children: [
-      ScInlineField(label: 'Adresse', value: params.oscAddress, onChanged: (v) => onChanged(params.copyWith(oscAddress: v))),
+      ScInlineField(
+          label: 'Adresse',
+          value: params.oscAddress,
+          onChanged: (v) => onChanged(params.copyWith(oscAddress: v))),
       const SizedBox(height: 6),
-      ScInlineField(label: 'Argument', value: params.oscArgument, onChanged: (v) => onChanged(params.copyWith(oscArgument: v))),
+      ScInlineField(
+          label: 'Argument',
+          value: params.oscArgument,
+          onChanged: (v) => onChanged(params.copyWith(oscArgument: v))),
       const SizedBox(height: 6),
-      ScInlineField(label: 'Executor', value: params.executorNo.toString(), keyboardType: TextInputType.number, onChanged: (v) => onChanged(params.copyWith(executorNo: int.tryParse(v) ?? params.executorNo))),
+      ScInlineField(
+          label: 'Executor',
+          value: params.executorNo.toString(),
+          keyboardType: TextInputType.number,
+          onChanged: (v) => onChanged(params.copyWith(
+              executorNo: int.tryParse(v) ?? params.executorNo))),
       const SizedBox(height: 6),
-      ScInlineField(label: 'Page', value: params.executorPage.toString(), keyboardType: TextInputType.number, onChanged: (v) => onChanged(params.copyWith(executorPage: int.tryParse(v) ?? params.executorPage))),
+      ScInlineField(
+          label: 'Page',
+          value: params.executorPage.toString(),
+          keyboardType: TextInputType.number,
+          onChanged: (v) => onChanged(params.copyWith(
+              executorPage: int.tryParse(v) ?? params.executorPage))),
     ]);
   }
 }
@@ -967,7 +1146,11 @@ class _GotoParamsEditor extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _Section(title: 'GOTO', children: [
-      ScInlineField(label: 'Cue-Nr.', value: params.targetNumber, readOnly: true, tooltip: 'Cue-ID: ${params.targetCueId}'),
+      ScInlineField(
+          label: 'Cue-Nr.',
+          value: params.targetNumber,
+          readOnly: true,
+          tooltip: 'Cue-ID: ${params.targetCueId}'),
     ]);
   }
 }
@@ -998,11 +1181,16 @@ class _NoteParamsEditorState extends State<_NoteParamsEditor> {
   @override
   Widget build(BuildContext context) {
     return _Section(title: 'NOTE', children: [
-      ScInlineField(label: 'Text', value: widget.params.text, onChanged: (v) => widget.onChanged(widget.params.copyWith(text: v))),
+      ScInlineField(
+          label: 'Text',
+          value: widget.params.text,
+          onChanged: (v) => widget.onChanged(widget.params.copyWith(text: v))),
       const SizedBox(height: 8),
       Row(
         children: [
-          SizedBox(width: ScSpacing.inspectorLabelWidth, child: Text('GO-Verhalten', style: ScText.label)),
+          SizedBox(
+              width: ScSpacing.inspectorLabelWidth,
+              child: Text('GO-Verhalten', style: ScText.label)),
           const SizedBox(width: 6),
           Expanded(
             child: DropdownButtonHideUnderline(
@@ -1014,9 +1202,12 @@ class _NoteParamsEditorState extends State<_NoteParamsEditor> {
                 style: ScText.label.copyWith(color: ScColors.textPrimary),
                 items: const [
                   DropdownMenuItem(value: false, child: Text('Überspringen')),
-                  DropdownMenuItem(value: true,  child: Text('Landen')),
+                  DropdownMenuItem(value: true, child: Text('Landen')),
                 ],
-                onChanged: (v) { if (v != null) widget.onChanged(widget.params.copyWith(landable: v)); },
+                onChanged: (v) {
+                  if (v != null)
+                    widget.onChanged(widget.params.copyWith(landable: v));
+                },
               ),
             ),
           ),
@@ -1025,20 +1216,27 @@ class _NoteParamsEditorState extends State<_NoteParamsEditor> {
       const SizedBox(height: 8),
       Row(
         children: [
-          SizedBox(width: ScSpacing.inspectorLabelWidth, child: Text('Farbe', style: ScText.label)),
+          SizedBox(
+              width: ScSpacing.inspectorLabelWidth,
+              child: Text('Farbe', style: ScText.label)),
           const SizedBox(width: 6),
           Wrap(
             spacing: 6,
             children: _palette.map((c) {
-              final isSelected = c == widget.params.color || (c == null && widget.params.color == null);
+              final isSelected = c == widget.params.color ||
+                  (c == null && widget.params.color == null);
               return GestureDetector(
                 onTap: () => widget.onChanged(widget.params.copyWith(color: c)),
                 child: Container(
-                  width: 20, height: 20,
+                  width: 20,
+                  height: 20,
                   decoration: BoxDecoration(
                     color: c ?? ScColors.textDim,
                     shape: BoxShape.circle,
-                    border: Border.all(color: isSelected ? ScColors.active : Colors.transparent, width: 2),
+                    border: Border.all(
+                        color:
+                            isSelected ? ScColors.active : Colors.transparent,
+                        width: 2),
                   ),
                 ),
               );
@@ -1065,15 +1263,22 @@ class _FadeParamsEditor extends ConsumerWidget {
     return _Section(title: 'FADE / CONTROL', children: [
       Row(
         children: [
-          SizedBox(width: ScSpacing.inspectorLabelWidth, child: Text('Ziel', style: ScText.label)),
+          SizedBox(
+              width: ScSpacing.inspectorLabelWidth,
+              child: Text('Ziel', style: ScText.label)),
           const SizedBox(width: 6),
           Expanded(
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8),
-              decoration: BoxDecoration(color: ScColors.bg, borderRadius: BorderRadius.circular(4), border: Border.all(color: ScColors.divider)),
+              decoration: BoxDecoration(
+                  color: ScColors.bg,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: ScColors.divider)),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
-                  value: cues.any((c) => c.id == params.targetCueId) ? params.targetCueId : '',
+                  value: cues.any((c) => c.id == params.targetCueId)
+                      ? params.targetCueId
+                      : '',
                   isDense: true,
                   isExpanded: true,
                   dropdownColor: ScColors.surface2,
@@ -1081,12 +1286,18 @@ class _FadeParamsEditor extends ConsumerWidget {
                   items: [
                     const DropdownMenuItem(value: '', child: Text('— Keine —')),
                     ...cues.where((c) => c.params is AudioParams).map((c) =>
-                        DropdownMenuItem(value: c.id, child: Text('${c.number}  ${c.label}', overflow: TextOverflow.ellipsis))),
+                        DropdownMenuItem(
+                            value: c.id,
+                            child: Text('${c.number}  ${c.label}',
+                                overflow: TextOverflow.ellipsis))),
                   ],
                   onChanged: (id) {
                     if (id == null) return;
-                    final cue = cues.firstWhere((c) => c.id == id, orElse: () => cues.first);
-                    onChanged(params.copyWith(targetCueId: id, targetCueNumber: id.isEmpty ? '' : cue.number));
+                    final cue = cues.firstWhere((c) => c.id == id,
+                        orElse: () => cues.first);
+                    onChanged(params.copyWith(
+                        targetCueId: id,
+                        targetCueNumber: id.isEmpty ? '' : cue.number));
                   },
                 ),
               ),
@@ -1100,21 +1311,40 @@ class _FadeParamsEditor extends ConsumerWidget {
         value: params.action,
         items: const [
           (FadeAction.volume, 'Lautstärke'),
-          (FadeAction.stop,   'Mit Fade stoppen'),
-          (FadeAction.pause,  'Mit Fade pausieren'),
+          (FadeAction.stop, 'Mit Fade stoppen'),
+          (FadeAction.pause, 'Mit Fade pausieren'),
           (FadeAction.resume, 'Mit Fade fortsetzen'),
         ],
         onChanged: (v) => onChanged(params.copyWith(action: v)),
       ),
       if (params.action != FadeAction.resume) ...[
         const SizedBox(height: 6),
-        ScDragField(label: 'Ziel-Vol.', value: params.targetVolumeDb, min: -60, max: 6, step: 0.5, suffix: 'dB', decimalPlaces: 1, onChanged: (v) => onChanged(params.copyWith(targetVolumeDb: v))),
+        ScDragField(
+            label: 'Ziel-Vol.',
+            value: params.targetVolumeDb,
+            min: -60,
+            max: 6,
+            step: 0.5,
+            suffix: 'dB',
+            decimalPlaces: 1,
+            onChanged: (v) => onChanged(params.copyWith(targetVolumeDb: v))),
       ],
       const SizedBox(height: 6),
-      ScDragField(label: 'Dauer', value: params.durationMs, min: 0, max: 30000, step: 100, suffix: 'ms', decimalPlaces: 0, onChanged: (v) => onChanged(params.copyWith(durationMs: v))),
+      ScDragField(
+          label: 'Dauer',
+          value: params.durationMs,
+          min: 0,
+          max: 30000,
+          step: 100,
+          suffix: 'ms',
+          decimalPlaces: 0,
+          onChanged: (v) => onChanged(params.copyWith(durationMs: v))),
       if (params.action == FadeAction.volume) ...[
         const SizedBox(height: 6),
-        _BoolField(label: 'Stopp danach', value: params.stopWhenDone, onChanged: (v) => onChanged(params.copyWith(stopWhenDone: v))),
+        _BoolField(
+            label: 'Stopp danach',
+            value: params.stopWhenDone,
+            onChanged: (v) => onChanged(params.copyWith(stopWhenDone: v))),
       ],
       const SizedBox(height: 8),
       Container(
@@ -1150,7 +1380,8 @@ class _WaveformSection extends ConsumerWidget {
     required this.onChanged,
   });
 
-  bool get _autoSilenceActive => params.startTimeMs == 0 && params.assetId.isNotEmpty;
+  bool get _autoSilenceActive =>
+      params.startTimeMs == 0 && params.assetId.isNotEmpty;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1169,8 +1400,10 @@ class _WaveformSection extends ConsumerWidget {
             height: 80,
             child: Center(
               child: SizedBox(
-                width: 16, height: 16,
-                child: CircularProgressIndicator(strokeWidth: 1.5, color: ScColors.textDim),
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                    strokeWidth: 1.5, color: ScColors.textDim),
               ),
             ),
           ),
@@ -1193,14 +1426,18 @@ class _WaveformSection extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Hinweis wenn Auto-Silence-Offset erkannt wurde
-                if (_autoSilenceActive && detectedSilenceMs != null && detectedSilenceMs > 0) ...[
+                if (_autoSilenceActive &&
+                    detectedSilenceMs != null &&
+                    detectedSilenceMs > 0) ...[
                   Row(
                     children: [
-                      const Icon(Icons.skip_next, size: 12, color: ScColors.active),
+                      const Icon(Icons.skip_next,
+                          size: 12, color: ScColors.active),
                       const SizedBox(width: 4),
                       Text(
                         'Stille erkannt: ${_fmtMs(detectedSilenceMs)}',
-                        style: ScText.statusSmall.copyWith(color: ScColors.active),
+                        style:
+                            ScText.statusSmall.copyWith(color: ScColors.active),
                       ),
                     ],
                   ),
@@ -1217,7 +1454,8 @@ class _WaveformSection extends ConsumerWidget {
                     // Im Auto-Mode: kein manuelles Ziehen des In-Markers
                     onSeekStart: _autoSilenceActive
                         ? null
-                        : (f) => onChanged(params.copyWith(startTimeMs: f * dur)),
+                        : (f) =>
+                            onChanged(params.copyWith(startTimeMs: f * dur)),
                     onSeekEnd: (f) => onChanged(params.copyWith(
                       endTimeMs: f >= 0.999 ? 0.0 : f * dur,
                     )),
@@ -1311,9 +1549,11 @@ class _SilenceSkipFieldState extends ConsumerState<_SilenceSkipField> {
                   const SizedBox(width: 6),
                   if (_autoActive)
                     Tooltip(
-                      message: 'Server erkennt und überspringt führende Stille automatisch beim Preload.',
+                      message:
+                          'Server erkennt und überspringt führende Stille automatisch beim Preload.',
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 5, vertical: 2),
                         decoration: BoxDecoration(
                           color: ScColors.active.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(4),
@@ -1321,7 +1561,9 @@ class _SilenceSkipFieldState extends ConsumerState<_SilenceSkipField> {
                         child: Text(
                           'AUTO',
                           style: ScText.label.copyWith(
-                            color: ScColors.active, fontSize: 9, fontWeight: FontWeight.w800,
+                            color: ScColors.active,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
                           ),
                         ),
                       ),
@@ -1355,8 +1597,10 @@ class _SilenceSkipFieldState extends ConsumerState<_SilenceSkipField> {
                       child: SliderTheme(
                         data: SliderTheme.of(context).copyWith(
                           trackHeight: 2,
-                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                          overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+                          thumbShape: const RoundSliderThumbShape(
+                              enabledThumbRadius: 6),
+                          overlayShape:
+                              const RoundSliderOverlayShape(overlayRadius: 12),
                           activeTrackColor: ScColors.active,
                           inactiveTrackColor: ScColors.surface2,
                           thumbColor: ScColors.active,
@@ -1364,7 +1608,8 @@ class _SilenceSkipFieldState extends ConsumerState<_SilenceSkipField> {
                         ),
                         child: Slider(
                           value: _thresholdDb,
-                          min: -80, max: -20,
+                          min: -80,
+                          max: -20,
                           divisions: 60,
                           onChanged: (v) => setState(() => _thresholdDb = v),
                         ),
@@ -1394,20 +1639,24 @@ class _SilenceSkipFieldState extends ConsumerState<_SilenceSkipField> {
                     children: [
                       Text(
                         'Ton ab ${_fmtMs(estimated)}',
-                        style: ScText.label.copyWith(color: ScColors.textDim, fontSize: 10),
+                        style: ScText.label
+                            .copyWith(color: ScColors.textDim, fontSize: 10),
                       ),
                       const SizedBox(width: 8),
                       GestureDetector(
-                        onTap: () => widget.onChanged(estimated > 0 ? estimated : 0.001),
+                        onTap: () =>
+                            widget.onChanged(estimated > 0 ? estimated : 0.001),
                         child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
                             border: Border.all(color: ScColors.textDim),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: Text(
                             'Anwenden',
-                            style: ScText.label.copyWith(color: ScColors.textDim, fontSize: 9),
+                            style: ScText.label
+                                .copyWith(color: ScColors.textDim, fontSize: 9),
                           ),
                         ),
                       ),
@@ -1425,8 +1674,11 @@ class _SilenceSkipFieldState extends ConsumerState<_SilenceSkipField> {
           ScDragField(
             label: 'Startzeit',
             value: widget.startTimeMs > 0.001 ? widget.startTimeMs : 0,
-            min: 0, max: widget.maxMs, step: 10,
-            suffix: 'ms', decimalPlaces: 0,
+            min: 0,
+            max: widget.maxMs,
+            step: 10,
+            suffix: 'ms',
+            decimalPlaces: 0,
             onChanged: (v) => widget.onChanged(v > 0 ? v : 0.001),
           ),
         ],
@@ -1439,4 +1691,3 @@ class _SilenceSkipFieldState extends ConsumerState<_SilenceSkipField> {
     return '${(ms / 1000).toStringAsFixed(1)} s';
   }
 }
-

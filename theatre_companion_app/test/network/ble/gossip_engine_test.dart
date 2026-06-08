@@ -1,4 +1,4 @@
-﻿/// gossip_engine_test.dart
+/// gossip_engine_test.dart
 /// ──────────────────────────
 /// Unit-Tests für den GossipEngine.
 ///
@@ -9,6 +9,7 @@
 ///   4. drainQueueForPeer: Verwendet sendRawEncryptedPacket (kein Re-Encrypt).
 ///   5. Bei Sendefehler: RetryCount inkrementieren.
 library gossip_engine_test;
+
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
@@ -19,10 +20,14 @@ import 'package:theatre_companion_app/network/db/dao/packet_queue_dao.dart';
 import 'package:theatre_companion_app/network/models/ble_packet.dart';
 import 'package:theatre_companion_app/network/platform/abstract_ble_service.dart';
 import 'package:theatre_companion_app/network/routing/peer_registry.dart';
+
 // ─── Mock-Klassen ─────────────────────────────────────────────────────────────
 class MockBleService extends Mock implements AbstractBleService {}
+
 class MockPacketQueueDao extends Mock implements PacketQueueDao {}
+
 class MockAesGcmService extends Mock implements AesGcmService {}
+
 // ─── Hilfsfunktionen ─────────────────────────────────────────────────────────
 /// Erstellt ein BleDataPacket mit konfigurierbarem TTL.
 BleDataPacket makeDataPacket({int ttl = kDataPacketTtl, int shortId = 0xBEEF}) {
@@ -38,6 +43,7 @@ BleDataPacket makeDataPacket({int ttl = kDataPacketTtl, int shortId = 0xBEEF}) {
     timestampSec: 1000000,
   );
 }
+
 // ─────────────────────────────────────────────────────────────────────────────
 void main() {
   late MockBleService ble;
@@ -62,7 +68,8 @@ void main() {
     );
     // Standard-Stubs
     when(() => ble.sendPacket(any(), any())).thenAnswer((_) async {});
-    when(() => ble.sendRawEncryptedPacket(any(), any())).thenAnswer((_) async {});
+    when(() => ble.sendRawEncryptedPacket(any(), any()))
+        .thenAnswer((_) async {});
     when(() => ble.broadcastToSubscribers(any())).thenAnswer((_) async {});
     when(() => crypto.encrypt(any()))
         .thenAnswer((_) async => Uint8List.fromList([0x01, 0x02, 0x03, 0x04]));
@@ -95,7 +102,9 @@ void main() {
       // Beide weitergeleitet → 2 Aufrufe insgesamt
       verify(() => ble.sendRawEncryptedPacket(any(), any())).called(2);
     });
-    test('originateDataPacket markiert Paket als gesehen – Relay-Loop verhindert', () async {
+    test(
+        'originateDataPacket markiert Paket als gesehen – Relay-Loop verhindert',
+        () async {
       peers.touchPeer(deviceId: 'peer-1', deviceShortId: 1, rssi: -60);
       final packet = BleDataPacket.create(
         sourceDeviceShortId: 0xABCD,
@@ -153,7 +162,8 @@ void main() {
           )).called(1);
       verifyNever(() => ble.sendRawEncryptedPacket(any(), any()));
     });
-    test('drainQueueForPeer verwendet sendRawEncryptedPacket – kein Re-Encrypt', () async {
+    test('drainQueueForPeer verwendet sendRawEncryptedPacket – kein Re-Encrypt',
+        () async {
       // BUG-FIX Verifikation: Doppel-Verschlüsselung muss verhindert werden.
       final encBytes = Uint8List.fromList([0xDE, 0xAD, 0xBE, 0xEF, 0xCA, 0xFE]);
       final fakeRow = PacketQueueData(
@@ -175,7 +185,8 @@ void main() {
       // Nach Erfolg: markDelivered aufrufen
       verify(() => queue.markDelivered(42)).called(1);
     });
-    test('drainQueueForPeer inkrementiert RetryCount bei Sendefehler', () async {
+    test('drainQueueForPeer inkrementiert RetryCount bei Sendefehler',
+        () async {
       final fakeRow = PacketQueueData(
         id: 99,
         encryptedPayload: Uint8List.fromList([0xCA, 0xFE]),
@@ -214,7 +225,8 @@ void main() {
           isDelivered: false,
         ),
       ];
-      when(() => queue.dequeueForDelivery('peer-1')).thenAnswer((_) async => rows);
+      when(() => queue.dequeueForDelivery('peer-1'))
+          .thenAnswer((_) async => rows);
       await engine.drainQueueForPeer('peer-1');
       verify(() => ble.sendRawEncryptedPacket('peer-1', any())).called(2);
       verify(() => queue.markDelivered(1)).called(1);
@@ -234,7 +246,8 @@ void main() {
       );
       await engine.originateDataPacket(packet);
       // GossipFanout = 3, aber nur 2 Peers verfügbar → 2 Aufrufe
-      final callCount = verify(() => ble.sendRawEncryptedPacket(any(), any())).callCount;
+      final callCount =
+          verify(() => ble.sendRawEncryptedPacket(any(), any())).callCount;
       expect(callCount, inInclusiveRange(1, 2));
     });
   });

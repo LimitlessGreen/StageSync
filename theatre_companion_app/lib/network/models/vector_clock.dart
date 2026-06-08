@@ -131,4 +131,3 @@ class VectorClock {
   /// Read-only view of all entries (useful for debugging / diagnostics).
   Map<String, int> get entries => Map.unmodifiable(_entries);
 }
-

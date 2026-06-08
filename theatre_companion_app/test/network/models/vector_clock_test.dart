@@ -24,10 +24,7 @@ void main() {
     });
 
     test('wiederholtes increment addiert korrekt', () {
-      final c = VectorClock.zero
-          .increment('A')
-          .increment('A')
-          .increment('A');
+      final c = VectorClock.zero.increment('A').increment('A').increment('A');
       expect(c.entries['A'], 3);
     });
 
@@ -164,4 +161,3 @@ void main() {
     });
   });
 }
-

@@ -19,7 +19,8 @@ import 'server_media_client.dart' show MediaFile, MediaAudioInfo;
 /// Authentifizierung: session_id + token werden automatisch aus
 /// [StageSyncClient.instance] übernommen.
 class MediaGrpcClient {
-  static const _chunkSize = 64 * 1024; // 64 KiB — muss mit Server übereinstimmen
+  static const _chunkSize =
+      64 * 1024; // 64 KiB — muss mit Server übereinstimmen
 
   MediaServiceClient get _stub => StageSyncClient.instance.media;
 
@@ -39,11 +40,12 @@ class MediaGrpcClient {
   static ManifestSnapshot _eventToSnapshot(pb.ManifestEvent event) {
     return ManifestSnapshot(
       type: switch (event.type) {
-        pb.ManifestEvent_EventType.MANIFEST_SNAPSHOT => ManifestEventType.snapshot,
-        pb.ManifestEvent_EventType.ASSET_ADDED       => ManifestEventType.added,
-        pb.ManifestEvent_EventType.ASSET_REMOVED     => ManifestEventType.removed,
-        pb.ManifestEvent_EventType.ASSET_UPDATED     => ManifestEventType.updated,
-        _                                             => ManifestEventType.snapshot,
+        pb.ManifestEvent_EventType.MANIFEST_SNAPSHOT =>
+          ManifestEventType.snapshot,
+        pb.ManifestEvent_EventType.ASSET_ADDED => ManifestEventType.added,
+        pb.ManifestEvent_EventType.ASSET_REMOVED => ManifestEventType.removed,
+        pb.ManifestEvent_EventType.ASSET_UPDATED => ManifestEventType.updated,
+        _ => ManifestEventType.snapshot,
       },
       seq: event.seq.toInt(),
       assets: event.assets.map(_assetInfoToMediaFile).toList(),
@@ -52,20 +54,22 @@ class MediaGrpcClient {
   }
 
   static MediaFile _assetInfoToMediaFile(pb.AssetInfo a) {
-    final audio = a.hasAudio() ? MediaAudioInfo(
-      durationMs:   a.audio.durationMs.toInt(),
-      channels:     a.audio.channels,
-      sampleRate:   a.audio.sampleRate,
-      bitDepth:     a.audio.bitDepth,
-      loudnessLufs: a.audio.hasLoudness ? a.audio.loudnessLufs : null,
-    ) : null;
+    final audio = a.hasAudio()
+        ? MediaAudioInfo(
+            durationMs: a.audio.durationMs.toInt(),
+            channels: a.audio.channels,
+            sampleRate: a.audio.sampleRate,
+            bitDepth: a.audio.bitDepth,
+            loudnessLufs: a.audio.hasLoudness ? a.audio.loudnessLufs : null,
+          )
+        : null;
     return MediaFile(
-      name:       a.name,
-      sizeBytes:  a.sizeBytes.toInt(),
-      sha256:     a.assetId,
+      name: a.name,
+      sizeBytes: a.sizeBytes.toInt(),
+      sha256: a.assetId,
       modifiedMs: a.modifiedMs.toInt(),
-      mimeType:   a.mimeType,
-      audio:      audio,
+      mimeType: a.mimeType,
+      audio: audio,
     );
   }
 
@@ -87,10 +91,10 @@ class MediaGrpcClient {
 
     final req = pb.StreamFileRequest(
       sessionId: StageSyncClient.instance.sessionId ?? '',
-      token:     StageSyncClient.instance.token ?? '',
-      assetId:   assetId ?? '',
-      name:      name ?? '',
-      offset:    Int64(offset),
+      token: StageSyncClient.instance.token ?? '',
+      assetId: assetId ?? '',
+      name: name ?? '',
+      offset: Int64(offset),
     );
 
     final chunks = <Uint8List>[];
@@ -107,7 +111,8 @@ class MediaGrpcClient {
       totalBytes = chunk.totalBytes.toInt();
     }
 
-    final result = Uint8List(totalBytes > 0 ? totalBytes : chunks.fold(0, (s, c) => s + c.length));
+    final result = Uint8List(
+        totalBytes > 0 ? totalBytes : chunks.fold(0, (s, c) => s + c.length));
     var pos = 0;
     for (final chunk in chunks) {
       result.setRange(pos, pos + chunk.length, chunk);
@@ -128,10 +133,11 @@ class MediaGrpcClient {
   }) async {
     final controller = StreamController<pb.UploadChunk>();
 
-    controller.add(pb.UploadChunk(meta: pb.UploadMeta(
-      sessionId:  StageSyncClient.instance.sessionId ?? '',
-      token:      StageSyncClient.instance.token ?? '',
-      filename:   filename,
+    controller.add(pb.UploadChunk(
+        meta: pb.UploadMeta(
+      sessionId: StageSyncClient.instance.sessionId ?? '',
+      token: StageSyncClient.instance.token ?? '',
+      filename: filename,
       totalBytes: Int64(bytes.length),
     )));
 
@@ -145,20 +151,24 @@ class MediaGrpcClient {
     controller.close();
 
     final resp = await _stub.uploadFile(controller.stream);
-    debugPrint('[MediaGrpc] upload ok: ${resp.name} ${resp.sizeBytes} B sha=${resp.assetId.substring(0, 8)}');
+    debugPrint(
+        '[MediaGrpc] upload ok: ${resp.name} ${resp.sizeBytes} B sha=${resp.assetId.substring(0, 8)}');
 
     return MediaFile(
-      name:       resp.name,
-      sizeBytes:  resp.sizeBytes.toInt(),
-      sha256:     resp.assetId,
+      name: resp.name,
+      sizeBytes: resp.sizeBytes.toInt(),
+      sha256: resp.assetId,
       modifiedMs: DateTime.now().millisecondsSinceEpoch,
-      audio: resp.hasAudio() ? MediaAudioInfo(
-        durationMs:   resp.audio.durationMs.toInt(),
-        channels:     resp.audio.channels,
-        sampleRate:   resp.audio.sampleRate,
-        bitDepth:     resp.audio.bitDepth,
-        loudnessLufs: resp.audio.hasLoudness ? resp.audio.loudnessLufs : null,
-      ) : null,
+      audio: resp.hasAudio()
+          ? MediaAudioInfo(
+              durationMs: resp.audio.durationMs.toInt(),
+              channels: resp.audio.channels,
+              sampleRate: resp.audio.sampleRate,
+              bitDepth: resp.audio.bitDepth,
+              loudnessLufs:
+                  resp.audio.hasLoudness ? resp.audio.loudnessLufs : null,
+            )
+          : null,
     );
   }
 
@@ -168,8 +178,8 @@ class MediaGrpcClient {
   Future<void> deleteFile(String name) async {
     await _stub.deleteFile(pb.DeleteFileRequest(
       sessionId: StageSyncClient.instance.sessionId ?? '',
-      token:     StageSyncClient.instance.token ?? '',
-      name:      name,
+      token: StageSyncClient.instance.token ?? '',
+      name: name,
     ));
     debugPrint('[MediaGrpc] deleted: $name');
   }

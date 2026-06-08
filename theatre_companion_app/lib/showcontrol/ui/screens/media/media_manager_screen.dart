@@ -64,12 +64,12 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
 
   int _cmp(Asset a, Asset b) {
     final c = switch (_sortBy) {
-      _SortCol.name     => naturalCompare(a.name, b.name),
-      _SortCol.format   => (a.audio?.codec ?? '').compareTo(b.audio?.codec ?? ''),
+      _SortCol.name => naturalCompare(a.name, b.name),
+      _SortCol.format => (a.audio?.codec ?? '').compareTo(b.audio?.codec ?? ''),
       _SortCol.loudness => (a.audio?.loudnessLufs ?? double.negativeInfinity)
           .compareTo(b.audio?.loudnessLufs ?? double.negativeInfinity),
-      _SortCol.size     => a.sizeBytes.compareTo(b.sizeBytes),
-      _SortCol.status   => a.readiness.index.compareTo(b.readiness.index),
+      _SortCol.size => a.sizeBytes.compareTo(b.sizeBytes),
+      _SortCol.status => a.readiness.index.compareTo(b.readiness.index),
       _SortCol.uploaded => a.uploadedAt.compareTo(b.uploadedAt),
     };
     return _sortAsc ? c : -c;
@@ -116,7 +116,10 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
       files.add((filename: f.name, bytes: bytes));
     }
     if (files.isEmpty) return;
-    setState(() { _queueVisible = true; _isDragOver = false; });
+    setState(() {
+      _queueVisible = true;
+      _isDragOver = false;
+    });
     await ref.read(mediaProvider.notifier).uploadFiles(files);
     if (mounted) {
       Future.delayed(const Duration(seconds: 4), () {
@@ -153,8 +156,10 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
   }
 
   bool get _isAudioConnected {
-    final isLocal = ref.watch(audioNodeProvider).state == AudioNodeState.connected;
-    final hasOnline = ref.watch(nodeStatusListProvider).any((n) => n.isAudio && n.isOnline);
+    final isLocal =
+        ref.watch(audioNodeProvider).state == AudioNodeState.connected;
+    final hasOnline =
+        ref.watch(nodeStatusListProvider).any((n) => n.isAudio && n.isOnline);
     return isLocal || hasOnline;
   }
 
@@ -194,9 +199,9 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final state  = ref.watch(mediaProvider);
+    final state = ref.watch(mediaProvider);
     final assets = _filteredSorted(ref.watch(enrichedAssetsProvider));
-    final queue  = state.uploadQueue;
+    final queue = state.uploadQueue;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -208,11 +213,15 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
     );
   }
 
-  Widget _buildDesktop(BuildContext context, MediaState state, List<Asset> assets, List<UploadItem> queue) {
+  Widget _buildDesktop(BuildContext context, MediaState state,
+      List<Asset> assets, List<UploadItem> queue) {
     return DropTarget(
       onDragEntered: (_) => setState(() => _isDragOver = true),
-      onDragExited:  (_) => setState(() => _isDragOver = false),
-      onDragDone:    (d) { setState(() => _isDragOver = false); _dropFiles(d); },
+      onDragExited: (_) => setState(() => _isDragOver = false),
+      onDragDone: (d) {
+        setState(() => _isDragOver = false);
+        _dropFiles(d);
+      },
       child: Stack(
         children: [
           _buildDesktopInner(context, state, assets, queue),
@@ -227,7 +236,10 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
                     SizedBox(height: 12),
                     Text(
                       'Audio-Datei hier ablegen',
-                      style: TextStyle(color: ScColors.active, fontSize: 16, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                          color: ScColors.active,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600),
                     ),
                   ],
                 ),
@@ -238,15 +250,18 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
     );
   }
 
-  Widget _buildDesktopInner(BuildContext context, MediaState state, List<Asset> assets, List<UploadItem> queue) {
+  Widget _buildDesktopInner(BuildContext context, MediaState state,
+      List<Asset> assets, List<UploadItem> queue) {
     return Column(
       children: [
         _Toolbar(
           isLoading: state.isLoading,
-          activeUploads: queue.where((u) =>
-              u.status == UploadStatus.uploading ||
-              u.status == UploadStatus.pending ||
-              u.status == UploadStatus.analyzing).length,
+          activeUploads: queue
+              .where((u) =>
+                  u.status == UploadStatus.uploading ||
+                  u.status == UploadStatus.pending ||
+                  u.status == UploadStatus.analyzing)
+              .length,
           searchQuery: _searchQuery,
           onSearchChanged: (v) => setState(() => _searchQuery = v),
           onRefresh: () => ref.read(mediaProvider.notifier).refresh(),
@@ -263,7 +278,8 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
           child: Stack(
             children: [
               state.isLoading && assets.isEmpty
-                  ? const Center(child: CircularProgressIndicator(color: ScColors.active))
+                  ? const Center(
+                      child: CircularProgressIndicator(color: ScColors.active))
                   : assets.isEmpty
                       ? _EmptyState(onUpload: _pickAndUpload)
                       : _AssetTable(
@@ -282,9 +298,9 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
                                 : 0.0;
                             setState(() => _auditingAssetId = asset.id);
                             ref.read(audioNodeProvider.notifier).auditionPlay(
-                              assetId: asset.id,
-                              volumeDb: volumeDb,
-                            );
+                                  assetId: asset.id,
+                                  volumeDb: volumeDb,
+                                );
                           },
                           onAuditionStop: () {
                             setState(() => _auditingAssetId = null);
@@ -298,15 +314,16 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
                 child: ScFloatingPanel(
                   visible: _queueVisible,
                   title: 'UPLOADS',
-                  subtitle: '${queue.length} Datei${queue.length == 1 ? "" : "en"}',
+                  subtitle:
+                      '${queue.length} Datei${queue.length == 1 ? "" : "en"}',
                   onClose: _closeQueue,
                   actions: [
-                    if (queue.any((u) => u.status == UploadStatus.done ||
+                    if (queue.any((u) =>
+                        u.status == UploadStatus.done ||
                         u.status == UploadStatus.error))
                       _ClearDoneButton(
-                        onTap: () => ref
-                            .read(mediaProvider.notifier)
-                            .clearUploadQueue(),
+                        onTap: () =>
+                            ref.read(mediaProvider.notifier).clearUploadQueue(),
                       ),
                   ],
                   child: _UploadQueueContent(queue: queue),
@@ -319,11 +336,14 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
     );
   }
 
-  Widget _buildMobile(BuildContext context, MediaState state, List<Asset> assets, List<UploadItem> queue) {
-    final activeUploads = queue.where((u) =>
-        u.status == UploadStatus.uploading ||
-        u.status == UploadStatus.pending ||
-        u.status == UploadStatus.analyzing).length;
+  Widget _buildMobile(BuildContext context, MediaState state,
+      List<Asset> assets, List<UploadItem> queue) {
+    final activeUploads = queue
+        .where((u) =>
+            u.status == UploadStatus.uploading ||
+            u.status == UploadStatus.pending ||
+            u.status == UploadStatus.analyzing)
+        .length;
 
     return Scaffold(
       backgroundColor: ScColors.bg,
@@ -342,10 +362,12 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
                     decoration: InputDecoration(
                       hintText: 'Suchen…',
                       hintStyle: ScText.label.copyWith(color: ScColors.textDim),
-                      prefixIcon: const Icon(Icons.search, size: 16, color: ScColors.textDim),
+                      prefixIcon: const Icon(Icons.search,
+                          size: 16, color: ScColors.textDim),
                       prefixIconConstraints: const BoxConstraints(minWidth: 32),
                       isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 8),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(6),
                         borderSide: const BorderSide(color: ScColors.divider),
@@ -368,14 +390,18 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
                     icon: const SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: ScColors.active),
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: ScColors.active),
                     ),
                     onPressed: () => _showUploadQueueSheet(context, queue),
                   )
                 else
                   IconButton(
-                    icon: const Icon(Icons.refresh, size: 18, color: ScColors.textSecondary),
-                    onPressed: state.isLoading ? null : () => ref.read(mediaProvider.notifier).refresh(),
+                    icon: const Icon(Icons.refresh,
+                        size: 18, color: ScColors.textSecondary),
+                    onPressed: state.isLoading
+                        ? null
+                        : () => ref.read(mediaProvider.notifier).refresh(),
                   ),
               ],
             ),
@@ -390,7 +416,8 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
           // ── Asset list ─────────────────────────────────────────────────
           Expanded(
             child: state.isLoading && assets.isEmpty
-                ? const Center(child: CircularProgressIndicator(color: ScColors.active))
+                ? const Center(
+                    child: CircularProgressIndicator(color: ScColors.active))
                 : assets.isEmpty
                     ? _EmptyState(onUpload: _pickAndUpload)
                     : _AssetList(
@@ -406,9 +433,9 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
                               : 0.0;
                           setState(() => _auditingAssetId = asset.id);
                           ref.read(audioNodeProvider.notifier).auditionPlay(
-                            assetId: asset.id,
-                            volumeDb: volumeDb,
-                          );
+                                assetId: asset.id,
+                                volumeDb: volumeDb,
+                              );
                         },
                         onAuditionStop: () {
                           setState(() => _auditingAssetId = null);
@@ -491,7 +518,8 @@ class _ToolbarState extends State<_Toolbar> {
               decoration: InputDecoration(
                 hintText: 'Suchen…',
                 hintStyle: ScText.label.copyWith(color: ScColors.textDim),
-                prefixIcon: const Icon(Icons.search, size: 14, color: ScColors.textDim),
+                prefixIcon:
+                    const Icon(Icons.search, size: 14, color: ScColors.textDim),
                 prefixIconConstraints: const BoxConstraints(minWidth: 28),
                 suffixIcon: widget.searchQuery.isNotEmpty
                     ? GestureDetector(
@@ -499,11 +527,13 @@ class _ToolbarState extends State<_Toolbar> {
                           _searchCtrl.clear();
                           widget.onSearchChanged('');
                         },
-                        child: const Icon(Icons.close, size: 13, color: ScColors.textDim),
+                        child: const Icon(Icons.close,
+                            size: 13, color: ScColors.textDim),
                       )
                     : null,
                 isDense: true,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(5),
                   borderSide: const BorderSide(color: ScColors.divider),
@@ -605,18 +635,18 @@ class _UploadRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (icon, iconColor) = switch (item.status) {
-      UploadStatus.done     => (Icons.check_circle_outline, ScColors.active),
-      UploadStatus.error    => (Icons.error_outline, ScColors.error),
-      UploadStatus.pending  => (Icons.schedule, ScColors.textDim),
-      _                     => (Icons.upload, ScColors.active),
+      UploadStatus.done => (Icons.check_circle_outline, ScColors.active),
+      UploadStatus.error => (Icons.error_outline, ScColors.error),
+      UploadStatus.pending => (Icons.schedule, ScColors.textDim),
+      _ => (Icons.upload, ScColors.active),
     };
 
     final statusText = switch (item.status) {
-      UploadStatus.pending   => 'Wartend',
+      UploadStatus.pending => 'Wartend',
       UploadStatus.uploading => '${(item.progress * 100).toStringAsFixed(0)}%',
       UploadStatus.analyzing => 'Analysiere…',
-      UploadStatus.done      => 'Fertig',
-      UploadStatus.error     => item.error ?? 'Fehler',
+      UploadStatus.done => 'Fertig',
+      UploadStatus.error => item.error ?? 'Fehler',
     };
 
     return Padding(
@@ -660,9 +690,9 @@ class _UploadRow extends StatelessWidget {
               statusText,
               style: ScText.statusSmall.copyWith(
                 color: switch (item.status) {
-                  UploadStatus.done  => ScColors.active,
+                  UploadStatus.done => ScColors.active,
                   UploadStatus.error => ScColors.error,
-                  _                  => ScColors.textSecondary,
+                  _ => ScColors.textSecondary,
                 },
               ),
               textAlign: TextAlign.right,
@@ -698,7 +728,8 @@ class _AssetList extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListView.separated(
       itemCount: assets.length,
-      separatorBuilder: (_, __) => const Divider(height: 1, color: ScColors.divider),
+      separatorBuilder: (_, __) =>
+          const Divider(height: 1, color: ScColors.divider),
       itemBuilder: (_, i) {
         final a = i < assets.length ? assets[i] : null;
         if (a == null) return const SizedBox.shrink();
@@ -718,33 +749,40 @@ class _AssetList extends StatelessWidget {
             color: ScColors.error,
             alignment: Alignment.centerRight,
             padding: const EdgeInsets.only(right: 16),
-            child: const Icon(Icons.delete_outline, color: Colors.white, size: 20),
+            child:
+                const Icon(Icons.delete_outline, color: Colors.white, size: 20),
           ),
           confirmDismiss: (_) async {
             return await showDialog<bool>(
-              context: context,
-              builder: (_) => AlertDialog(
-                backgroundColor: ScColors.surface,
-                title: Text(
-                  '${a.name} löschen?',
-                  style: ScText.label.copyWith(color: ScColors.textPrimary),
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(false),
-                    child: Text('Abbrechen', style: ScText.label.copyWith(color: ScColors.textSecondary)),
+                  context: context,
+                  builder: (_) => AlertDialog(
+                    backgroundColor: ScColors.surface,
+                    title: Text(
+                      '${a.name} löschen?',
+                      style: ScText.label.copyWith(color: ScColors.textPrimary),
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        child: Text('Abbrechen',
+                            style: ScText.label
+                                .copyWith(color: ScColors.textSecondary)),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        child: Text('Löschen',
+                            style:
+                                ScText.label.copyWith(color: ScColors.error)),
+                      ),
+                    ],
                   ),
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(true),
-                    child: Text('Löschen', style: ScText.label.copyWith(color: ScColors.error)),
-                  ),
-                ],
-              ),
-            ) ?? false;
+                ) ??
+                false;
           },
           onDismissed: (_) => onDelete(a.name),
           child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             leading: Container(
               width: 36,
               height: 36,
@@ -766,17 +804,22 @@ class _AssetList extends StatelessWidget {
             subtitle: info.isNotEmpty
                 ? Text(
                     info,
-                    style: ScText.label.copyWith(color: ScColors.textDim, fontSize: 10),
+                    style: ScText.label
+                        .copyWith(color: ScColors.textDim, fontSize: 10),
                   )
                 : null,
             trailing: isAudioConnected && a.audio != null
                 ? IconButton(
                     icon: Icon(
-                      isAuditing ? Icons.stop_circle_outlined : Icons.play_circle_outline,
+                      isAuditing
+                          ? Icons.stop_circle_outlined
+                          : Icons.play_circle_outline,
                       size: 22,
-                      color: isAuditing ? ScColors.active : ScColors.textSecondary,
+                      color:
+                          isAuditing ? ScColors.active : ScColors.textSecondary,
                     ),
-                    onPressed: isAuditing ? onAuditionStop : () => onAudition(a),
+                    onPressed:
+                        isAuditing ? onAuditionStop : () => onAudition(a),
                   )
                 : null,
           ),
@@ -832,12 +875,42 @@ class _AssetTable extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: ScSpacing.panelPad),
           child: Row(
             children: [
-              _HeaderCell('NAME',       col: _SortCol.name,     flex: 4, sortBy: sortBy, sortAsc: sortAsc, onSort: onSort),
-              _HeaderCell('FORMAT',     col: _SortCol.format,   flex: 1, sortBy: sortBy, sortAsc: sortAsc, onSort: onSort),
-              _HeaderCell('LAUTHEIT',   col: _SortCol.loudness, flex: 1, sortBy: sortBy, sortAsc: sortAsc, onSort: onSort),
-              _HeaderCell('GRÖßE',      col: _SortCol.size,     flex: 1, sortBy: sortBy, sortAsc: sortAsc, onSort: onSort),
-              _HeaderCell('STATUS',     col: _SortCol.status,   flex: 1, sortBy: sortBy, sortAsc: sortAsc, onSort: onSort),
-              _HeaderCell('HOCHGELADEN',col: _SortCol.uploaded, flex: 2, sortBy: sortBy, sortAsc: sortAsc, onSort: onSort),
+              _HeaderCell('NAME',
+                  col: _SortCol.name,
+                  flex: 4,
+                  sortBy: sortBy,
+                  sortAsc: sortAsc,
+                  onSort: onSort),
+              _HeaderCell('FORMAT',
+                  col: _SortCol.format,
+                  flex: 1,
+                  sortBy: sortBy,
+                  sortAsc: sortAsc,
+                  onSort: onSort),
+              _HeaderCell('LAUTHEIT',
+                  col: _SortCol.loudness,
+                  flex: 1,
+                  sortBy: sortBy,
+                  sortAsc: sortAsc,
+                  onSort: onSort),
+              _HeaderCell('GRÖßE',
+                  col: _SortCol.size,
+                  flex: 1,
+                  sortBy: sortBy,
+                  sortAsc: sortAsc,
+                  onSort: onSort),
+              _HeaderCell('STATUS',
+                  col: _SortCol.status,
+                  flex: 1,
+                  sortBy: sortBy,
+                  sortAsc: sortAsc,
+                  onSort: onSort),
+              _HeaderCell('HOCHGELADEN',
+                  col: _SortCol.uploaded,
+                  flex: 2,
+                  sortBy: sortBy,
+                  sortAsc: sortAsc,
+                  onSort: onSort),
               const SizedBox(width: 80),
             ],
           ),
@@ -906,7 +979,8 @@ class _HeaderCell extends StatelessWidget {
   final bool sortAsc;
   final ValueChanged<_SortCol> onSort;
 
-  const _HeaderCell(this.label, {
+  const _HeaderCell(
+    this.label, {
     required this.col,
     required this.flex,
     required this.sortBy,
@@ -1029,8 +1103,7 @@ class _AssetRowState extends State<_AssetRow> {
                       ),
                     )
                   : Text('—',
-                      style: ScText.label
-                          .copyWith(color: ScColors.textDim)),
+                      style: ScText.label.copyWith(color: ScColors.textDim)),
             ),
             Expanded(
               flex: 1,
@@ -1100,8 +1173,7 @@ class _AssetRowState extends State<_AssetRow> {
                             icon: Icons.delete_outline,
                             tooltip: 'Löschen',
                             color: ScColors.error,
-                            onTap: () =>
-                                setState(() => _confirmDelete = true),
+                            onTap: () => setState(() => _confirmDelete = true),
                           )
                   else
                     const SizedBox(width: 20),
@@ -1167,17 +1239,17 @@ class _ReadinessChip extends StatelessWidget {
   const _ReadinessChip({required this.readiness});
 
   ScChipState get _chipState => switch (readiness) {
-        AssetReadiness.patched    => ScChipState.ok,
+        AssetReadiness.patched => ScChipState.ok,
         AssetReadiness.renderable => ScChipState.warn,
-        AssetReadiness.validated  => ScChipState.idle,
-        AssetReadiness.present    => ScChipState.warn,
+        AssetReadiness.validated => ScChipState.idle,
+        AssetReadiness.present => ScChipState.warn,
       };
 
   String get _label => switch (readiness) {
-        AssetReadiness.patched    => 'Bereit',
+        AssetReadiness.patched => 'Bereit',
         AssetReadiness.renderable => 'Abspielbar',
-        AssetReadiness.validated  => 'Verifiziert',
-        AssetReadiness.present    => 'Vorhanden',
+        AssetReadiness.validated => 'Verifiziert',
+        AssetReadiness.present => 'Vorhanden',
       };
 
   String get _tooltip => switch (readiness) {
@@ -1251,8 +1323,8 @@ class _ErrorBanner extends StatelessWidget {
     return Container(
       width: double.infinity,
       color: color.withValues(alpha: 0.1),
-      padding:
-          const EdgeInsets.symmetric(horizontal: ScSpacing.panelPad, vertical: 6),
+      padding: const EdgeInsets.symmetric(
+          horizontal: ScSpacing.panelPad, vertical: 6),
       child: Row(
         children: [
           Icon(Icons.warning_amber_rounded, size: 14, color: color),

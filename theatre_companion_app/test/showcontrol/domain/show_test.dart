@@ -29,8 +29,8 @@ void main() {
     });
 
     test('displayDurationMs for AudioParams with endTime > startTime', () {
-      const audio = AudioParams(
-          assetId: 'x', startTimeMs: 1000, endTimeMs: 5000);
+      const audio =
+          AudioParams(assetId: 'x', startTimeMs: 1000, endTimeMs: 5000);
       final cue = baseCue.copyWith(params: audio);
       expect(cue.displayDurationMs, 4000.0);
     });
@@ -45,8 +45,8 @@ void main() {
     });
 
     test('displayDurationMs null for GroupParams', () {
-      final cue = baseCue.copyWith(
-          params: const GroupParams(childCueIds: ['a', 'b']));
+      final cue =
+          baseCue.copyWith(params: const GroupParams(childCueIds: ['a', 'b']));
       expect(cue.displayDurationMs, isNull);
     });
   });
@@ -67,16 +67,16 @@ void main() {
       ];
       for (final p in params) {
         final label = switch (p) {
-          AudioParams()  => 'audio',
-          WaitParams()   => 'wait',
-          GroupParams()  => 'group',
-          MaOscParams()  => 'maosc',
-          GotoParams()   => 'goto',
-          OscParams()    => 'osc',
-          MidiParams()   => 'midi',
+          AudioParams() => 'audio',
+          WaitParams() => 'wait',
+          GroupParams() => 'group',
+          MaOscParams() => 'maosc',
+          GotoParams() => 'goto',
+          OscParams() => 'osc',
+          MidiParams() => 'midi',
           ScriptParams() => 'script',
-          NoteParams()   => 'note',
-          FadeParams()   => 'fade',
+          NoteParams() => 'note',
+          FadeParams() => 'fade',
         };
         expect(label, isNotEmpty);
       }
@@ -93,9 +93,21 @@ void main() {
       id: 'list-1',
       name: 'Act 1',
       cues: const [
-        Cue(id: 'a', number: '1', label: 'A', params: AudioParams(assetId: 'x')),
-        Cue(id: 'b', number: '2', label: 'B', params: WaitParams(durationMs: 1000)),
-        Cue(id: 'c', number: '3', label: 'C', params: AudioParams(assetId: 'y')),
+        Cue(
+            id: 'a',
+            number: '1',
+            label: 'A',
+            params: AudioParams(assetId: 'x')),
+        Cue(
+            id: 'b',
+            number: '2',
+            label: 'B',
+            params: WaitParams(durationMs: 1000)),
+        Cue(
+            id: 'c',
+            number: '3',
+            label: 'C',
+            params: AudioParams(assetId: 'y')),
       ],
     );
 

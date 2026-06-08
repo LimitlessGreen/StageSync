@@ -151,4 +151,3 @@ class PlatformCapabilities {
   bool get hasFullBle => bleMesh == FeatureSupport.full;
   bool get isWebSocketOnly => !hasBle;
 }
-

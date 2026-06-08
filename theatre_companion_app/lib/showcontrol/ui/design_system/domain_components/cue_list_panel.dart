@@ -63,7 +63,8 @@ class CueListPanel extends ConsumerWidget {
                   icon: const Icon(Icons.playlist_add, size: 18),
                   color: ScColors.textSecondary,
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  constraints:
+                      const BoxConstraints(minWidth: 28, minHeight: 28),
                   tooltip: 'Mehrere Cues hinzufügen',
                   onPressed: () => showBulkAddCuesDialog(
                     btnCtx,
@@ -77,7 +78,8 @@ class CueListPanel extends ConsumerWidget {
                   icon: const Icon(Icons.add, size: 18),
                   color: ScColors.textSecondary,
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  constraints:
+                      const BoxConstraints(minWidth: 28, minHeight: 28),
                   tooltip: 'Cue hinzufügen',
                   onPressed: () async {
                     final params = await showCueTypePicker(btnCtx);
@@ -136,6 +138,7 @@ class _CueListView extends StatefulWidget {
 
 class _CueListViewState extends State<_CueListView> {
   final Set<String> _expandedGroups = {};
+
   /// Optimistic ordering applied immediately on drag to prevent revert flicker.
   List<String>? _pendingTopLevelIds;
 
@@ -160,11 +163,12 @@ class _CueListViewState extends State<_CueListView> {
     final activeId = playhead.activeCueId;
     if (activeId == null) return false;
     final activeIdx = list.cues.indexWhere((c) => c.id == activeId);
-    final thisIdx   = list.cues.indexWhere((c) => c.id == cue.id);
+    final thisIdx = list.cues.indexWhere((c) => c.id == cue.id);
     return thisIdx < activeIdx;
   }
 
-  Future<void> _insertCue(BuildContext context, {String? afterId, String? beforeId}) async {
+  Future<void> _insertCue(BuildContext context,
+      {String? afterId, String? beforeId}) async {
     final params = await showCueTypePicker(context);
     if (params == null) return;
     String? newId;
@@ -201,8 +205,8 @@ class _CueListViewState extends State<_CueListView> {
         tlIds.insert(newIndex, moved);
         final childCues = cues.where((c) => childIds.contains(c.id)).toList();
         setState(() => _pendingTopLevelIds = tlIds);
-        widget.notifier.reorderCue(
-            orderedIds: [...tlIds, ...childCues.map((c) => c.id)]);
+        widget.notifier
+            .reorderCue(orderedIds: [...tlIds, ...childCues.map((c) => c.id)]);
       },
       proxyDecorator: (child, _, __) => Material(
         elevation: 4,
@@ -212,16 +216,18 @@ class _CueListViewState extends State<_CueListView> {
       ),
       itemBuilder: (context, i) {
         final cue = topLevel[i];
-        final isGroup    = cue.params is GroupParams;
+        final isGroup = cue.params is GroupParams;
         final isExpanded = _expandedGroups.contains(cue.id);
-        final isRunning  = widget.playhead.runningCueIds.contains(cue.id);
-        final isActive   = widget.playhead.activeCueId == cue.id;
-        final isPast     = !isRunning && _isCuePast(cue, widget.cueList, widget.playhead);
+        final isRunning = widget.playhead.runningCueIds.contains(cue.id);
+        final isActive = widget.playhead.activeCueId == cue.id;
+        final isPast =
+            !isRunning && _isCuePast(cue, widget.cueList, widget.playhead);
 
         final groupChildren = isGroup
             ? (cue.params as GroupParams)
                 .childCueIds
-                .map((id) => cues.firstWhere((c) => c.id == id, orElse: () => cue))
+                .map((id) =>
+                    cues.firstWhere((c) => c.id == id, orElse: () => cue))
                 .where((c) => c.id != cue.id)
                 .toList()
             : null;
@@ -256,7 +262,8 @@ class _CueListViewState extends State<_CueListView> {
           onTap: () => widget.onCueSelected(cue.id),
           onDelete: () => widget.notifier.deleteCueById(cue.id),
           onGo: () => widget.notifier.goToCue(cue.id),
-          onInsertBefore: () => _insertCue(context, afterId: null, beforeId: cue.id),
+          onInsertBefore: () =>
+              _insertCue(context, afterId: null, beforeId: cue.id),
           onInsertAfter: () => _insertCue(context, afterId: cue.id),
           onDuplicate: () => widget.notifier.duplicateDomainCue(cue.id),
           onGroup: () => widget.notifier.wrapInGroup(cue.id),
@@ -275,8 +282,10 @@ class _CueListViewState extends State<_CueListView> {
                 key: ValueKey('strip_${cue.id}'),
                 cue: cue,
                 playhead: widget.playhead,
-                onFadeUp: (ms) => widget.notifier.fadeUpAudio(cue.id, durationMs: ms),
-                onFadeOut: (ms) => widget.notifier.fadeOutAudio(cue.id, durationMs: ms),
+                onFadeUp: (ms) =>
+                    widget.notifier.fadeUpAudio(cue.id, durationMs: ms),
+                onFadeOut: (ms) =>
+                    widget.notifier.fadeOutAudio(cue.id, durationMs: ms),
                 onStop: () => widget.notifier.stopCueAudio(cue.id),
                 onPause: () => widget.notifier.pauseCueAudio(cue.id),
                 onResume: () => widget.notifier.resumeCueAudio(cue.id),

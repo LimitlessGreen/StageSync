@@ -43,45 +43,45 @@ class CueListRow extends StatefulWidget {
   final VoidCallback? onToggleExpand;
   final Map<String, CueRunState>? childRunStates;
 
-   // ── Action callbacks ──────────────────────────────────────────────────────
-   final VoidCallback? onTap;
-   final VoidCallback? onDoubleTap;
-   final VoidCallback? onLongPress;
-   final VoidCallback? onDelete;
-   final VoidCallback? onGo;
-   final VoidCallback? onInsertBefore;
-   final VoidCallback? onInsertAfter;
-    final VoidCallback? onDuplicate;
-    final VoidCallback? onGroup;
+  // ── Action callbacks ──────────────────────────────────────────────────────
+  final VoidCallback? onTap;
+  final VoidCallback? onDoubleTap;
+  final VoidCallback? onLongPress;
+  final VoidCallback? onDelete;
+  final VoidCallback? onGo;
+  final VoidCallback? onInsertBefore;
+  final VoidCallback? onInsertAfter;
+  final VoidCallback? onDuplicate;
+  final VoidCallback? onGroup;
 
-    const CueListRow({
-     super.key,
-     required this.cue,
-     this.runState,
-     this.playhead,
-     this.isActive = false,
-     this.isPast = false,
-     this.isSelected = false,
-     this.expanded = false,
-     this.showDragHandle = false,
-     this.dragIndex,
-     this.depth = 0,
-     this.groupChildren,
-     this.isGroupExpanded = false,
-     this.onToggleExpand,
-     this.childRunStates,
-     this.onTap,
-     this.onDoubleTap,
-     this.onLongPress,
-     this.onDelete,
-     this.onGo,
-     this.onInsertBefore,
-     this.onInsertAfter,
-      this.onDuplicate,
-      this.onGroup,
-    });
+  const CueListRow({
+    super.key,
+    required this.cue,
+    this.runState,
+    this.playhead,
+    this.isActive = false,
+    this.isPast = false,
+    this.isSelected = false,
+    this.expanded = false,
+    this.showDragHandle = false,
+    this.dragIndex,
+    this.depth = 0,
+    this.groupChildren,
+    this.isGroupExpanded = false,
+    this.onToggleExpand,
+    this.childRunStates,
+    this.onTap,
+    this.onDoubleTap,
+    this.onLongPress,
+    this.onDelete,
+    this.onGo,
+    this.onInsertBefore,
+    this.onInsertAfter,
+    this.onDuplicate,
+    this.onGroup,
+  });
 
-    bool get hasError => runState?.lifecycle == CueLifecycle.error;
+  bool get hasError => runState?.lifecycle == CueLifecycle.error;
   bool get isPaused => runState?.lifecycle == CueLifecycle.paused;
   bool get isGroup => cue.params is GroupParams;
 
@@ -95,29 +95,29 @@ class CueListRow extends StatefulWidget {
   // ── Static helpers shared with child widgets ──────────────────────────────
 
   static IconData typeIcon(CueParams p) => switch (p) {
-        AudioParams()  => Icons.volume_up,
-        WaitParams()   => Icons.timer_outlined,
-        MaOscParams()  => Icons.light_mode,
-        GroupParams()  => Icons.folder_outlined,
-        GotoParams()   => Icons.redo,
-        OscParams()    => Icons.settings_ethernet,
-        MidiParams()   => Icons.piano,
+        AudioParams() => Icons.volume_up,
+        WaitParams() => Icons.timer_outlined,
+        MaOscParams() => Icons.light_mode,
+        GroupParams() => Icons.folder_outlined,
+        GotoParams() => Icons.redo,
+        OscParams() => Icons.settings_ethernet,
+        MidiParams() => Icons.piano,
         ScriptParams() => Icons.code,
-        NoteParams()   => Icons.text_fields,
-        FadeParams()   => Icons.tune,
+        NoteParams() => Icons.text_fields,
+        FadeParams() => Icons.tune,
       };
 
   static Color typeColor(CueParams p) => switch (p) {
-        AudioParams()  => const Color(0xFF1E88E5),
-        WaitParams()   => const Color(0xFF8E24AA),
-        MaOscParams()  => const Color(0xFFF4511E),
-        GroupParams()  => const Color(0xFF00897B),
-        GotoParams()   => const Color(0xFF00ACC1),
-        OscParams()    => const Color(0xFF7CB342),
-        MidiParams()   => const Color(0xFFE91E8C),
+        AudioParams() => const Color(0xFF1E88E5),
+        WaitParams() => const Color(0xFF8E24AA),
+        MaOscParams() => const Color(0xFFF4511E),
+        GroupParams() => const Color(0xFF00897B),
+        GotoParams() => const Color(0xFF00ACC1),
+        OscParams() => const Color(0xFF7CB342),
+        MidiParams() => const Color(0xFFE91E8C),
         ScriptParams() => const Color(0xFF757575),
-        NoteParams  p  => p.color ?? const Color(0xFF616161),
-        FadeParams()   => const Color(0xFFAB47BC),
+        NoteParams p => p.color ?? const Color(0xFF616161),
+        FadeParams() => const Color(0xFFAB47BC),
       };
 }
 
@@ -132,8 +132,7 @@ class _CueListRowState extends State<CueListRow> {
       widget.playhead?.isCuePaused(widget.cue.id) ?? false;
 
   /// true während der Fade-Out-Zeitfenster (Audio läuft noch aus).
-  bool get _isFading =>
-      widget.playhead?.isCueFading(widget.cue.id) ?? false;
+  bool get _isFading => widget.playhead?.isCueFading(widget.cue.id) ?? false;
 
   /// true während des Fade-In-Fensters nach Resume.
   bool get _isResuming {
@@ -164,7 +163,8 @@ class _CueListRowState extends State<CueListRow> {
     if (ph == null) return null;
     final perCueStart = ph.cueStartedServerMsByCueId[widget.cue.id];
     if (perCueStart != null) return perCueStart;
-    if (widget.isActive) return ph.startedServerMs; // Fallback nur für aktive Cue
+    if (widget.isActive)
+      return ph.startedServerMs; // Fallback nur für aktive Cue
     return null;
   }
 
@@ -194,9 +194,9 @@ class _CueListRowState extends State<CueListRow> {
     final isAlsoRunning = widget._isAlsoRunning(widget.playhead);
 
     // ── Per-cue fade-Zonen (gilt für aktive und Hintergrund-Cues) ──────────
-    if (_isFading)   return _AudioPhase.pauseFading; // Fade-Out läuft noch
-    if (_perCuePaused) return _AudioPhase.paused;    // Fade-Out abgeschlossen
-    if (_isResuming) return _AudioPhase.fadeIn;      // Fade-In nach Resume
+    if (_isFading) return _AudioPhase.pauseFading; // Fade-Out läuft noch
+    if (_perCuePaused) return _AudioPhase.paused; // Fade-Out abgeschlossen
+    if (_isResuming) return _AudioPhase.fadeIn; // Fade-In nach Resume
 
     // ── Hintergrund-Cues ────────────────────────────────────────────────────
     if (isAlsoRunning && !widget.isActive) {
@@ -204,7 +204,8 @@ class _CueListRowState extends State<CueListRow> {
       if (widget.cue.params case AudioParams p) {
         if (p.fadeInMs > 0 && elapsed < p.fadeInMs) return _AudioPhase.fadeIn;
         final duration = widget.cue.displayDurationMs;
-        if (duration != null && p.fadeOutMs > 0 &&
+        if (duration != null &&
+            p.fadeOutMs > 0 &&
             elapsed > duration - p.fadeOutMs) return _AudioPhase.fadeOut;
       }
       return _AudioPhase.playing;
@@ -224,7 +225,8 @@ class _CueListRowState extends State<CueListRow> {
     if (widget.cue.params case AudioParams p) {
       if (p.fadeInMs > 0 && elapsed < p.fadeInMs) return _AudioPhase.fadeIn;
       final duration = widget.cue.displayDurationMs;
-      if (duration != null && p.fadeOutMs > 0 &&
+      if (duration != null &&
+          p.fadeOutMs > 0 &&
           elapsed > duration - p.fadeOutMs) return _AudioPhase.fadeOut;
     }
     return _AudioPhase.playing;
@@ -251,7 +253,8 @@ class _CueListRowState extends State<CueListRow> {
         showDragHandle: widget.showDragHandle && widget.dragIndex != null,
       );
       if (widget.showDragHandle && widget.dragIndex != null) {
-        return ReorderableDragStartListener(index: widget.dragIndex!, child: noteRow);
+        return ReorderableDragStartListener(
+            index: widget.dragIndex!, child: noteRow);
       }
       return noteRow;
     }
@@ -260,8 +263,11 @@ class _CueListRowState extends State<CueListRow> {
     // Ticker läuft solange Zeit voranschreitet:
     // - normal spielend, global pausiert (Fade-Fenster), per-cue fadend, resumend.
     // Nur wenn vollständig eingefroren (paused + kein Fade) kein Tick nötig.
-    final frozen = _perCuePaused && !_isFading && !_isResuming &&
-        !(widget.playhead?.isPaused == true && widget.playhead!.isCueFading(widget.cue.id));
+    final frozen = _perCuePaused &&
+        !_isFading &&
+        !_isResuming &&
+        !(widget.playhead?.isPaused == true &&
+            widget.playhead!.isCueFading(widget.cue.id));
     if (_isLiveRunning && !frozen && !(widget.playhead?.isDone ?? false)) {
       ScTick.of(context);
     }
@@ -318,7 +324,9 @@ class _CueListRowState extends State<CueListRow> {
           // ── Left accent bar ─────────────────────────────────────────────
           if (widget.isActive || widget.hasError || isAlsoRunning)
             Positioned(
-              left: 0, top: 0, bottom: 0,
+              left: 0,
+              top: 0,
+              bottom: 0,
               child: Container(
                 width: 3,
                 color: isAlsoRunning && !widget.isActive
@@ -330,7 +338,9 @@ class _CueListRowState extends State<CueListRow> {
           // ── Bottom progress line ────────────────────────────────────────
           if (widget.isActive || isAlsoRunning)
             Positioned(
-              left: 0, right: 0, bottom: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
               child: Opacity(
                 opacity: isAlsoRunning && !widget.isActive ? 0.5 : 1.0,
                 child: _CueProgressBar(
@@ -391,10 +401,9 @@ class _CueListRowState extends State<CueListRow> {
                     child: Text(
                       widget.cue.number,
                       key: ValueKey(widget.cue.number),
-                      style: (widget.isActive
-                              ? ScText.numberLarge
-                              : ScText.number)
-                          .copyWith(color: _stateColor),
+                      style:
+                          (widget.isActive ? ScText.numberLarge : ScText.number)
+                              .copyWith(color: _stateColor),
                       textAlign: TextAlign.right,
                     ),
                   ),
@@ -423,17 +432,17 @@ class _CueListRowState extends State<CueListRow> {
                 ),
 
                 // Timing column: remaining-time when active, total otherwise
-                 _TimingColumn(
-                   cue: widget.cue,
-                   playhead: widget.playhead,
-                   isActive: widget.isActive,
-                  ),
+                _TimingColumn(
+                  cue: widget.cue,
+                  playhead: widget.playhead,
+                  isActive: widget.isActive,
+                ),
 
-                  // Status dot
-                  SizedBox(
-                    width: ScSpacing.cueStatusDotWidth,
-                    child: Center(child: _statusDot()),
-                  ),
+                // Status dot
+                SizedBox(
+                  width: ScSpacing.cueStatusDotWidth,
+                  child: Center(child: _statusDot()),
+                ),
 
                 // Delete button (desktop editor)
                 if (widget.showDragHandle && widget.onDelete != null)
@@ -527,8 +536,10 @@ class _CueListRowState extends State<CueListRow> {
     showMenu<String>(
       context: context,
       position: RelativeRect.fromLTRB(
-        global.dx, global.dy,
-        size.width - global.dx, size.height - global.dy,
+        global.dx,
+        global.dy,
+        size.width - global.dx,
+        size.height - global.dy,
       ),
       color: ScColors.surface2,
       items: [
@@ -572,7 +583,10 @@ class _CueListRowState extends State<CueListRow> {
 
   Widget _statusDot() {
     final isAlsoRunning = widget._isAlsoRunning(widget.playhead);
-    if (!widget.isActive && !widget.hasError && !widget.isPaused && !isAlsoRunning) {
+    if (!widget.isActive &&
+        !widget.hasError &&
+        !widget.isPaused &&
+        !isAlsoRunning) {
       return const SizedBox.shrink();
     }
     final color = isAlsoRunning && !widget.isActive
@@ -626,7 +640,8 @@ class _TimingColumn extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if ((isActive || isAlsoRunning) && duration != null && hasStartTime)
-            _RemainingTime(playhead: playhead!, cueId: cue.id, duration: duration)
+            _RemainingTime(
+                playhead: playhead!, cueId: cue.id, duration: duration)
           else
             Text(
               _fmt(duration),
@@ -697,9 +712,9 @@ class _RemainingTime extends StatelessWidget {
   Widget build(BuildContext context) {
     // Per-Cue-Start hat Priorität; für primär-aktive Cues ist Fallback ok.
     // Für Hintergrund-Cues darf der Fallback nicht verwendet werden (falsche Zeit).
-    final start = playhead.cueStartedServerMsByCueId[cueId]
-        ?? playhead.startedServerMs
-        ?? ClockSync.instance.serverNow();
+    final start = playhead.cueStartedServerMsByCueId[cueId] ??
+        playhead.startedServerMs ??
+        ClockSync.instance.serverNow();
     final now = playhead.effectiveNowMsForCue(cueId);
     final elapsed = (now - start).clamp(0, 99 * 60 * 1000).toDouble();
     final remaining = (duration - elapsed).clamp(0.0, duration);
@@ -719,11 +734,11 @@ class _RemainingTime extends StatelessWidget {
 /// Current audio sub-phase — drives visual feedback in progress bars.
 enum _AudioPhase {
   idle,
-  fadeIn,       // audio is ramping up (start of cue)
-  playing,      // full-volume playback
-  fadeOut,      // audio is ramping down (end of cue)
-  pauseFading,  // PAUSE fired with fadeOut behavior — audio still audible
-  paused,       // fully paused, silent
+  fadeIn, // audio is ramping up (start of cue)
+  playing, // full-volume playback
+  fadeOut, // audio is ramping down (end of cue)
+  pauseFading, // PAUSE fired with fadeOut behavior — audio still audible
+  paused, // fully paused, silent
   done,
 }
 
@@ -870,7 +885,7 @@ class _SweepPaint extends CustomPainter {
 /// - An amber warning overlay during pause-fade.
 /// - Indeterminate animation when duration is unknown.
 class _CueProgressBar extends StatelessWidget {
-  final double fraction;          // 0.0–1.0; 0 = indeterminate
+  final double fraction; // 0.0–1.0; 0 = indeterminate
   final _AudioPhase audioPhase;
   final Color typeColor;
   final Cue cue;
@@ -904,12 +919,12 @@ class _CueProgressBar extends StatelessWidget {
   }
 
   Color get _barColor => switch (audioPhase) {
-    _AudioPhase.pauseFading => ScColors.warn,
-    _AudioPhase.paused      => ScColors.warn,
-    _AudioPhase.done        => ScColors.textDim,
-    _AudioPhase.fadeIn      => typeColor.withValues(alpha: 0.6),
-    _                       => typeColor,
-  };
+        _AudioPhase.pauseFading => ScColors.warn,
+        _AudioPhase.paused => ScColors.warn,
+        _AudioPhase.done => ScColors.textDim,
+        _AudioPhase.fadeIn => typeColor.withValues(alpha: 0.6),
+        _ => typeColor,
+      };
 }
 
 class _BarPaint extends CustomPainter {
@@ -941,12 +956,13 @@ class _BarPaint extends CustomPainter {
 
     // Determine segments based on fade zones.
     final duration = cue.displayDurationMs;
-    double fadeInEndX   = 0;
+    double fadeInEndX = 0;
     double fadeOutStartX = fillX;
 
     if (cue.params case AudioParams p when duration != null && duration > 0) {
-      fadeInEndX    = (p.fadeInMs  / duration * w).clamp(0.0, fillX);
-      fadeOutStartX = ((duration - p.fadeOutMs) / duration * w).clamp(0.0, fillX);
+      fadeInEndX = (p.fadeInMs / duration * w).clamp(0.0, fillX);
+      fadeOutStartX =
+          ((duration - p.fadeOutMs) / duration * w).clamp(0.0, fillX);
     }
 
     // ── Fade-in segment (lighter) ───────────────────────────────────────
@@ -973,7 +989,7 @@ class _BarPaint extends CustomPainter {
                 : typeColor;
 
     final mainStart = fadeInEndX;
-    final mainEnd   = fadeOutStartX.clamp(mainStart, fillX);
+    final mainEnd = fadeOutStartX.clamp(mainStart, fillX);
     if (mainEnd > mainStart) {
       canvas.drawRect(
         Rect.fromLTWH(mainStart, 0, mainEnd - mainStart, h),
@@ -988,7 +1004,8 @@ class _BarPaint extends CustomPainter {
         Paint()
           ..shader = LinearGradient(
             colors: [typeColor, ScColors.warn],
-          ).createShader(Rect.fromLTWH(fadeOutStartX, 0, fillX - fadeOutStartX, h)),
+          ).createShader(
+              Rect.fromLTWH(fadeOutStartX, 0, fillX - fadeOutStartX, h)),
       );
     }
   }
@@ -1022,9 +1039,10 @@ class _AudioGhostWaveform extends ConsumerWidget {
         final startFraction = fileDurationMs > 0
             ? (params.startTimeMs / fileDurationMs).clamp(0.0, 1.0)
             : 0.0;
-        final endFraction = fileDurationMs > 0 && params.endTimeMs > params.startTimeMs
-            ? (params.endTimeMs / fileDurationMs).clamp(startFraction, 1.0)
-            : 1.0;
+        final endFraction =
+            fileDurationMs > 0 && params.endTimeMs > params.startTimeMs
+                ? (params.endTimeMs / fileDurationMs).clamp(startFraction, 1.0)
+                : 1.0;
 
         return IgnorePointer(
           child: CustomPaint(
@@ -1115,7 +1133,12 @@ class _NoteRow extends StatelessWidget {
   final VoidCallback? onDelete;
   final bool showDragHandle;
 
-  const _NoteRow({required this.cue, required this.note, this.onTap, this.onDelete, this.showDragHandle = false});
+  const _NoteRow(
+      {required this.cue,
+      required this.note,
+      this.onTap,
+      this.onDelete,
+      this.showDragHandle = false});
 
   @override
   Widget build(BuildContext context) {
@@ -1144,7 +1167,8 @@ class _NoteRow extends StatelessWidget {
               child: Row(
                 children: [
                   Expanded(
-                    child: Container(height: 1, color: color.withValues(alpha: 0.4)),
+                    child: Container(
+                        height: 1, color: color.withValues(alpha: 0.4)),
                   ),
                   if (text.isNotEmpty) ...[
                     const SizedBox(width: 8),
@@ -1181,7 +1205,6 @@ class _NoteRow extends StatelessWidget {
     );
   }
 }
-
 
 // ── Node state chips ──────────────────────────────────────────────────────────
 

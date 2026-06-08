@@ -38,11 +38,10 @@ class ShowDao extends DatabaseAccessor<AppDatabase> with _$ShowDaoMixin {
 
   // ── Cues ─────────────────────────────────────────────────────────────────
 
-  Future<List<ShowCue>> getCues(String cueListId) =>
-      (select(showCues)
-            ..where((t) => t.cueListId.equals(cueListId))
-            ..orderBy([(t) => OrderingTerm.asc(t.orderIndex)]))
-          .get();
+  Future<List<ShowCue>> getCues(String cueListId) => (select(showCues)
+        ..where((t) => t.cueListId.equals(cueListId))
+        ..orderBy([(t) => OrderingTerm.asc(t.orderIndex)]))
+      .get();
 
   Future<void> upsertCue(String cueListId, pb.Cue proto, int orderIndex) async {
     await into(showCues).insertOnConflictUpdate(ShowCuesCompanion(
@@ -53,7 +52,8 @@ class ShowDao extends DatabaseAccessor<AppDatabase> with _$ShowDaoMixin {
       cueType: Value(proto.cueType.value),
       paramsJson: Value(_encodeParams(proto)),
       orderIndex: Value(orderIndex),
-      targetNodeId: Value(proto.targetNodeId.isEmpty ? null : proto.targetNodeId),
+      targetNodeId:
+          Value(proto.targetNodeId.isEmpty ? null : proto.targetNodeId),
       autoContinue: Value(proto.autoContinue),
       preWaitMs: Value(proto.preWaitMs),
       postWaitMs: Value(proto.postWaitMs),
@@ -95,7 +95,8 @@ class ShowDao extends DatabaseAccessor<AppDatabase> with _$ShowDaoMixin {
       ..cueId = row.id
       ..number = row.number
       ..label = row.label
-      ..cueType = pb_common.CueType.valueOf(row.cueType) ?? pb_common.CueType.CUE_TYPE_UNSPECIFIED
+      ..cueType = pb_common.CueType.valueOf(row.cueType) ??
+          pb_common.CueType.CUE_TYPE_UNSPECIFIED
       ..autoContinue = row.autoContinue
       ..preWaitMs = row.preWaitMs
       ..postWaitMs = row.postWaitMs
@@ -177,11 +178,13 @@ class ShowDao extends DatabaseAccessor<AppDatabase> with _$ShowDaoMixin {
           ..oscArgument = map['oscArgument'] ?? ''
           ..executorPage = map['executorPage'] ?? 0
           ..executorNo = map['executorNo'] ?? 0
-          ..command = pb.MaOscCueParams_MaCommand.valueOf(map['command'] ?? 0) ??
-              pb.MaOscCueParams_MaCommand.MA_CMD_UNSPECIFIED
+          ..command =
+              pb.MaOscCueParams_MaCommand.valueOf(map['command'] ?? 0) ??
+                  pb.MaOscCueParams_MaCommand.MA_CMD_UNSPECIFIED
           ..gotoCue = map['gotoCue'] ?? 0;
       case 'wait':
-        cue.wait = pb.WaitCueParams()..durationMs = (map['durationMs'] ?? 0.0).toDouble();
+        cue.wait = pb.WaitCueParams()
+          ..durationMs = (map['durationMs'] ?? 0.0).toDouble();
       case 'goto':
         cue.gotoP = pb.GotoCueParams()
           ..targetCueId = map['targetCueId'] ?? ''

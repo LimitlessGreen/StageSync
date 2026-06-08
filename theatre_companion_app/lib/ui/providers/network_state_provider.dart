@@ -184,8 +184,7 @@ final itemUpdateStreamProvider = StreamProvider<ItemUpdatedEvent>((ref) {
 });
 
 /// Stream of [ChatMessageReceivedEvent]s for the chat screen.
-final chatEventStreamProvider =
-    StreamProvider<ChatMessageReceivedEvent>((ref) {
+final chatEventStreamProvider = StreamProvider<ChatMessageReceivedEvent>((ref) {
   final ctrl = StreamController<ChatMessageReceivedEvent>.broadcast();
   final sub = ref.listen<AsyncValue<NetworkEvent>>(
     networkEventStreamProvider,
@@ -261,8 +260,7 @@ final isCloudConnectedProvider =
 // Cloud-Peer-Liste (Companion-App-Geräte auf dem Server)
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _CloudPeersNotifier
-    extends StateNotifier<(List<CloudPeerInfo>, int)> {
+class _CloudPeersNotifier extends StateNotifier<(List<CloudPeerInfo>, int)> {
   _CloudPeersNotifier(Ref ref) : super((const [], 0)) {
     ref.listen<AsyncValue<NetworkEvent>>(
       networkEventStreamProvider,
@@ -371,11 +369,3 @@ final bleRawLogStreamProvider = StreamProvider<BleStatusEvent>((ref) {
   });
   return ctrl.stream;
 });
-
-
-
-
-
-
-
-

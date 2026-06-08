@@ -39,9 +39,8 @@ class TransportBar extends StatelessWidget {
   String _elapsedStr() {
     final start = playhead.startedServerMs;
     if (start == null) return '0:00';
-    final int nowMs = playhead.phase == CueListPhase.idle
-        ? -1
-        : playhead.effectiveNowMs();
+    final int nowMs =
+        playhead.phase == CueListPhase.idle ? -1 : playhead.effectiveNowMs();
     if (nowMs < 0) return '0:00';
     final ms = (nowMs - start).clamp(0, 99 * 60 * 1000);
     final s = ms ~/ 1000;
@@ -51,24 +50,24 @@ class TransportBar extends StatelessWidget {
   }
 
   Color get _timerColor => switch (playhead.phase) {
-    CueListPhase.running => ScColors.active,
-    CueListPhase.paused  => ScColors.warn,
-    CueListPhase.done    => ScColors.textDim,
-    _                    => ScColors.textDim,
-  };
+        CueListPhase.running => ScColors.active,
+        CueListPhase.paused => ScColors.warn,
+        CueListPhase.done => ScColors.textDim,
+        _ => ScColors.textDim,
+      };
 
   IconData get _stateIcon => switch (playhead.phase) {
-    CueListPhase.running => Icons.play_arrow,
-    CueListPhase.paused  => Icons.pause,
-    CueListPhase.done    => Icons.check,
-    _                    => Icons.hourglass_empty,
-  };
+        CueListPhase.running => Icons.play_arrow,
+        CueListPhase.paused => Icons.pause,
+        CueListPhase.done => Icons.check,
+        _ => Icons.hourglass_empty,
+      };
 
   Color get _stateIconColor => switch (playhead.phase) {
-    CueListPhase.running => ScColors.active,
-    CueListPhase.paused  => ScColors.warn,
-    _                    => ScColors.textDim,
-  };
+        CueListPhase.running => ScColors.active,
+        CueListPhase.paused => ScColors.warn,
+        _ => ScColors.textDim,
+      };
 
   Cue? _activeCue() {
     final id = playhead.activeCueId;
@@ -91,8 +90,9 @@ class TransportBar extends StatelessWidget {
     if (playhead.isRunning || playhead.isPaused) ScTick.of(context);
 
     final active = _activeCue();
-    final next   = _nextCue();
-    final showPhase = playhead.isRunning || playhead.isPaused || playhead.isDone;
+    final next = _nextCue();
+    final showPhase =
+        playhead.isRunning || playhead.isPaused || playhead.isDone;
 
     return Container(
       height: ScSpacing.transportBarHeight,
@@ -111,36 +111,42 @@ class TransportBar extends StatelessWidget {
                   Flexible(
                     child: Text(
                       '${active.number}  ${active.label}',
-                      style: ScText.cueLabel.copyWith(color: ScColors.textPrimary),
+                      style:
+                          ScText.cueLabel.copyWith(color: ScColors.textPrimary),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   const SizedBox(width: 10),
                   Text(
                     _elapsedStr(),
-                    style: ScText.timer.copyWith(fontSize: 15, color: _timerColor),
+                    style:
+                        ScText.timer.copyWith(fontSize: 15, color: _timerColor),
                   ),
                 ] else
-                  Text('—', style: ScText.cueLabel.copyWith(color: ScColors.textDim)),
+                  Text('—',
+                      style: ScText.cueLabel.copyWith(color: ScColors.textDim)),
 
                 // Next cue preview
                 if (next != null && !compact) ...[
                   Container(
-                    width: 1, height: 20,
+                    width: 1,
+                    height: 20,
                     color: ScColors.divider,
                     margin: const EdgeInsets.symmetric(horizontal: 12),
                   ),
-                  const Text('NEXT', style: TextStyle(
-                    color: ScColors.textDim,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.8,
-                  )),
+                  const Text('NEXT',
+                      style: TextStyle(
+                        color: ScColors.textDim,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.8,
+                      )),
                   const SizedBox(width: 6),
                   Flexible(
                     child: Text(
                       '${next.number}  ${next.label}',
-                      style: ScText.label.copyWith(color: ScColors.textSecondary),
+                      style:
+                          ScText.label.copyWith(color: ScColors.textSecondary),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),

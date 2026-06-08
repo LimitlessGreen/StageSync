@@ -96,8 +96,7 @@ class ShowControlRepository {
       pb.Cue_Params.note => NoteParams(
           text: proto.note.text,
           color: proto.note.colorHex.isNotEmpty
-              ? Color(int.parse(
-                  'FF${proto.note.colorHex.replaceAll("#", "")}',
+              ? Color(int.parse('FF${proto.note.colorHex.replaceAll("#", "")}',
                   radix: 16))
               : null,
           landable: proto.note.landable,
@@ -135,23 +134,28 @@ class ShowControlRepository {
         _ => MaOscCommand.unspecified,
       };
 
-  static pb.AudioCueParams_PauseBehavior _pauseBehaviorToProto(PauseBehavior v) =>
+  static pb.AudioCueParams_PauseBehavior _pauseBehaviorToProto(
+          PauseBehavior v) =>
       switch (v) {
         PauseBehavior.fadeOut => pb.AudioCueParams_PauseBehavior.PAUSE_FADE_OUT,
-        PauseBehavior.hard    => pb.AudioCueParams_PauseBehavior.PAUSE_HARD,
+        PauseBehavior.hard => pb.AudioCueParams_PauseBehavior.PAUSE_HARD,
       };
 
-  static pb.AudioCueParams_ResumeBehavior _resumeBehaviorToProto(ResumeBehavior v) =>
+  static pb.AudioCueParams_ResumeBehavior _resumeBehaviorToProto(
+          ResumeBehavior v) =>
       switch (v) {
-        ResumeBehavior.fadeIn          => pb.AudioCueParams_ResumeBehavior.RESUME_FADE_IN,
-        ResumeBehavior.fromStart       => pb.AudioCueParams_ResumeBehavior.RESUME_FROM_START,
-        ResumeBehavior.continuePlaying => pb.AudioCueParams_ResumeBehavior.RESUME_CONTINUE,
+        ResumeBehavior.fadeIn =>
+          pb.AudioCueParams_ResumeBehavior.RESUME_FADE_IN,
+        ResumeBehavior.fromStart =>
+          pb.AudioCueParams_ResumeBehavior.RESUME_FROM_START,
+        ResumeBehavior.continuePlaying =>
+          pb.AudioCueParams_ResumeBehavior.RESUME_CONTINUE,
       };
 
   static pb.FadeCueParams_FadeAction _fadeActionToProto(FadeAction v) =>
       switch (v) {
-        FadeAction.stop   => pb.FadeCueParams_FadeAction.FADE_ACTION_STOP,
-        FadeAction.pause  => pb.FadeCueParams_FadeAction.FADE_ACTION_PAUSE,
+        FadeAction.stop => pb.FadeCueParams_FadeAction.FADE_ACTION_STOP,
+        FadeAction.pause => pb.FadeCueParams_FadeAction.FADE_ACTION_PAUSE,
         FadeAction.resume => pb.FadeCueParams_FadeAction.FADE_ACTION_RESUME,
         FadeAction.volume => pb.FadeCueParams_FadeAction.FADE_ACTION_VOLUME,
       };
@@ -200,14 +204,16 @@ class ShowControlRepository {
   }
 
   static List<String> tasksFromProto(List<pb_common.NodeTask> tasks) {
-    return tasks.map((t) => switch (t.value) {
-          1 => 'master',
-          2 => 'audio',
-          3 => 'editor',
-          4 => 'viewer',
-          5 => 'ma_osc',
-          _ => 'unknown',
-        }).toList();
+    return tasks
+        .map((t) => switch (t.value) {
+              1 => 'master',
+              2 => 'audio',
+              3 => 'editor',
+              4 => 'viewer',
+              5 => 'ma_osc',
+              _ => 'unknown',
+            })
+        .toList();
   }
 
   // ── PatchConfig ───────────────────────────────────────────────────────────
@@ -251,19 +257,19 @@ class ShowControlRepository {
       );
 
   static AudioBusType _busTypeFromProto(pb_bus.AudioBusType t) => switch (t) {
-        pb_bus.AudioBusType.AUDIO_BUS_TYPE_MONITOR  => AudioBusType.monitor,
+        pb_bus.AudioBusType.AUDIO_BUS_TYPE_MONITOR => AudioBusType.monitor,
         pb_bus.AudioBusType.AUDIO_BUS_TYPE_TALKBACK => AudioBusType.talkback,
-        pb_bus.AudioBusType.AUDIO_BUS_TYPE_AUX      => AudioBusType.aux,
-        pb_bus.AudioBusType.AUDIO_BUS_TYPE_IEM      => AudioBusType.iem,
-        _                                        => AudioBusType.main,
+        pb_bus.AudioBusType.AUDIO_BUS_TYPE_AUX => AudioBusType.aux,
+        pb_bus.AudioBusType.AUDIO_BUS_TYPE_IEM => AudioBusType.iem,
+        _ => AudioBusType.main,
       };
 
   static pb_bus.AudioBusType _busTypeToProto(AudioBusType t) => switch (t) {
-        AudioBusType.monitor  => pb_bus.AudioBusType.AUDIO_BUS_TYPE_MONITOR,
+        AudioBusType.monitor => pb_bus.AudioBusType.AUDIO_BUS_TYPE_MONITOR,
         AudioBusType.talkback => pb_bus.AudioBusType.AUDIO_BUS_TYPE_TALKBACK,
-        AudioBusType.aux      => pb_bus.AudioBusType.AUDIO_BUS_TYPE_AUX,
-        AudioBusType.iem      => pb_bus.AudioBusType.AUDIO_BUS_TYPE_IEM,
-        AudioBusType.main     => pb_bus.AudioBusType.AUDIO_BUS_TYPE_MAIN,
+        AudioBusType.aux => pb_bus.AudioBusType.AUDIO_BUS_TYPE_AUX,
+        AudioBusType.iem => pb_bus.AudioBusType.AUDIO_BUS_TYPE_IEM,
+        AudioBusType.main => pb_bus.AudioBusType.AUDIO_BUS_TYPE_MAIN,
       };
 
   static pb.PatchConfig patchConfigToProto(PatchConfig domain) {

@@ -108,7 +108,8 @@ class CloudConnectService {
   // ── Callbacks ─────────────────────────────────────────────────────────────
   final void Function(bool isConnected) _onConnectionChanged;
   final void Function(CloudInventoryUpdate update) _onInventoryUpdate;
-  final void Function(List<CloudPeerInfo> peers, int totalOnline) _onCloudPeersUpdated;
+  final void Function(List<CloudPeerInfo> peers, int totalOnline)
+      _onCloudPeersUpdated;
   final void Function(CloudChatMessage message)? _onChatMessage;
 
   // ── Peer-Tracking ─────────────────────────────────────────────────────────
@@ -252,7 +253,9 @@ class CloudConnectService {
     // Generischer Fehler-Event (manche Server-Implementierungen)
     _socket!.on('error', (data) {
       final msg = data?.toString().toLowerCase() ?? '';
-      if (msg.contains('token') || msg.contains('auth') || msg.contains('expired')) {
+      if (msg.contains('token') ||
+          msg.contains('auth') ||
+          msg.contains('expired')) {
         _tokenRefreshTimer?.cancel();
         _closeSocket();
         _scheduleReconnect();
@@ -440,8 +443,9 @@ class CloudConnectService {
 
       // Ort
       final rawLocation = item['location'] ?? item['locationTag'];
-      final locationTag =
-          (rawLocation is String && rawLocation.isNotEmpty) ? rawLocation : null;
+      final locationTag = (rawLocation is String && rawLocation.isNotEmpty)
+          ? rawLocation
+          : null;
 
       // Zeitstempel
       final rawTs = item['updatedAt'] ?? item['lastUpdatedMs'];
@@ -479,7 +483,8 @@ class CloudConnectService {
     final rawTs = data['timestampMs'];
     if (messageId is! String || messageId.isEmpty) return;
     if (content is! String || content.isEmpty) return;
-    final timestampMs = rawTs is int ? rawTs : DateTime.now().millisecondsSinceEpoch;
+    final timestampMs =
+        rawTs is int ? rawTs : DateTime.now().millisecondsSinceEpoch;
     _onChatMessage(CloudChatMessage(
       messageId: messageId,
       senderDeviceId: (senderDeviceId is String && senderDeviceId.isNotEmpty)
@@ -513,11 +518,9 @@ class CloudConnectService {
       secretKey: secretKey,
     );
 
-    final sig = mac.bytes
-        .map((b) => b.toRadixString(16).padLeft(2, '0'))
-        .join();
+    final sig =
+        mac.bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
 
     return '$issuedAt.$expiresAt.$sig';
   }
 }
-

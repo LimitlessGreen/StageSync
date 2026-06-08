@@ -121,8 +121,7 @@ class PacketQueueDao {
   /// Deletes packets older than [kPacketMaxAgeMs] that were never delivered.
   /// These are considered permanently lost (peer never came into range).
   Future<int> purgeStale() async {
-    final cutoff =
-        DateTime.now().millisecondsSinceEpoch - kPacketMaxAgeMs;
+    final cutoff = DateTime.now().millisecondsSinceEpoch - kPacketMaxAgeMs;
     return (_db.delete(_db.packetQueue)
           ..where(
             (t) => t.createdAtMs.isSmallerThanValue(cutoff),
@@ -160,4 +159,3 @@ class PacketQueueDao {
     }
   }
 }
-

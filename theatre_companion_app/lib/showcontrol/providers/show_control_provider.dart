@@ -246,15 +246,15 @@ class ShowControlNotifier extends StateNotifier<ShowControlState>
     state = state.copyWith(isPaused: true);
   }
 
-   Future<void> resume() async {
-     if (!_session.isInSession) return;
-     final req = ResumeRequest()
-       ..sessionId = _sessionId
-       ..token = _token
-       ..commandId = _uuid.v4();
-     await StageSyncClient.instance.showControl.resume(req);
-     state = state.copyWith(isPaused: false);
-   }
+  Future<void> resume() async {
+    if (!_session.isInSession) return;
+    final req = ResumeRequest()
+      ..sessionId = _sessionId
+      ..token = _token
+      ..commandId = _uuid.v4();
+    await StageSyncClient.instance.showControl.resume(req);
+    state = state.copyWith(isPaused: false);
+  }
 
   /// Ermittelt die Ziel-Node-IDs für [cueId] über PatchConfig.
   /// Priorität: logicalOutputId → targetNodeId → alle online Audio-Nodes → eigene Node.
@@ -262,7 +262,10 @@ class ShowControlNotifier extends StateNotifier<ShowControlState>
     if (state.cueList == null) return const [];
     Cue? protoCue;
     for (final c in state.cueList!.cues) {
-      if (c.cueId == cueId) { protoCue = c; break; }
+      if (c.cueId == cueId) {
+        protoCue = c;
+        break;
+      }
     }
     if (protoCue == null) return const [];
 
@@ -281,136 +284,142 @@ class ShowControlNotifier extends StateNotifier<ShowControlState>
     }
     if (ids.isEmpty) {
       final myNode = _session.myNode;
-      if (myNode != null && myNode.tasks.contains(NodeTask.NODE_TASK_AUDIO_OUTPUT)) {
+      if (myNode != null &&
+          myNode.tasks.contains(NodeTask.NODE_TASK_AUDIO_OUTPUT)) {
         ids = [myNode.nodeId];
       }
     }
     return ids;
   }
 
-   /// Sendet einen AudioFadeCommand über NodeService.sendNodeCommand an alle
-   /// Nodes, die über [cueId] (via logicalOutputId + PatchConfig) zugeordnet sind.
-   ///
-   /// [targetVolumeDb]  Ziel-Lautstärke in dB (z.B. 0.0 für fade-up, -40.0 für fade-out).
-   /// [durationMs]      Fade-Dauer in Millisekunden.
-   /// [stopWhenDone]    Node stoppt Wiedergabe nach dem Fade (für fade-out).
-   Future<void> sendAudioFade(
-     String cueId, {
-     required double targetVolumeDb,
-     required double durationMs,
-     bool stopWhenDone = false,
-   }) async {
-     if (!_session.isInSession) return;
-     final targetNodeIds = _resolveTargetNodes(cueId);
-     if (targetNodeIds.isEmpty) return;
+  /// Sendet einen AudioFadeCommand über NodeService.sendNodeCommand an alle
+  /// Nodes, die über [cueId] (via logicalOutputId + PatchConfig) zugeordnet sind.
+  ///
+  /// [targetVolumeDb]  Ziel-Lautstärke in dB (z.B. 0.0 für fade-up, -40.0 für fade-out).
+  /// [durationMs]      Fade-Dauer in Millisekunden.
+  /// [stopWhenDone]    Node stoppt Wiedergabe nach dem Fade (für fade-out).
+  Future<void> sendAudioFade(
+    String cueId, {
+    required double targetVolumeDb,
+    required double durationMs,
+    bool stopWhenDone = false,
+  }) async {
+    if (!_session.isInSession) return;
+    final targetNodeIds = _resolveTargetNodes(cueId);
+    if (targetNodeIds.isEmpty) return;
 
-     final fadeCmd = node_pb.AudioFadeCommand(
-       cueId: cueId,
-       targetVolumeDb: targetVolumeDb,
-       durationMs: durationMs,
-       stopWhenDone: stopWhenDone,
-     );
+    final fadeCmd = node_pb.AudioFadeCommand(
+      cueId: cueId,
+      targetVolumeDb: targetVolumeDb,
+      durationMs: durationMs,
+      stopWhenDone: stopWhenDone,
+    );
 
-     for (final nodeId in targetNodeIds) {
-       final req = node_pb.SendNodeCommandRequest(
-         sessionId: _sessionId,
-         token: _token,
-         targetNodeId: nodeId,
-         command: node_pb.NodeCommandRequest(
-           sessionId: _sessionId,
-           commandId: _uuid.v4(),
-           audioFade: fadeCmd,
-         ),
-       );
-       try {
-         await StageSyncClient.instance.node.sendNodeCommand(req);
-       } catch (e) {
-         // Fehler eines einzelnen Nodes soll andere Nodes nicht blockieren
-         state = state.copyWith(error: 'Fade-Fehler ($nodeId): $e');
-       }
-     }
-   }
+    for (final nodeId in targetNodeIds) {
+      final req = node_pb.SendNodeCommandRequest(
+        sessionId: _sessionId,
+        token: _token,
+        targetNodeId: nodeId,
+        command: node_pb.NodeCommandRequest(
+          sessionId: _sessionId,
+          commandId: _uuid.v4(),
+          audioFade: fadeCmd,
+        ),
+      );
+      try {
+        await StageSyncClient.instance.node.sendNodeCommand(req);
+      } catch (e) {
+        // Fehler eines einzelnen Nodes soll andere Nodes nicht blockieren
+        state = state.copyWith(error: 'Fade-Fehler ($nodeId): $e');
+      }
+    }
+  }
 
-   /// Blendet eine Cue hoch.
-   ///
-   /// Ist die Cue per-Cue pausiert (Fade-Out wurde vorher ausgelöst), wird sie
-   /// mit einem Fade-In fortgesetzt. Läuft sie bereits, wird nur die Lautstärke
-   /// auf den konfigurierten Wert hochgefadet.
-   Future<void> fadeUpAudio(String cueId, {double durationMs = 1000.0}) async {
-     if (!_session.isInSession) return;
+  /// Blendet eine Cue hoch.
+  ///
+  /// Ist die Cue per-Cue pausiert (Fade-Out wurde vorher ausgelöst), wird sie
+  /// mit einem Fade-In fortgesetzt. Läuft sie bereits, wird nur die Lautstärke
+  /// auf den konfigurierten Wert hochgefadet.
+  Future<void> fadeUpAudio(String cueId, {double durationMs = 1000.0}) async {
+    if (!_session.isInSession) return;
 
-     if (state.perCuePausedIds.contains(cueId)) {
-       // Cue ist pausiert → Resume mit Fade-In
-       await resumeCueAudio(cueId, fadeInMs: durationMs);
-     } else {
-       // Cue spielt → Lautstärke auf konfigurierten Wert hochfaden
-       Cue? protoCue;
-       for (final c in (state.cueList?.cues ?? [])) {
-         if (c.cueId == cueId) { protoCue = c; break; }
-       }
-       final targetVolumeDb = (protoCue?.hasAudio() == true)
-           ? protoCue!.audio.volumeDb
-           : 0.0;
-       await sendAudioFade(cueId, targetVolumeDb: targetVolumeDb, durationMs: durationMs, stopWhenDone: false);
-     }
-   }
+    if (state.perCuePausedIds.contains(cueId)) {
+      // Cue ist pausiert → Resume mit Fade-In
+      await resumeCueAudio(cueId, fadeInMs: durationMs);
+    } else {
+      // Cue spielt → Lautstärke auf konfigurierten Wert hochfaden
+      Cue? protoCue;
+      for (final c in (state.cueList?.cues ?? [])) {
+        if (c.cueId == cueId) {
+          protoCue = c;
+          break;
+        }
+      }
+      final targetVolumeDb =
+          (protoCue?.hasAudio() == true) ? protoCue!.audio.volumeDb : 0.0;
+      await sendAudioFade(cueId,
+          targetVolumeDb: targetVolumeDb,
+          durationMs: durationMs,
+          stopWhenDone: false);
+    }
+  }
 
-   /// Blendet eine Cue aus und **pausiert** danach (nicht stoppen).
-   /// So kann mit Fade-Up nahtlos fortgesetzt werden.
-   Future<void> fadeOutAudio(String cueId, {double durationMs = 1000.0}) async {
-     await pauseCueAudio(cueId, fadeOutMs: durationMs);
-   }
+  /// Blendet eine Cue aus und **pausiert** danach (nicht stoppen).
+  /// So kann mit Fade-Up nahtlos fortgesetzt werden.
+  Future<void> fadeOutAudio(String cueId, {double durationMs = 1000.0}) async {
+    await pauseCueAudio(cueId, fadeOutMs: durationMs);
+  }
 
-   /// Stoppt eine laufende Audio-Cue sofort (mit kurzem Fade gegen Knackser).
-   /// Der Server serialisiert den Stop, setzt Engine-State und broadcastet CUE_DONE.
-   Future<void> stopCueAudio(String cueId, {double fadeOutMs = 200.0}) async {
-     if (!_session.isInSession) return;
-     try {
-       await StageSyncClient.instance.showControl.stopCueAudio(
-         StopCueAudioRequest()
-           ..sessionId = _sessionId
-           ..token = _token
-           ..cueId = cueId
-           ..fadeOutMs = fadeOutMs,
-       );
-     } catch (e) {
-       state = state.copyWith(error: 'StopCueAudio-Fehler: $e');
-     }
-   }
+  /// Stoppt eine laufende Audio-Cue sofort (mit kurzem Fade gegen Knackser).
+  /// Der Server serialisiert den Stop, setzt Engine-State und broadcastet CUE_DONE.
+  Future<void> stopCueAudio(String cueId, {double fadeOutMs = 200.0}) async {
+    if (!_session.isInSession) return;
+    try {
+      await StageSyncClient.instance.showControl.stopCueAudio(
+        StopCueAudioRequest()
+          ..sessionId = _sessionId
+          ..token = _token
+          ..cueId = cueId
+          ..fadeOutMs = fadeOutMs,
+      );
+    } catch (e) {
+      state = state.copyWith(error: 'StopCueAudio-Fehler: $e');
+    }
+  }
 
-   /// Pausiert eine laufende Audio-Cue mit kurzem Fade.
-   /// Der Server serialisiert die Pause, setzt Engine-State und broadcastet CUE_CUE_PAUSED.
-   Future<void> pauseCueAudio(String cueId, {double fadeOutMs = 120.0}) async {
-     if (!_session.isInSession) return;
-     try {
-       await StageSyncClient.instance.showControl.pauseCueAudio(
-         PauseCueAudioRequest()
-           ..sessionId = _sessionId
-           ..token = _token
-           ..cueId = cueId
-           ..fadeOutMs = fadeOutMs,
-       );
-     } catch (e) {
-       state = state.copyWith(error: 'PauseCueAudio-Fehler: $e');
-     }
-   }
+  /// Pausiert eine laufende Audio-Cue mit kurzem Fade.
+  /// Der Server serialisiert die Pause, setzt Engine-State und broadcastet CUE_CUE_PAUSED.
+  Future<void> pauseCueAudio(String cueId, {double fadeOutMs = 120.0}) async {
+    if (!_session.isInSession) return;
+    try {
+      await StageSyncClient.instance.showControl.pauseCueAudio(
+        PauseCueAudioRequest()
+          ..sessionId = _sessionId
+          ..token = _token
+          ..cueId = cueId
+          ..fadeOutMs = fadeOutMs,
+      );
+    } catch (e) {
+      state = state.copyWith(error: 'PauseCueAudio-Fehler: $e');
+    }
+  }
 
-   /// Setzt eine pausierte Audio-Cue fort (mit kurzem Fade-In gegen Knackser).
-   /// Der Server serialisiert den Resume, setzt Engine-State und broadcastet CUE_CUE_RESUMED.
-   Future<void> resumeCueAudio(String cueId, {double fadeInMs = 120.0}) async {
-     if (!_session.isInSession) return;
-     try {
-       await StageSyncClient.instance.showControl.resumeCueAudio(
-         ResumeCueAudioRequest()
-           ..sessionId = _sessionId
-           ..token = _token
-           ..cueId = cueId
-           ..fadeInMs = fadeInMs,
-       );
-     } catch (e) {
-       state = state.copyWith(error: 'ResumeCueAudio-Fehler: $e');
-     }
-   }
+  /// Setzt eine pausierte Audio-Cue fort (mit kurzem Fade-In gegen Knackser).
+  /// Der Server serialisiert den Resume, setzt Engine-State und broadcastet CUE_CUE_RESUMED.
+  Future<void> resumeCueAudio(String cueId, {double fadeInMs = 120.0}) async {
+    if (!_session.isInSession) return;
+    try {
+      await StageSyncClient.instance.showControl.resumeCueAudio(
+        ResumeCueAudioRequest()
+          ..sessionId = _sessionId
+          ..token = _token
+          ..cueId = cueId
+          ..fadeInMs = fadeInMs,
+      );
+    } catch (e) {
+      state = state.copyWith(error: 'ResumeCueAudio-Fehler: $e');
+    }
+  }
 
   Future<void> goToCue(String cueId) => go(cueId: cueId);
   Future<void> deleteCueById(String cueId) => deleteCue(cueId);
@@ -589,14 +598,16 @@ class ShowControlNotifier extends StateNotifier<ShowControlState>
         activeCue: null,
         activeCueStartedServerMs: null,
         runningCueIds: {...state.runningCueIds}..remove(cueId),
-        runningCueStartedServerMs: Map.of(state.runningCueStartedServerMs)..remove(cueId),
+        runningCueStartedServerMs: Map.of(state.runningCueStartedServerMs)
+          ..remove(cueId),
         perCuePausedIds: {...state.perCuePausedIds}..remove(cueId),
         perCuePausedAtMs: Map.of(state.perCuePausedAtMs)..remove(cueId),
       );
     } else if (state.runningCueIds.contains(cueId)) {
       state = state.copyWith(
         runningCueIds: {...state.runningCueIds}..remove(cueId),
-        runningCueStartedServerMs: Map.of(state.runningCueStartedServerMs)..remove(cueId),
+        runningCueStartedServerMs: Map.of(state.runningCueStartedServerMs)
+          ..remove(cueId),
         perCuePausedIds: {...state.perCuePausedIds}..remove(cueId),
         perCuePausedAtMs: Map.of(state.perCuePausedAtMs)..remove(cueId),
       );

@@ -126,12 +126,17 @@ class _ClipInspectorState extends ConsumerState<ClipInspector> {
           children: [
             Row(
               children: [
-                Text('Zelle  T${widget.trackIndex + 1} · S${widget.sceneIndex + 1}',
-                    style: const TextStyle(color: ScColors.textPrimary, fontSize: 15, fontWeight: FontWeight.bold)),
+                Text(
+                    'Zelle  T${widget.trackIndex + 1} · S${widget.sceneIndex + 1}',
+                    style: const TextStyle(
+                        color: ScColors.textPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold)),
                 const Spacer(),
                 if (widget.existing != null)
                   IconButton(
-                    icon: const Icon(Icons.delete_outline, color: ScColors.error),
+                    icon:
+                        const Icon(Icons.delete_outline, color: ScColors.error),
                     tooltip: 'Zelle löschen',
                     onPressed: _delete,
                   ),
@@ -155,11 +160,13 @@ class _ClipInspectorState extends ConsumerState<ClipInspector> {
               children: [
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Abbrechen', style: TextStyle(color: ScColors.textSecondary)),
+                  child: const Text('Abbrechen',
+                      style: TextStyle(color: ScColors.textSecondary)),
                 ),
                 const SizedBox(width: 8),
                 FilledButton(
-                  style: FilledButton.styleFrom(backgroundColor: ScColors.active),
+                  style:
+                      FilledButton.styleFrom(backgroundColor: ScColors.active),
                   onPressed: _save,
                   child: const Text('Speichern'),
                 ),
@@ -202,7 +209,8 @@ class _ClipInspectorState extends ConsumerState<ClipInspector> {
   }
 
   Widget _audioEditor() {
-    final assets = ref.watch(mediaProvider).assets.where((a) => a.audio != null).toList();
+    final assets =
+        ref.watch(mediaProvider).assets.where((a) => a.audio != null).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -214,7 +222,9 @@ class _ClipInspectorState extends ConsumerState<ClipInspector> {
           style: const TextStyle(color: ScColors.textPrimary),
           items: [
             for (final a in assets)
-              DropdownMenuItem(value: a.id, child: Text(a.name, overflow: TextOverflow.ellipsis)),
+              DropdownMenuItem(
+                  value: a.id,
+                  child: Text(a.name, overflow: TextOverflow.ellipsis)),
           ],
           onChanged: (v) {
             if (v == null) return;
@@ -229,15 +239,31 @@ class _ClipInspectorState extends ConsumerState<ClipInspector> {
         const SizedBox(height: 12),
         if (_assetId.isNotEmpty) _waveform(),
         const SizedBox(height: 12),
-        _slider('Lautstärke', _volumeDb, -60, 6, '${_volumeDb.toStringAsFixed(1)} dB',
+        _slider(
+            'Lautstärke',
+            _volumeDb,
+            -60,
+            6,
+            '${_volumeDb.toStringAsFixed(1)} dB',
             (v) => setState(() => _volumeDb = v)),
-        _slider('Fade In', _fadeInMs, 0, 10000, '${_fadeInMs.toStringAsFixed(0)} ms',
+        _slider(
+            'Fade In',
+            _fadeInMs,
+            0,
+            10000,
+            '${_fadeInMs.toStringAsFixed(0)} ms',
             (v) => setState(() => _fadeInMs = v)),
-        _slider('Fade Out', _fadeOutMs, 0, 10000, '${_fadeOutMs.toStringAsFixed(0)} ms',
+        _slider(
+            'Fade Out',
+            _fadeOutMs,
+            0,
+            10000,
+            '${_fadeOutMs.toStringAsFixed(0)} ms',
             (v) => setState(() => _fadeOutMs = v)),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Loop', style: TextStyle(color: ScColors.textPrimary)),
+          title:
+              const Text('Loop', style: TextStyle(color: ScColors.textPrimary)),
           value: _loop,
           activeThumbColor: ScColors.active,
           onChanged: (v) => setState(() => _loop = v),
@@ -253,9 +279,12 @@ class _ClipInspectorState extends ConsumerState<ClipInspector> {
       child: asyncWf.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(
-            child: Text('Waveform-Fehler', style: TextStyle(color: ScColors.textDim))),
+            child: Text('Waveform-Fehler',
+                style: TextStyle(color: ScColors.textDim))),
         data: (wf) {
-          final dur = _durationMs > 0 ? _durationMs : (wf.durationMs > 0 ? wf.durationMs : 1);
+          final dur = _durationMs > 0
+              ? _durationMs
+              : (wf.durationMs > 0 ? wf.durationMs : 1);
           final endMs = _endMs > 0 ? _endMs : dur;
           return ScWaveform(
             data: wf,
@@ -292,10 +321,14 @@ class _ClipInspectorState extends ConsumerState<ClipInspector> {
   Widget _midiEditor() {
     return Column(
       children: [
-        _intField('Kanal (0-15)', _midiChannel, (v) => setState(() => _midiChannel = v)),
-        _intField('Command (Hex, z.B. 144=NoteOn)', _midiCommand, (v) => setState(() => _midiCommand = v)),
-        _intField('Data1 (Note/CC)', _midiData1, (v) => setState(() => _midiData1 = v)),
-        _intField('Data2 (Velocity/Value)', _midiData2, (v) => setState(() => _midiData2 = v)),
+        _intField('Kanal (0-15)', _midiChannel,
+            (v) => setState(() => _midiChannel = v)),
+        _intField('Command (Hex, z.B. 144=NoteOn)', _midiCommand,
+            (v) => setState(() => _midiCommand = v)),
+        _intField('Data1 (Note/CC)', _midiData1,
+            (v) => setState(() => _midiData1 = v)),
+        _intField('Data2 (Velocity/Value)', _midiData2,
+            (v) => setState(() => _midiData2 = v)),
       ],
     );
   }
@@ -312,7 +345,8 @@ class _ClipInspectorState extends ConsumerState<ClipInspector> {
         for (final c in cues)
           DropdownMenuItem(
               value: c.cueId,
-              child: Text('${c.number}  ${c.label}', overflow: TextOverflow.ellipsis)),
+              child: Text('${c.number}  ${c.label}',
+                  overflow: TextOverflow.ellipsis)),
       ],
       onChanged: (v) => setState(() => _cueId = v ?? ''),
     );
@@ -328,11 +362,15 @@ class _ClipInspectorState extends ConsumerState<ClipInspector> {
             decoration: _dec('Launch-Modus'),
             style: const TextStyle(color: ScColors.textPrimary),
             items: const [
-              DropdownMenuItem(value: LaunchMode.LAUNCH_TRIGGER, child: Text('Trigger')),
-              DropdownMenuItem(value: LaunchMode.LAUNCH_GATE, child: Text('Gate')),
-              DropdownMenuItem(value: LaunchMode.LAUNCH_TOGGLE, child: Text('Toggle')),
+              DropdownMenuItem(
+                  value: LaunchMode.LAUNCH_TRIGGER, child: Text('Trigger')),
+              DropdownMenuItem(
+                  value: LaunchMode.LAUNCH_GATE, child: Text('Gate')),
+              DropdownMenuItem(
+                  value: LaunchMode.LAUNCH_TOGGLE, child: Text('Toggle')),
             ],
-            onChanged: (v) => setState(() => _launchMode = v ?? LaunchMode.LAUNCH_TRIGGER),
+            onChanged: (v) =>
+                setState(() => _launchMode = v ?? LaunchMode.LAUNCH_TRIGGER),
           ),
         ),
         const SizedBox(width: 8),
@@ -343,12 +381,19 @@ class _ClipInspectorState extends ConsumerState<ClipInspector> {
             decoration: _dec('Follow'),
             style: const TextStyle(color: ScColors.textPrimary),
             items: const [
-              DropdownMenuItem(value: FollowAction.FOLLOW_NONE, child: Text('Keine')),
-              DropdownMenuItem(value: FollowAction.FOLLOW_NEXT_CLIP, child: Text('Nächster Clip')),
-              DropdownMenuItem(value: FollowAction.FOLLOW_NEXT_SCENE, child: Text('Nächste Scene')),
-              DropdownMenuItem(value: FollowAction.FOLLOW_STOP, child: Text('Stop')),
+              DropdownMenuItem(
+                  value: FollowAction.FOLLOW_NONE, child: Text('Keine')),
+              DropdownMenuItem(
+                  value: FollowAction.FOLLOW_NEXT_CLIP,
+                  child: Text('Nächster Clip')),
+              DropdownMenuItem(
+                  value: FollowAction.FOLLOW_NEXT_SCENE,
+                  child: Text('Nächste Scene')),
+              DropdownMenuItem(
+                  value: FollowAction.FOLLOW_STOP, child: Text('Stop')),
             ],
-            onChanged: (v) => setState(() => _follow = v ?? FollowAction.FOLLOW_NONE),
+            onChanged: (v) =>
+                setState(() => _follow = v ?? FollowAction.FOLLOW_NONE),
           ),
         ),
       ],
@@ -367,16 +412,20 @@ class _ClipInspectorState extends ConsumerState<ClipInspector> {
             borderSide: BorderSide(color: ScColors.active)),
       );
 
-  Widget _slider(String label, double value, double min, double max, String display,
-      ValueChanged<double> onChanged) {
+  Widget _slider(String label, double value, double min, double max,
+      String display, ValueChanged<double> onChanged) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Text(label, style: const TextStyle(color: ScColors.textSecondary, fontSize: 12)),
+            Text(label,
+                style: const TextStyle(
+                    color: ScColors.textSecondary, fontSize: 12)),
             const Spacer(),
-            Text(display, style: const TextStyle(color: ScColors.textPrimary, fontSize: 12)),
+            Text(display,
+                style:
+                    const TextStyle(color: ScColors.textPrimary, fontSize: 12)),
           ],
         ),
         Slider(

@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:theatre_companion_app/showcontrol/domain/playhead.dart';
 import 'package:theatre_companion_app/showcontrol/ui/design_system/domain_components/transport_bar.dart';
 
-Widget _wrap(Widget child) => MaterialApp(
-      theme: ThemeData.dark(useMaterial3: true),
-      home: Scaffold(body: SizedBox(width: 800, child: child)),
+Widget _wrap(Widget child) => ProviderScope(
+      child: MaterialApp(
+        theme: ThemeData.dark(useMaterial3: true),
+        home: Scaffold(body: SizedBox(width: 800, child: child)),
+      ),
     );
 
 const _idle = PlayheadState.empty;
@@ -52,7 +55,8 @@ void main() {
       await _drainRunningTimer(tester);
     });
 
-    testWidgets('PAUSE button fires onPause callback when running', (tester) async {
+    testWidgets('PAUSE button fires onPause callback when running',
+        (tester) async {
       var called = false;
       await tester.pumpWidget(_wrap(
         TransportBar(playhead: _running, onPause: () => called = true),
@@ -62,7 +66,8 @@ void main() {
       await _drainRunningTimer(tester);
     });
 
-    testWidgets('RESUME button fires onResume callback when paused', (tester) async {
+    testWidgets('RESUME button fires onResume callback when paused',
+        (tester) async {
       var called = false;
       await tester.pumpWidget(_wrap(
         TransportBar(

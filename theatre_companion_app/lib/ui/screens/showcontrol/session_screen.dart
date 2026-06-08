@@ -63,7 +63,8 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
         _deviceNameCtrl.text = defaults.deviceName;
       } else {
         // Fallback: letzter Teil der Device-ID als lesbarer Kurzname
-        _deviceNameCtrl.text = 'Gerät ${id.substring(id.length - 4).toUpperCase()}';
+        _deviceNameCtrl.text =
+            'Gerät ${id.substring(id.length - 4).toUpperCase()}';
       }
     });
   }
@@ -209,7 +210,10 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Text(
                   'Geräte-ID: $_deviceId',
-                  style: const TextStyle(fontSize: 11, color: Colors.grey, fontFamily: 'monospace'),
+                  style: const TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey,
+                      fontFamily: 'monospace'),
                 ),
               ),
             const SizedBox(height: 12),
@@ -220,12 +224,14 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
                   _selectedTasks.clear();
                   _selectedTasks.addAll(tasks);
                 });
-                if (tasks.contains(NodeTask.NODE_TASK_AUDIO_OUTPUT) && _availableInterfaces.isEmpty) {
+                if (tasks.contains(NodeTask.NODE_TASK_AUDIO_OUTPUT) &&
+                    _availableInterfaces.isEmpty) {
                   final ifaces = await MediaServer.listInterfaces();
                   if (mounted) {
                     setState(() {
                       _availableInterfaces = ifaces;
-                      _selectedInterface ??= ifaces.isNotEmpty ? ifaces.first : null;
+                      _selectedInterface ??=
+                          ifaces.isNotEmpty ? ifaces.first : null;
                     });
                   }
                 }
@@ -237,17 +243,24 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
                 _availableInterfaces.isNotEmpty) ...[
               const SizedBox(height: 12),
               Text('Netzwerk-Interface (MediaServer)',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey)),
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: Colors.grey)),
               const SizedBox(height: 4),
               DropdownButtonFormField<NetworkInterfaceInfo>(
                 value: _selectedInterface,
                 decoration: const InputDecoration(border: OutlineInputBorder()),
-                items: _availableInterfaces.map((iface) => DropdownMenuItem(
-                  value: iface,
-                  child: Text('${iface.name}  ${iface.address}',
-                      style: const TextStyle(fontFamily: 'monospace', fontSize: 13)),
-                )).toList(),
-                onChanged: (iface) => setState(() => _selectedInterface = iface),
+                items: _availableInterfaces
+                    .map((iface) => DropdownMenuItem(
+                          value: iface,
+                          child: Text('${iface.name}  ${iface.address}',
+                              style: const TextStyle(
+                                  fontFamily: 'monospace', fontSize: 13)),
+                        ))
+                    .toList(),
+                onChanged: (iface) =>
+                    setState(() => _selectedInterface = iface),
               ),
             ],
 
@@ -256,10 +269,12 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
               const SizedBox(height: 16),
               _SectionHeader('GrandMA2/3-Konsole'),
               Row(children: [
-                Expanded(flex: 3, child: _Field('IP-Adresse (MA)', _maHostCtrl)),
+                Expanded(
+                    flex: 3, child: _Field('IP-Adresse (MA)', _maHostCtrl)),
                 const SizedBox(width: 12),
-                Expanded(child: _Field('OSC-Port', _maPortCtrl,
-                    keyboardType: TextInputType.number)),
+                Expanded(
+                    child: _Field('OSC-Port', _maPortCtrl,
+                        keyboardType: TextInputType.number)),
               ]),
             ],
 
@@ -321,7 +336,10 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
   }
 
   Future<void> _scanForServers() async {
-    setState(() { _scanning = true; _discovered = []; });
+    setState(() {
+      _scanning = true;
+      _discovered = [];
+    });
     final found = await MdnsDiscovery.discover();
     if (!mounted) return;
     setState(() {
@@ -364,7 +382,8 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
         deviceId: _deviceId ?? '',
       );
     } else {
-      final sessionId = _selectedSession?.sessionId ?? _sessionIdCtrl.text.trim();
+      final sessionId =
+          _selectedSession?.sessionId ?? _sessionIdCtrl.text.trim();
       if (sessionId.isEmpty) return;
       await notifier.joinSession(
         host: host,
@@ -385,7 +404,9 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
 
     if (_selectedTasks.contains(NodeTask.NODE_TASK_AUDIO_OUTPUT)) {
       if (_selectedInterface != null) {
-        await ref.read(audioNodeProvider.notifier).selectInterface(_selectedInterface!);
+        await ref
+            .read(audioNodeProvider.notifier)
+            .selectInterface(_selectedInterface!);
       }
       await ref.read(audioNodeProvider.notifier).startAudioNode();
     }
@@ -427,7 +448,8 @@ class _Field extends StatelessWidget {
         padding: const EdgeInsets.only(bottom: 12),
         child: TextField(
           controller: controller,
-          decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
+          decoration: InputDecoration(
+              labelText: label, border: const OutlineInputBorder()),
           keyboardType: keyboardType,
           obscureText: obscure,
         ),
@@ -508,7 +530,8 @@ class _ServerDiscoveryWidget extends StatelessWidget {
           ),
         if (discovered.isNotEmpty) ...[
           const SizedBox(height: 8),
-          const Text('Gefundene Server:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+          const Text('Gefundene Server:',
+              style: TextStyle(fontSize: 12, color: Colors.grey)),
           const SizedBox(height: 4),
           ...discovered.map((s) => Card(
                 margin: const EdgeInsets.only(bottom: 4),
@@ -701,11 +724,11 @@ class _NodeTaskSelector extends StatelessWidget {
   const _NodeTaskSelector({required this.selected, required this.onChanged});
 
   static const _tasks = [
-    (NodeTask.NODE_TASK_VIEWER,       'Viewer',   Icons.visibility),
-    (NodeTask.NODE_TASK_AUDIO_OUTPUT, 'Audio',    Icons.volume_up),
-    (NodeTask.NODE_TASK_MA_OSC,       'GrandMA',  Icons.light_mode),
-    (NodeTask.NODE_TASK_MASTER,       'Master',   Icons.laptop),
-    (NodeTask.NODE_TASK_EDITOR,       'Editor',   Icons.edit_note),
+    (NodeTask.NODE_TASK_VIEWER, 'Viewer', Icons.visibility),
+    (NodeTask.NODE_TASK_AUDIO_OUTPUT, 'Audio', Icons.volume_up),
+    (NodeTask.NODE_TASK_MA_OSC, 'GrandMA', Icons.light_mode),
+    (NodeTask.NODE_TASK_MASTER, 'Master', Icons.laptop),
+    (NodeTask.NODE_TASK_EDITOR, 'Editor', Icons.edit_note),
   ];
 
   @override
@@ -715,7 +738,10 @@ class _NodeTaskSelector extends StatelessWidget {
       children: [
         Text(
           'Aufgaben dieses Geräts (Mehrfachauswahl)',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+          style: Theme.of(context)
+              .textTheme
+              .bodySmall
+              ?.copyWith(color: Colors.grey),
         ),
         const SizedBox(height: 8),
         Wrap(

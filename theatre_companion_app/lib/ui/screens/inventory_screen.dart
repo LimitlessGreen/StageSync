@@ -179,7 +179,8 @@ class _InventoryItemCard extends StatelessWidget {
                   border: Border.all(color: color, width: 2),
                 ),
                 child: Center(
-                    child: Icon(inventoryStatusIcon(st), color: color, size: 20)),
+                    child:
+                        Icon(inventoryStatusIcon(st), color: color, size: 20)),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -323,9 +324,8 @@ class _StatusChangeSheet extends StatelessWidget {
                 ),
                 title: Text(s.label,
                     style: TextStyle(
-                        fontWeight: isActive
-                            ? FontWeight.bold
-                            : FontWeight.normal)),
+                        fontWeight:
+                            isActive ? FontWeight.bold : FontWeight.normal)),
                 trailing:
                     isActive ? Icon(Icons.check_circle, color: color) : null,
                 onTap: () {
@@ -417,8 +417,7 @@ class _AddItemDialogState extends State<_AddItemDialog> {
                     color: sel ? color : null,
                     fontWeight: sel ? FontWeight.bold : FontWeight.normal,
                   ),
-                  side: BorderSide(
-                      color: sel ? color : Colors.transparent),
+                  side: BorderSide(color: sel ? color : Colors.transparent),
                 );
               }).toList(),
             ),
@@ -452,9 +451,8 @@ class _AddItemDialogState extends State<_AddItemDialog> {
     await widget.ref.read(inventoryProvider.notifier).addItem(
           itemId: id,
           statusId: _selectedStatus.code,
-          locationTag: _locCtrl.text.trim().isEmpty
-              ? null
-              : _locCtrl.text.trim(),
+          locationTag:
+              _locCtrl.text.trim().isEmpty ? null : _locCtrl.text.trim(),
         );
     if (mounted) Navigator.pop(context);
   }
@@ -513,4 +511,3 @@ IconData inventoryStatusIcon(InventoryStatus s) => switch (s) {
       InventoryStatus.missing => Icons.search_off,
       InventoryStatus.damaged => Icons.warning_amber_outlined,
     };
-
