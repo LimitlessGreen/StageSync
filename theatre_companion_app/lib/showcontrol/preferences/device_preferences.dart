@@ -5,6 +5,8 @@ const _kDeviceId = 'stagesync_device_id';
 const _kConnectHost = 'stagesync_connect_host';
 const _kConnectPort = 'stagesync_connect_port';
 const _kDeviceName = 'stagesync_device_name';
+const _kPreferredAudioDevice = 'stagesync_preferred_audio_device';
+const _kAudioSetupDone = 'stagesync_audio_setup_done';
 
 const _defaultHost = '127.0.0.1';
 const _defaultPort = 50051;
@@ -42,6 +44,26 @@ class DevicePreferences {
     await prefs.setString(_kConnectHost, host);
     await prefs.setInt(_kConnectPort, port);
     await prefs.setString(_kDeviceName, deviceName);
+  }
+
+  static Future<String?> getPreferredAudioDeviceName() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_kPreferredAudioDevice);
+  }
+
+  static Future<void> savePreferredAudioDeviceName(String name) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kPreferredAudioDevice, name);
+  }
+
+  static Future<bool> isAudioSetupDone() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_kAudioSetupDone) ?? false;
+  }
+
+  static Future<void> markAudioSetupDone() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kAudioSetupDone, true);
   }
 }
 

@@ -39,7 +39,7 @@ import '../screens/nodes/node_management_panel.dart';
 import '../screens/settings/settings_screen.dart';
 import '../screens/media/media_manager_screen.dart';
 import '../screens/audio/local_audio_panel.dart';
-import '../../providers/embedded_server_provider.dart';
+import '../screens/session/session_settings_panel.dart';
 import '../../providers/standalone_bootstrap_provider.dart';
 import '../../preferences/device_preferences.dart';
 import '../../providers/grid_provider.dart';
@@ -80,7 +80,7 @@ class _ScShellState extends ConsumerState<ScShell>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 6, vsync: this);
+    _tabController = TabController(length: 7, vsync: this);
     _rightTabController = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(showControlProvider.notifier).initialize();
@@ -132,6 +132,14 @@ class _ScShellState extends ConsumerState<ScShell>
     final idx = cues.indexWhere((c) => c.id == _selectedCueId);
     final next = (idx + delta).clamp(0, cues.length - 1);
     setState(() => _selectedCueId = cues[next].id);
+  }
+
+  void _openSessionTab() {
+    setState(() {
+      _bottomPanelOpen = true;
+      _lastOpenTab = 5;
+      _tabController.animateTo(5);
+    });
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
@@ -201,6 +209,7 @@ class _ScShellState extends ConsumerState<ScShell>
               _lastOpenTab = 2;
               _tabController.animateTo(2);
             }),
+            onOpenSessionPanel: _openSessionTab,
           ),
           if (sessionState.health != ConnectionHealth.connected)
             _ConnectionBanner(
@@ -450,64 +459,20 @@ class _HeaderBar extends ConsumerWidget {
   final VoidCallback onLeave;
   final VoidCallback onOpenAudioPanel;
   final VoidCallback onOpenNodesPanel;
+  final VoidCallback onOpenSessionPanel;
 
   const _HeaderBar({
     required this.sessionName,
     required this.onLeave,
     required this.onOpenAudioPanel,
     required this.onOpenNodesPanel,
+    required this.onOpenSessionPanel,
   });
 
   void _openSettings(BuildContext context) {
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => const SettingsScreen(),
     ));
-  }
-
-  void _showShareDialog(BuildContext context, WidgetRef ref) {
-    final session = ref.read(sessionProvider).session;
-    final port = ref.read(embeddedPortProvider);
-    final sessionId = session?.sessionId ?? '—';
-    final sessionName = session?.name ?? '—';
-
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.share_outlined, size: 20),
-            SizedBox(width: 8),
-            Text('Session teilen'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Andere Geräte im Netz können dieser Session beitreten:',
-              style: TextStyle(color: Colors.white70, fontSize: 13),
-            ),
-            const SizedBox(height: 16),
-            _ShareInfoRow(label: 'Session', value: sessionName),
-            _ShareInfoRow(label: 'Port', value: '$port'),
-            _ShareInfoRow(label: 'Session-ID', value: sessionId),
-            const SizedBox(height: 8),
-            const Text(
-              'Tipp: Der Server kündigt sich via mDNS an — andere StageSync-Geräte '
-              'finden ihn automatisch über "Im Netz suchen".',
-              style: TextStyle(color: Colors.white38, fontSize: 11),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Schließen'),
-          ),
-        ],
-      ),
-    );
   }
 
   void _showSwitchSessionDialog(BuildContext context, WidgetRef ref) {
@@ -566,15 +531,15 @@ class _HeaderBar extends ConsumerWidget {
             constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             onPressed: () => _openSettings(context),
           ),
-          // Standalone: Share + Switch; Remote: nur Logout.
+          // Standalone: Session-Details + Switch; Remote: nur Logout.
           if (isStandalone) ...[
             IconButton(
               icon: const Icon(Icons.group_add_outlined, size: 16),
               color: ScColors.textDim,
-              tooltip: 'Session teilen — andere Geräte einladen',
+              tooltip: 'Session-Details & Freigabe',
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-              onPressed: () => _showShareDialog(context, ref),
+              onPressed: () => onOpenSessionPanel(),
             ),
             IconButton(
               icon: const Icon(Icons.swap_horiz, size: 16),
@@ -639,36 +604,6 @@ class _HeaderBar extends ConsumerWidget {
           'GrandMA OSC Verbindungsfehler  ·  Klicken → Nodes-Panel',
         _ => 'GrandMA OSC nicht verbunden  ·  Klicken → Nodes-Panel',
       };
-}
-
-// ── Share-Dialog Helper ───────────────────────────────────────────────────────
-
-class _ShareInfoRow extends StatelessWidget {
-  final String label;
-  final String value;
-  const _ShareInfoRow({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 80,
-              child: Text('$label:',
-                  style: const TextStyle(color: Colors.white54, fontSize: 12)),
-            ),
-            Expanded(
-              child: SelectableText(
-                value,
-                style: const TextStyle(
-                    fontFamily: 'monospace', fontSize: 13, color: Colors.white),
-              ),
-            ),
-          ],
-        ),
-      );
 }
 
 // ── Switch-Session-Dialog ─────────────────────────────────────────────────────
@@ -984,6 +919,7 @@ class _BottomTabPanel extends ConsumerWidget {
         const NodeManagementPanel(),
         const LocalAudioPanel(),
         _DesktopTalkbackPanel(domainState: domainState),
+        const SessionSettingsPanel(),
         const Padding(padding: EdgeInsets.all(8), child: ScGridView()),
       ],
     );
@@ -1019,6 +955,7 @@ class _BottomBar extends StatelessWidget {
               Tab(text: 'NODES', height: 36),
               Tab(text: 'AUDIO', height: 36),
               Tab(text: 'TALKBACK', height: 36),
+              Tab(text: 'SESSION', height: 36),
               Tab(text: 'GRID', height: 36),
             ],
           ),

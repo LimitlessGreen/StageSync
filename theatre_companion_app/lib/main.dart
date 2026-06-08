@@ -98,10 +98,12 @@ class _StandaloneBootstrapScreen extends ConsumerWidget {
       loading: () => const _SplashScreen(),
       data: (_) {
         // Session sollte jetzt aktiv sein — sessionProvider-Watch oben greift.
-        // Falls nicht (edge case: Audio-Fehler aber Session ok), zeigen wir
-        // trotzdem die Shell falls session aktiv ist, sonst Session-Screen.
+        // Wenn nach dem Bootstrap keine Session aktiv ist, liegt ein Fehler vor.
         final s = ref.read(sessionProvider);
-        return s.isInSession ? const ScAdaptiveShell() : const SessionScreen();
+        if (s.isInSession) return const ScAdaptiveShell();
+        return const _BootstrapErrorScreen(
+          error: 'Standalone-Session konnte nicht gestartet werden.',
+        );
       },
       error: (e, _) => _BootstrapErrorScreen(error: e.toString()),
     );
@@ -200,43 +202,10 @@ class _SplashScreen extends StatelessWidget {
                         fontWeight: FontWeight.bold,
                       )),
               const SizedBox(height: 8),
-              const Text('Netzwerk wird initialisiert…',
+              const Text('Startet lokal…',
                   style: TextStyle(color: Colors.white54)),
               const SizedBox(height: 32),
               const SizedBox(width: 200, child: LinearProgressIndicator()),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Error
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _ErrorScreen extends StatelessWidget {
-  final String error;
-  const _ErrorScreen({required this.error});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.error_outline, size: 52, color: Colors.red),
-              const SizedBox(height: 16),
-              const Text('Netzwerk-Stack failed',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              Text(error,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white54)),
             ],
           ),
         ),

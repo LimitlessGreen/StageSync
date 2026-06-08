@@ -313,40 +313,12 @@ class _NodeDetailColumn extends ConsumerStatefulWidget {
 
 class _NodeDetailColumnState extends ConsumerState<_NodeDetailColumn> {
   int? _selectedDeviceIdx;
-  late final TextEditingController _sampleRateCtrl;
-  late final TextEditingController _channelsCtrl;
-  Set<AudioBackend> _selectedBackends = <AudioBackend>{};
-  AudioBackend? _preferredBackend;
-
-  @override
-  void initState() {
-    super.initState();
-    _sampleRateCtrl = TextEditingController();
-    _channelsCtrl = TextEditingController();
-    _syncAudioConfigFromNode();
-  }
-
-  @override
-  void dispose() {
-    _sampleRateCtrl.dispose();
-    _channelsCtrl.dispose();
-    super.dispose();
-  }
 
   @override
   void didUpdateWidget(_NodeDetailColumn old) {
     super.didUpdateWidget(old);
     if (old.node.nodeId != widget.node.nodeId) {
-      _selectedDeviceIdx = null;
-      _syncAudioConfigFromNode();
-      return;
-    }
-    if (old.node.backendPriority != widget.node.backendPriority ||
-        old.node.activeBackend != widget.node.activeBackend ||
-        old.node.sampleRate != widget.node.sampleRate ||
-        old.node.channels != widget.node.channels ||
-        old.node.availableDevices != widget.node.availableDevices) {
-      _syncAudioConfigFromNode();
+      setState(() => _selectedDeviceIdx = null);
     }
   }
 
@@ -365,61 +337,6 @@ class _NodeDetailColumnState extends ConsumerState<_NodeDetailColumn> {
     return i >= 0 ? i : null;
   }
 
-  void _syncAudioConfigFromNode() {
-    final ordered =
-        _effectiveBackendOrder(_backendChoices(widget.node.availableDevices));
-    _selectedBackends = ordered.toSet();
-    _preferredBackend = ordered.isNotEmpty ? ordered.first : null;
-    _sampleRateCtrl.text = widget.node.sampleRate?.toString() ?? '';
-    _channelsCtrl.text = widget.node.channels?.toString() ?? '';
-  }
-
-  List<AudioBackend> _backendChoices(List<AudioDevice> devices) {
-    final ordered = <AudioBackend>[];
-    void add(AudioBackend? backend) {
-      if (backend == null ||
-          backend == AudioBackend.unknown ||
-          ordered.contains(backend)) {
-        return;
-      }
-      ordered.add(backend);
-    }
-
-    for (final backend in widget.node.backendPriority) {
-      add(backend);
-    }
-    add(widget.node.activeBackend);
-    for (final device in devices) {
-      add(device.backend);
-    }
-    return ordered;
-  }
-
-  List<AudioBackend> _effectiveBackendOrder(List<AudioBackend> available) {
-    final ordered = <AudioBackend>[];
-    void add(AudioBackend? backend) {
-      if (backend == null ||
-          backend == AudioBackend.unknown ||
-          ordered.contains(backend)) {
-        return;
-      }
-      ordered.add(backend);
-    }
-
-    add(_preferredBackend);
-    for (final backend in widget.node.backendPriority) {
-      add(backend);
-    }
-    add(widget.node.activeBackend);
-    for (final backend in _selectedBackends) {
-      add(backend);
-    }
-    for (final backend in available) {
-      add(backend);
-    }
-    return ordered.where(_selectedBackends.contains).toList();
-  }
-
   @override
   Widget build(BuildContext context) {
     final session = ref.watch(sessionProvider);
@@ -436,8 +353,6 @@ class _NodeDetailColumnState extends ConsumerState<_NodeDetailColumn> {
         ? (audioStatus.selectedDevice ?? node.selectedAudioDevice)
         : node.selectedAudioDevice;
     final effectiveIdx = _effectiveIdx(devices, currentDevice, isLocalNode);
-    final backendChoices = _backendChoices(devices);
-    final backendOrder = _effectiveBackendOrder(backendChoices);
     final activeBackend = node.activeBackend ?? currentDevice?.backend;
 
     return SingleChildScrollView(
@@ -484,271 +399,81 @@ class _NodeDetailColumnState extends ConsumerState<_NodeDetailColumn> {
             ),
           ],
           if (node.isAudio) ...[
-            // ── Audio device section ──────────────────────────────────────
+            // ── Audio-Zusammenfassung ─────────────────────────────────────
             const Divider(height: 1, color: ScColors.divider),
-            _SectionHeader('AUDIO-GERÄT'),
-            if (devices.isEmpty)
+            _SectionHeader('AUDIO-AUSGABE'),
+            if (isLocalNode)
+              // Lokaler Node: kompakte Statusanzeige + Link zum Audio-Tab
+              _LocalAudioSummary(
+                audioStatus: audioStatus,
+                isRunning: isLocalAudioOk,
+                currentDevice: currentDevice,
+                activeBackend: activeBackend,
+              )
+            else ...[
+              // Remote Node: Geräte-Auswahl bleibt hier
+              if (devices.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: ScSpacing.panelPad, vertical: 6),
+                  child: Text(
+                    'Keine Gerätliste',
+                    style: ScText.label.copyWith(color: ScColors.textDim),
+                  ),
+                )
+              else
+                ...devices.asMap().entries.map((e) => _DeviceSelectRow(
+                      device: e.value,
+                      isSelected: effectiveIdx == e.key,
+                      isCurrent: false,
+                      onTap: () => setState(() => _selectedDeviceIdx = e.key),
+                    )),
               Padding(
                 padding: const EdgeInsets.symmetric(
                     horizontal: ScSpacing.panelPad, vertical: 6),
-                child: Text(
-                  isLocalNode
-                      ? (isLocalAudioOk
-                          ? 'Keine Geräte gefunden'
-                          : 'Audio-Node inaktiv')
-                      : 'Keine Gerätliste',
-                  style: ScText.label.copyWith(color: ScColors.textDim),
-                ),
-              )
-            else
-              ...devices.asMap().entries.map((e) => _DeviceSelectRow(
-                    device: e.value,
-                    isSelected: effectiveIdx == e.key,
-                    isCurrent:
-                        isLocalNode && currentDevice?.name == e.value.name,
-                    onTap: () => setState(() => _selectedDeviceIdx = e.key),
-                  )),
-            // Device action buttons
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: ScSpacing.panelPad, vertical: 6),
-              child: Row(
-                children: [
-                  ScButton(
-                    label: 'Setzen',
-                    icon: Icons.check,
-                    variant: ScButtonVariant.secondary,
-                    size: ScButtonSize.compact,
-                    onPressed: (effectiveIdx != null && canInteract)
-                        ? () {
-                            if (isLocalNode) {
-                              ref
-                                  .read(audioNodeProvider.notifier)
-                                  .selectDevice(devices[effectiveIdx]);
-                            }
-                            ref
-                                .read(nodeManagementProvider.notifier)
-                                .setAudioDevice(
-                                  targetNodeId: node.nodeId,
-                                  deviceIndex: devices[effectiveIdx].index,
-                                  deviceName: devices[effectiveIdx].name,
-                                );
-                          }
-                        : null,
-                  ),
-                  const SizedBox(width: 6),
-                  ScButton(
-                    label: 'Default',
-                    icon: Icons.restore,
-                    variant: ScButtonVariant.ghost,
-                    size: ScButtonSize.compact,
-                    onPressed: canInteract
-                        ? () {
-                            if (isLocalNode) {
-                              ref
-                                  .read(audioNodeProvider.notifier)
-                                  .resetToDefaultDevice();
-                            }
-                            ref
-                                .read(nodeManagementProvider.notifier)
-                                .resetToDefault(targetNodeId: node.nodeId);
-                          }
-                        : null,
-                  ),
-                  if (mgmtState.isSending) ...[
-                    const SizedBox(width: 8),
-                    const SizedBox(
-                      width: 12,
-                      height: 12,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: ScColors.active),
+                child: Row(
+                  children: [
+                    ScButton(
+                      label: 'Setzen',
+                      icon: Icons.check,
+                      variant: ScButtonVariant.secondary,
+                      size: ScButtonSize.compact,
+                      onPressed: (effectiveIdx != null && canInteract)
+                          ? () => ref
+                              .read(nodeManagementProvider.notifier)
+                              .setAudioDevice(
+                                targetNodeId: node.nodeId,
+                                deviceIndex: devices[effectiveIdx].index,
+                                deviceName: devices[effectiveIdx].name,
+                              )
+                          : null,
                     ),
-                  ],
-                ],
-              ),
-            ),
-            const Divider(height: 1, color: ScColors.divider),
-            _SectionHeader('BACKEND'),
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: ScSpacing.panelPad, vertical: 6),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _PropRow(
-                    'Aktiv',
-                    activeBackend == null
-                        ? 'Nicht gemeldet'
-                        : audioBackendToWireName(activeBackend).toUpperCase(),
-                  ),
-                  _PropRow(
-                    'Order',
-                    backendOrder.isEmpty
-                        ? 'Nicht konfiguriert'
-                        : backendOrder
-                            .map((b) => audioBackendToWireName(b).toUpperCase())
-                            .join(' → '),
-                  ),
-                  const SizedBox(height: 8),
-                  if (backendChoices.isEmpty)
-                    Text(
-                      'Keine Backend-Informationen verfügbar',
-                      style: ScText.label.copyWith(color: ScColors.textDim),
-                    )
-                  else ...[
-                    Text('Bevorzugtes Backend', style: ScText.label),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: backendChoices.map((backend) {
-                        final selected = _preferredBackend == backend;
-                        return ChoiceChip(
-                          label: Text(
-                              audioBackendToWireName(backend).toUpperCase()),
-                          selected: selected,
-                          onSelected: canInteract
-                              ? (_) => setState(() {
-                                    _preferredBackend = backend;
-                                    _selectedBackends.add(backend);
-                                  })
-                              : null,
-                        );
-                      }).toList(),
+                    const SizedBox(width: 6),
+                    ScButton(
+                      label: 'Default',
+                      icon: Icons.restore,
+                      variant: ScButtonVariant.ghost,
+                      size: ScButtonSize.compact,
+                      onPressed: canInteract
+                          ? () => ref
+                              .read(nodeManagementProvider.notifier)
+                              .resetToDefault(targetNodeId: node.nodeId)
+                          : null,
                     ),
-                    const SizedBox(height: 8),
-                    Text('Fallbacks aktivieren', style: ScText.label),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 6,
-                      runSpacing: 6,
-                      children: backendChoices.map((backend) {
-                        final selected = _selectedBackends.contains(backend);
-                        final isPreferred = _preferredBackend == backend;
-                        return FilterChip(
-                          label: Text(
-                            '${audioBackendToWireName(backend).toUpperCase()}${isPreferred ? ' • PREF' : ''}',
-                          ),
-                          selected: selected,
-                          onSelected: canInteract
-                              ? (value) => setState(() {
-                                    if (value) {
-                                      _selectedBackends.add(backend);
-                                      _preferredBackend ??= backend;
-                                    } else {
-                                      _selectedBackends.remove(backend);
-                                      if (_preferredBackend == backend) {
-                                        _preferredBackend =
-                                            _selectedBackends.isNotEmpty
-                                                ? _selectedBackends.first
-                                                : null;
-                                      }
-                                    }
-                                  })
-                              : null,
-                        );
-                      }).toList(),
-                    ),
-                  ],
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      ScButton(
-                        label: 'Backend anwenden',
-                        icon: Icons.tune,
-                        variant: ScButtonVariant.secondary,
-                        size: ScButtonSize.compact,
-                        onPressed: canInteract && backendChoices.isNotEmpty
-                            ? () => ref
-                                .read(nodeManagementProvider.notifier)
-                                .setAudioBackendPriority(
-                                  targetNodeId: node.nodeId,
-                                  preferredBackend: _preferredBackend,
-                                  backendPriority: backendOrder,
-                                )
-                            : null,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1, color: ScColors.divider),
-            _SectionHeader('AUDIO-FORMAT'),
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: ScSpacing.panelPad, vertical: 6),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _PropRow(
-                    'Aktuell',
-                    node.sampleRate != null && node.channels != null
-                        ? '${node.sampleRate} Hz / ${node.channels} ch'
-                        : 'Nicht gemeldet',
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _sampleRateCtrl,
-                          keyboardType: TextInputType.number,
-                          style: ScText.label
-                              .copyWith(color: ScColors.textPrimary),
-                          decoration: const InputDecoration(
-                            labelText: 'Sample-Rate (Hz)',
-                            isDense: true,
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
+                    if (mgmtState.isSending) ...[
                       const SizedBox(width: 8),
-                      Expanded(
-                        child: TextField(
-                          controller: _channelsCtrl,
-                          keyboardType: TextInputType.number,
-                          style: ScText.label
-                              .copyWith(color: ScColors.textPrimary),
-                          decoration: const InputDecoration(
-                            labelText: 'Kanäle',
-                            isDense: true,
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
+                      const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: ScColors.active),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      ScButton(
-                        label: 'Format anwenden',
-                        icon: Icons.equalizer,
-                        variant: ScButtonVariant.secondary,
-                        size: ScButtonSize.compact,
-                        onPressed: canInteract
-                            ? () {
-                                final sampleRate =
-                                    int.tryParse(_sampleRateCtrl.text.trim());
-                                final channels =
-                                    int.tryParse(_channelsCtrl.text.trim());
-                                ref
-                                    .read(nodeManagementProvider.notifier)
-                                    .setAudioFormat(
-                                      targetNodeId: node.nodeId,
-                                      sampleRate: sampleRate,
-                                      channels: channels,
-                                    );
-                              }
-                            : null,
-                      ),
-                    ],
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            // ── Test signal ───────────────────────────────────────────────
+            ],
+            // Test-Signal bleibt für alle Audio-Nodes
             const Divider(height: 1, color: ScColors.divider),
             _SectionHeader('TEST-SIGNAL'),
             Padding(
@@ -984,6 +709,88 @@ class _TestSignalRowState extends ConsumerState<_TestSignalRow> {
               style: ScText.label.copyWith(color: ScColors.textDim)),
         ],
       ],
+    );
+  }
+}
+
+// ── Local Audio Summary ────────────────────────────────────────────────────────
+
+class _LocalAudioSummary extends StatelessWidget {
+  final AudioNodeStatus audioStatus;
+  final bool isRunning;
+  final AudioDevice? currentDevice;
+  final AudioBackend? activeBackend;
+
+  const _LocalAudioSummary({
+    required this.audioStatus,
+    required this.isRunning,
+    required this.currentDevice,
+    required this.activeBackend,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final statusColor = isRunning ? ScColors.active : ScColors.textDim;
+    final statusLabel = isRunning ? 'AKTIV' : 'INAKTIV';
+    final deviceName = currentDevice?.name ?? 'System-Default';
+    final backendName = activeBackend != null
+        ? audioBackendToWireName(activeBackend!).toUpperCase()
+        : null;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+          horizontal: ScSpacing.panelPad, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 6,
+                height: 6,
+                margin: const EdgeInsets.only(right: 6),
+                decoration:
+                    BoxDecoration(color: statusColor, shape: BoxShape.circle),
+              ),
+              Text(
+                statusLabel,
+                style:
+                    ScText.status.copyWith(color: statusColor, fontSize: 10),
+              ),
+              if (isRunning) ...[
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    deviceName,
+                    style: ScText.label
+                        .copyWith(color: ScColors.textSecondary),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (backendName != null)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: ScColors.surface2,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                    child: Text(
+                      backendName,
+                      style:
+                          ScText.statusSmall.copyWith(fontSize: 9),
+                    ),
+                  ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '→ Gerät & Format im AUDIO-Tab konfigurieren.',
+            style: ScText.label.copyWith(color: ScColors.textDim, fontSize: 10),
+          ),
+        ],
+      ),
     );
   }
 }
