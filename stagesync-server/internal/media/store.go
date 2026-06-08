@@ -266,7 +266,7 @@ func (s *Store) hashLocked(name string, fi os.FileInfo) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {
 		return "", err
@@ -404,7 +404,7 @@ func parseWAV(path string) *AudioInfo {
 	if err != nil {
 		return nil
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	// RIFF-Header: "RIFF" (4) + chunkSize (4) + "WAVE" (4) = 12 Bytes
 	var riff [12]byte

@@ -14,7 +14,7 @@ func parseMP3(path string) *AudioInfo {
 	if err != nil {
 		return nil
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	dec, err := mp3dec.NewDecoder(f)
 	if err != nil {

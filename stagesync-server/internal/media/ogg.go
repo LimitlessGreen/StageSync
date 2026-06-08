@@ -12,7 +12,7 @@ func parseOGG(path string) *AudioInfo {
 	if err != nil {
 		return nil
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	r, err := oggvorbis.NewReader(f)
 	if err != nil {
