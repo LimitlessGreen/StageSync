@@ -273,10 +273,24 @@ jobs:
           retention-days: 30
           compression-level: 0
 
-  # ── Linux AppImage ───────────────────────────────────────────────────────────
+  # ── Linux packages (AppImage + .deb + .rpm + tar.gz, x86_64 + aarch64) ────────
   linux:
-    name: Linux AppImage
-    runs-on: ubuntu-latest
+    name: Linux ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+            flutter_arch: x64
+            deb_arch: amd64
+            rpm_arch: x86_64
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+            flutter_arch: arm64
+            deb_arch: arm64
+            rpm_arch: aarch64
     defaults:
       run:
         working-directory: theatre_companion_app
@@ -300,7 +314,8 @@ jobs:
           sudo apt-get install -y \
             ninja-build libgtk-3-dev libblkid-dev liblzma-dev \
             libstdc++-12-dev cmake clang pkg-config libbluetooth-dev \
-            libasound2-dev libfuse2 fuse imagemagick
+            libasound2-dev libfuse2 fuse imagemagick rpm ruby-dev
+          sudo gem install fpm --no-document
 
       - name: Flutter pub get
         run: flutter pub get
@@ -308,13 +323,13 @@ jobs:
       - name: Build Flutter Linux
         run: flutter build linux --release
 
-      - name: Build standalone server (Linux)
+      - name: Build standalone server
         working-directory: stagesync-server
         env:
           CGO_ENABLED: '1'
         run: |
           go build -ldflags="-s -w" \
-            -o ../theatre_companion_app/build/linux/x64/release/bundle/stagesync-server \
+            -o ../theatre_companion_app/build/linux/${{ matrix.flutter_arch }}/release/bundle/stagesync-server \
             ./cmd/server/
 
       - name: Get version
@@ -329,15 +344,14 @@ jobs:
       - name: Download appimagetool
         run: |
           wget -q \
-            "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage" \
+            "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-${{ matrix.arch }}.AppImage" \
             -O /usr/local/bin/appimagetool
           chmod +x /usr/local/bin/appimagetool
 
-      - name: Build AppImage
+      - name: Prepare AppDir
         run: |
-          BUNDLE="build/linux/x64/release/bundle"
+          BUNDLE="build/linux/${{ matrix.flutter_arch }}/release/bundle"
           APPDIR="AppDir"
-          VER="${{ steps.version.outputs.VER }}"
 
           mkdir -p \
             "$APPDIR/usr/bin" \
@@ -347,21 +361,21 @@ jobs:
           cp -r "$BUNDLE/." "$APPDIR/usr/bin/"
 
           cat > "$APPDIR/AppRun" << 'APPRUN'
-          #!/bin/bash
-          HERE="$(dirname "$(readlink -f "$0")")"
-          export LD_LIBRARY_PATH="$HERE/usr/bin/lib:${LD_LIBRARY_PATH}"
-          exec "$HERE/usr/bin/theatre_companion_app" "$@"
-          APPRUN
+#!/bin/bash
+HERE="$(dirname "$(readlink -f "$0")")"
+export LD_LIBRARY_PATH="$HERE/usr/bin/lib:${LD_LIBRARY_PATH}"
+exec "$HERE/usr/bin/theatre_companion_app" "$@"
+APPRUN
           chmod +x "$APPDIR/AppRun"
 
           cat > "$APPDIR/stagesync.desktop" << 'DESKTOP'
-          [Desktop Entry]
-          Name=StageSync
-          Exec=theatre_companion_app
-          Icon=stagesync
-          Type=Application
-          Categories=AudioVideo;Music;
-          DESKTOP
+[Desktop Entry]
+Name=StageSync
+Exec=theatre_companion_app
+Icon=stagesync
+Type=Application
+Categories=AudioVideo;Music;
+DESKTOP
           cp "$APPDIR/stagesync.desktop" "$APPDIR/usr/share/applications/stagesync.desktop"
 
           ICON_SRC="linux/assets/stagesync.png"
@@ -374,13 +388,72 @@ jobs:
           fi
           cp "$APPDIR/stagesync.png" "$APPDIR/usr/share/icons/hicolor/256x256/apps/stagesync.png"
 
-          ARCH=x86_64 appimagetool "$APPDIR" "StageSync-${VER}-linux-x86_64.AppImage"
+      - name: Build AppImage
+        run: |
+          VER="${{ steps.version.outputs.VER }}"
+          ARCH=${{ matrix.arch }} appimagetool AppDir \
+            "StageSync-${VER}-linux-${{ matrix.arch }}.AppImage"
 
-      - name: Upload Linux AppImage
+      - name: Build .deb
+        run: |
+          VER="${{ steps.version.outputs.VER }}"
+          BUNDLE="build/linux/${{ matrix.flutter_arch }}/release/bundle"
+          cat > /tmp/postinstall.sh << 'EOF'
+#!/bin/bash
+ln -sf /opt/stagesync/theatre_companion_app /usr/local/bin/stagesync
+EOF
+          chmod +x /tmp/postinstall.sh
+          fpm -s dir -t deb \
+            --name stagesync \
+            --version "$VER" \
+            --architecture ${{ matrix.deb_arch }} \
+            --description "StageSync - Theatre Companion App" \
+            --url "https://github.com/${{ github.repository }}" \
+            --maintainer "StageSync Team" \
+            --category sound \
+            --depends libgtk-3-0 \
+            --depends libblkid1 \
+            --after-install /tmp/postinstall.sh \
+            --prefix /opt/stagesync \
+            --package "StageSync-${VER}-linux-${{ matrix.deb_arch }}.deb" \
+            "$BUNDLE/=."
+
+      - name: Build .rpm
+        run: |
+          VER="${{ steps.version.outputs.VER }}"
+          BUNDLE="build/linux/${{ matrix.flutter_arch }}/release/bundle"
+          # RPM versions cannot contain hyphens — replace with ~
+          RPM_VER="${VER//-/\~}"
+          fpm -s dir -t rpm \
+            --name stagesync \
+            --version "$RPM_VER" \
+            --architecture ${{ matrix.rpm_arch }} \
+            --description "StageSync - Theatre Companion App" \
+            --url "https://github.com/${{ github.repository }}" \
+            --maintainer "StageSync Team" \
+            --category "Applications/Multimedia" \
+            --prefix /opt/stagesync \
+            --package "StageSync-${VER}-linux-${{ matrix.rpm_arch }}.rpm" \
+            "$BUNDLE/=."
+
+      - name: Build tar.gz
+        run: |
+          VER="${{ steps.version.outputs.VER }}"
+          BUNDLE="build/linux/${{ matrix.flutter_arch }}/release/bundle"
+          TARNAME="StageSync-${VER}-linux-${{ matrix.arch }}"
+          mkdir "$TARNAME"
+          cp -r "$BUNDLE/." "$TARNAME/"
+          tar -czf "${TARNAME}.tar.gz" "$TARNAME"
+
+      - name: Upload packages
         uses: actions/upload-artifact@v7
         with:
-          name: linux-appimage
-          path: theatre_companion_app/StageSync-${{ steps.version.outputs.VER }}-linux-x86_64.AppImage
+          name: linux-${{ matrix.arch }}-packages
+          path: |
+            theatre_companion_app/StageSync-${{ steps.version.outputs.VER }}-linux-${{ matrix.arch }}.AppImage
+            theatre_companion_app/StageSync-${{ steps.version.outputs.VER }}-linux-${{ matrix.deb_arch }}.deb
+            theatre_companion_app/StageSync-${{ steps.version.outputs.VER }}-linux-${{ matrix.rpm_arch }}.rpm
+            theatre_companion_app/StageSync-${{ steps.version.outputs.VER }}-linux-${{ matrix.arch }}.tar.gz
           retention-days: 30
           compression-level: 0
 
@@ -597,7 +670,14 @@ jobs:
           files: |
             dist/windows-installer/StageSync-${{ steps.version.outputs.VER }}-windows-x64-setup.exe
             dist/macos-dmg/StageSync-${{ steps.version.outputs.VER }}-macos.dmg
-            dist/linux-appimage/StageSync-${{ steps.version.outputs.VER }}-linux-x86_64.AppImage
+            dist/linux-x86_64-packages/StageSync-${{ steps.version.outputs.VER }}-linux-x86_64.AppImage
+            dist/linux-x86_64-packages/StageSync-${{ steps.version.outputs.VER }}-linux-amd64.deb
+            dist/linux-x86_64-packages/StageSync-${{ steps.version.outputs.VER }}-linux-x86_64.rpm
+            dist/linux-x86_64-packages/StageSync-${{ steps.version.outputs.VER }}-linux-x86_64.tar.gz
+            dist/linux-aarch64-packages/StageSync-${{ steps.version.outputs.VER }}-linux-aarch64.AppImage
+            dist/linux-aarch64-packages/StageSync-${{ steps.version.outputs.VER }}-linux-arm64.deb
+            dist/linux-aarch64-packages/StageSync-${{ steps.version.outputs.VER }}-linux-aarch64.rpm
+            dist/linux-aarch64-packages/StageSync-${{ steps.version.outputs.VER }}-linux-aarch64.tar.gz
             dist/stagesync-server-windows-amd64.exe/stagesync-server-windows-amd64.exe
             dist/stagesync-server-linux-amd64/stagesync-server-linux-amd64
             dist/stagesync-server-linux-arm64/stagesync-server-linux-arm64
