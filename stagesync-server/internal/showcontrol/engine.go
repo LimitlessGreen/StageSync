@@ -16,71 +16,82 @@ var (
 )
 
 // AssetWarmer wärmt den Server-RAM-Cache für bevorstehende Audio-Assets vor.
-// Implementiert von media.StoreWarmer; nil-sicher (Engine prüft vor Aufruf).
 type AssetWarmer interface {
 	WarmAssets(ctx context.Context, assetIDs []string)
 	LockForShow()
 	UnlockShow()
 }
 
-// lookAheadN: Anzahl Audio-Cues, die nach jedem GO vorausgeladen werden.
 const lookAheadN = 5
-
-// PrewarmN: Anzahl Audio-Cues die beim Session-Start vom Anfang vorgewärmt werden.
 const PrewarmN = 3
 
-// NodeDispatcher ist das Interface, über das die Engine Befehle an Nodes sendet.
-// Implementiert von node.Dispatcher.
+// NodeDispatcher sendet Befehle an Nodes.
 type NodeDispatcher interface {
 	Dispatch(ctx context.Context, nodeID string, cmd *pb.NodeCommandRequest) error
 	DispatchToTask(ctx context.Context, task pb.NodeTask, cmd *pb.NodeCommandRequest) error
 }
 
 // SilenceDetector liefert erkannte Stille-Offsets für Audio-Assets.
-// Implementiert von audioengine.Engine via AssetSilenceStartMs.
 type SilenceDetector interface {
 	AssetSilenceStartMs(assetID string) (int64, bool)
 }
 
+// ── Transport State Machine ───────────────────────────────────────────────────
+
+// transportPhase ist die explizite Phase des Transport-Zustandsautomaten.
+// Ungültige Kombinationen (z.B. paused+not-running) sind durch den Typ ausgeschlossen.
+type transportPhase int
+
+const (
+	phaseIdle    transportPhase = iota // nichts läuft
+	phaseRunning                        // Cue spielt
+	phasePaused                         // global pausiert
+)
+
+// transport bündelt alle veränderlichen Transport-Felder in einem einzigen Struct.
+// Zugriff ausschließlich unter Engine.mu.
+//
+// Invarianten:
+//   - phaseIdle:    cue=nil, startedAt=zero, frozenElapsed=0
+//   - phaseRunning: cue≠nil, startedAt gesetzt nach Pre-Wait, frozenElapsed=0
+//   - phasePaused:  cue≠nil, startedAt gesetzt, frozenElapsed>0 (inkl. Fade-Dauer)
+type transport struct {
+	phase         transportPhase
+	cue           *pb.Cue
+	startedAt     time.Time     // effektive Startzeit (wird bei Resume angepasst)
+	frozenElapsed time.Duration // bei phasePaused: verstrichene Zeit inkl. Fade-Dauer
+}
+
+// ── Engine ────────────────────────────────────────────────────────────────────
+
 // Engine ist das Show-Control-Herzstück einer Session.
-// Sie verwaltet GO/STOP/PAUSE und koordiniert die Node-Dispatches.
 type Engine struct {
-	mu               sync.Mutex
-	store            *Store
-	dispatcher       NodeDispatcher
-	warmer           AssetWarmer      // optional; nil = kein RAM-Cache-Preloading
-	silenceDetector  SilenceDetector  // optional; nil = Auto-Skip deaktiviert
-	sessionID        string
-	cueListID        string
+	mu              sync.Mutex
+	store           *Store
+	dispatcher      NodeDispatcher
+	warmer          AssetWarmer
+	silenceDetector SilenceDetector
+	sessionID       string
+	cueListID       string
 
-	paused    bool
-	running   bool
-	cancelFn  context.CancelFunc
+	cancelFn context.CancelFunc
 
-	// Transport-Tracking für konsistente verstrichene Zeit über alle Geräte.
-	cueStartedAt  time.Time     // Serverzeit, zu der die aktive Cue gestartet ist
-	pausedElapsed time.Duration // bei Pause: bereits verstrichene Zeit
-	pausedAt      time.Time     // absoluter Pausezeitpunkt (für genauen Snapshot)
+	// tp ist die einzige autoritative Quelle des Transport-Zustands.
+	// Alle Go/Stop/Pause/Resume-Methoden mutieren ausschließlich tp (unter mu).
+	tp transport
 
 	// runningCueIDs: Menge aller gerade ausführenden Cue-IDs.
-	// Bei normalen Cues: {activeCueId}; bei Group-Cues: {groupId} ∪ {childIds…}
-	runningCueIDs map[string]struct{}
-
-	// perCuePausedIDs: Menge aller per-Cue pausierten Cue-IDs.
-	// Unabhängig von globalem Pause — ein einzelner AudioPause-Command auf einem Node.
+	runningCueIDs   map[string]struct{}
 	perCuePausedIDs map[string]struct{}
 
-	// audioTrackers: pro laufender Audio-Cue ein eigener Cancel-Context.
-	// Diese Goroutinen laufen unabhängig vom execCtx weiter — ein neues GO
-	// cancelt nur execCtx, nicht die Hintergrund-Tracker. Nur STOP cancelt sie.
-	// Gespeichert als *audioTrackerEntry (Zeiger = Identitäts-Handle für CompareAndDelete).
+	// audioTrackers: pausierbare Countdown-Goroutinen pro laufender Audio-Cue.
 	audioTrackers sync.Map // map[cueID string]*audioTrackerEntry
 }
 
-// audioTrackerEntry hält den Cancel-Context eines Audio-Hintergrund-Trackers.
-// Der Zeiger dient als Identitäts-Handle für sync.Map.CompareAndDelete.
 type audioTrackerEntry struct {
-	cancel context.CancelFunc
+	cancel   context.CancelFunc
+	pauseCh  chan struct{} // gepuffert(1): Engine → Tracker: Timer einfrieren
+	resumeCh chan struct{} // gepuffert(1): Engine → Tracker: Timer fortsetzen
 }
 
 func (e *Engine) addRunning(ids ...string) {
@@ -125,9 +136,8 @@ func (e *Engine) perCuePausedIDsList() []string {
 	return ids
 }
 
-// PauseCueTracker markiert eine Cue als per-Cue-pausiert und broadcastet CUE_CUE_PAUSED.
-// OccurredAt = jetzt + fadeOutMs, damit der Client-Timer exakt nach Ende des Fades
-// einfriert (analog zur globalen Pause-Logik in Pause()).
+// PauseCueTracker markiert eine Cue als per-Cue-pausiert, friert ihren Tracker-Timer
+// ein und broadcastet CUE_CUE_PAUSED.
 func (e *Engine) PauseCueTracker(cueId string, fadeOutMs float64) {
 	e.mu.Lock()
 	e.addPerCuePaused(cueId)
@@ -135,7 +145,14 @@ func (e *Engine) PauseCueTracker(cueId string, fadeOutMs float64) {
 	runningIds := e.runningCueIDsList()
 	e.mu.Unlock()
 
-	// Zeitpunkt = jetzt + Fade-Dauer: Audio ist erst dann wirklich still.
+	// Tracker-Timer einfrieren — sonst läuft der Countdown während die Cue pausiert ist.
+	if entry, ok := e.audioTrackers.Load(cueId); ok {
+		select {
+		case entry.(*audioTrackerEntry).pauseCh <- struct{}{}:
+		default:
+		}
+	}
+
 	effectivePausedMs := time.Now().UnixMilli() + int64(fadeOutMs)
 	e.store.BroadcastExec(&pb.ShowExecutionEvent{
 		Type:            pb.ShowExecutionEvent_CUE_CUE_PAUSED,
@@ -146,15 +163,22 @@ func (e *Engine) PauseCueTracker(cueId string, fadeOutMs float64) {
 	})
 }
 
-// ResumeCueTracker hebt per-Cue-Pause auf und broadcastet CUE_CUE_RESUMED.
-// OccurredAt = jetzt (Resumezeitpunkt). Der Client berechnet daraus die neue
-// effektive Startzeit: resumeTime - (pausedAt - originalStart).
+// ResumeCueTracker hebt per-Cue-Pause auf, setzt den Tracker-Timer fort und
+// broadcastet CUE_CUE_RESUMED.
 func (e *Engine) ResumeCueTracker(cueId string, fadeInMs float64) {
 	e.mu.Lock()
 	e.removePerCuePaused(cueId)
 	pausedIds := e.perCuePausedIDsList()
 	runningIds := e.runningCueIDsList()
 	e.mu.Unlock()
+
+	// Tracker-Timer fortsetzen.
+	if entry, ok := e.audioTrackers.Load(cueId); ok {
+		select {
+		case entry.(*audioTrackerEntry).resumeCh <- struct{}{}:
+		default:
+		}
+	}
 
 	e.store.BroadcastExec(&pb.ShowExecutionEvent{
 		Type:            pb.ShowExecutionEvent_CUE_CUE_RESUMED,
@@ -174,60 +198,60 @@ func NewEngine(sessionID, cueListID string, store *Store, dispatcher NodeDispatc
 	}
 }
 
-// SetWarmer setzt den Asset-Warmer (RAM-Cache-Preloader). Thread-safe.
-// Kann nach NewEngine gesetzt werden; nil deaktiviert das Preloading.
 func (e *Engine) SetWarmer(w AssetWarmer) {
 	e.mu.Lock()
 	e.warmer = w
 	e.mu.Unlock()
 }
 
-// SetSilenceDetector verbindet den Stille-Detektor. Thread-safe.
-// nil deaktiviert Auto-Skip-Silence für alle Cues dieser Session.
 func (e *Engine) SetSilenceDetector(d SilenceDetector) {
 	e.mu.Lock()
 	e.silenceDetector = d
 	e.mu.Unlock()
 }
 
-// TransportSnapshot beschreibt den aktuellen Transport-Zustand (für den
-// Initial-Sync neuer Watcher).
+// TransportSnapshot liefert den aktuellen Zustand für einen neu verbundenen Watcher.
+// Liest ausschließlich aus e.tp — keine doppelten Lock-Regionen.
 type TransportSnapshot struct {
 	ActiveCue       *pb.Cue
 	Running         bool
 	Paused          bool
-	CueStartedAtMs  int64    // effektive Serverzeit-Startzeit (bei Pause: now - elapsed)
-	PausedAtMs      int64    // nur bei globaler Pause gesetzt
-	PerCuePausedIDs []string // per-Cue pausierte Cue-IDs
+	CueStartedAtMs  int64
+	PausedAtMs      int64
+	PerCuePausedIDs []string
 }
 
-// TransportSnapshot liefert den aktuellen Zustand für einen neu verbundenen Watcher.
 func (e *Engine) TransportSnapshot() TransportSnapshot {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+
+	tp := e.tp
 	ts := TransportSnapshot{
 		ActiveCue:       e.store.GetActiveCue(e.cueListID),
-		Running:         e.running,
-		Paused:          e.paused,
+		Running:         tp.phase != phaseIdle,
+		Paused:          tp.phase == phasePaused,
 		PerCuePausedIDs: e.perCuePausedIDsList(),
 	}
-	if e.paused {
-		// Effektive Startzeit = Pausezeitpunkt minus bereits vergangene Zeit.
-		ts.CueStartedAtMs = e.pausedAt.Add(-e.pausedElapsed).UnixMilli()
-		ts.PausedAtMs = e.pausedAt.UnixMilli()
-	} else if !e.cueStartedAt.IsZero() {
-		ts.CueStartedAtMs = e.cueStartedAt.UnixMilli()
+
+	switch tp.phase {
+	case phaseRunning:
+		if !tp.startedAt.IsZero() {
+			ts.CueStartedAtMs = tp.startedAt.UnixMilli()
+		}
+	case phasePaused:
+		// CueStartedAtMs = tatsächlicher Startzeit-Anker (unveränderlich).
+		ts.CueStartedAtMs = tp.startedAt.UnixMilli()
+		// PausedAtMs = startedAt + frozenElapsed = Zeitpunkt des Einfrierens (inkl. Fade).
+		ts.PausedAtMs = tp.startedAt.Add(tp.frozenElapsed).UnixMilli()
 	}
 	return ts
 }
 
-// Go führt die nächste (oder eine spezifische) Cue aus.
-func (e *Engine) Go(ctx context.Context, cueID string) (*pb.Cue, *pb.Cue, error) {
-	e.mu.Lock()
-	defer e.mu.Unlock()
+// ── Go ────────────────────────────────────────────────────────────────────────
 
+func (e *Engine) Go(ctx context.Context, cueID string) (*pb.Cue, *pb.Cue, error) {
+	// 1. Cue ermitteln (Store-Ops sind thread-safe)
 	var cue *pb.Cue
-	var ok bool
 
 	if cueID != "" {
 		list, found := e.store.GetCueList(e.cueListID)
@@ -237,29 +261,35 @@ func (e *Engine) Go(ctx context.Context, cueID string) (*pb.Cue, *pb.Cue, error)
 		for _, c := range list.Cues {
 			if c.CueId == cueID {
 				cue = c
-				ok = true
 				break
 			}
 		}
 	} else {
+		var ok bool
 		cue, ok = e.store.NextCue(e.cueListID)
+		if !ok || cue == nil {
+			return nil, nil, ErrNoCue
+		}
 	}
-
-	if !ok || cue == nil {
+	if cue == nil {
 		return nil, nil, ErrNoCue
 	}
 
 	e.store.SetActiveCue(e.cueListID, cue.CueId)
 
-	wasRunning := e.running // vor State-Wechsel merken (für Show-Lock-Entscheidung)
-
-	execCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	// 2. Transport-State atomisch setzen (eine einzige Lock-Region)
+	e.mu.Lock()
+	wasRunning := e.tp.phase != phaseIdle
 	if e.cancelFn != nil {
 		e.cancelFn()
+		e.cancelFn = nil
 	}
+	execCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	e.cancelFn = cancel
-	e.running = true
-	e.paused = false
+	// Startzeit wird erst in dispatchCue() nach Pre-Wait gesetzt.
+	e.tp = transport{phase: phaseRunning, cue: cue}
+	warmer := e.warmer
+	e.mu.Unlock()
 
 	go e.dispatchCue(execCtx, cue)
 
@@ -275,72 +305,67 @@ func (e *Engine) Go(ctx context.Context, cueID string) (*pb.Cue, *pb.Cue, error)
 		}
 	}
 
-	// Node-seitiges Preload: nächste Cue direkt auf den Audio-Nodes vorladen.
 	if next != nil {
 		go e.armCue(context.Background(), next)
 	}
 
-	// Server-RAM-Cache: nächste N Audio-Cues vorladen damit StreamFile Cache-Hits liefert.
-	if w := e.warmer; w != nil {
-		if !wasRunning { // erste GO dieser Show: Show-Lock aktivieren
-			w.LockForShow()
+	if warmer != nil {
+		if !wasRunning {
+			warmer.LockForShow()
 		}
 		assetIDs := e.lookAheadAssetIDs(list, cue.CueId, lookAheadN)
 		if len(assetIDs) > 0 {
-			go w.WarmAssets(context.Background(), assetIDs)
+			go warmer.WarmAssets(context.Background(), assetIDs)
 		}
 	}
 
 	return cue, next, nil
 }
 
-// Stop hält alle laufenden Cues an und stoppt Audio auf allen Nodes.
+// ── Stop ──────────────────────────────────────────────────────────────────────
+
+// Stop hält alle laufenden Cues an. Einzelne Lock-Region: runningCueIDs wird
+// atomar gecaptured und gecleart, bevor Tracker-Goroutinen gecancelt werden.
 func (e *Engine) Stop(ctx context.Context) error {
 	e.mu.Lock()
 	if e.cancelFn != nil {
 		e.cancelFn()
 		e.cancelFn = nil
 	}
-	e.running = false
-	e.paused = false
-	e.cueStartedAt = time.Time{}
-	e.pausedElapsed = 0
-	e.pausedAt = time.Time{}
+	e.tp = transport{} // → phaseIdle
 	activeCue := e.store.GetActiveCue(e.cueListID)
-	// Aktive Cue in Store löschen, damit Reconnect-Snapshots korrekt sind.
 	e.store.SetActiveCue(e.cueListID, "")
 	warmer := e.warmer
+	// Capture und clear in einer atomischen Operation: kein Race mit Tracker-Goroutinen.
+	oldRunning := e.runningCueIDs
+	e.runningCueIDs = make(map[string]struct{})
+	e.perCuePausedIDs = make(map[string]struct{})
 	e.mu.Unlock()
 
-	// Alle Audio-Hintergrund-Tracker beenden (stoppen ihre Goroutinen).
-	// runningCueIDs erst bereinigen — so verursachen die aufgeweckten Goroutinen
-	// keinen removeRunning-Race mehr.
-	e.mu.Lock()
-	e.runningCueIDs = make(map[string]struct{})
-	e.mu.Unlock()
+	// Tracker anhand der gecapturten Map canceln — außerhalb des Locks.
+	for id := range oldRunning {
+		if entry, loaded := e.audioTrackers.LoadAndDelete(id); loaded {
+			entry.(*audioTrackerEntry).cancel()
+		}
+	}
+	// Restliche Tracker (z.B. Re-Trigger ohne runningCueID-Eintrag) ebenfalls canceln.
 	e.audioTrackers.Range(func(k, v any) bool {
 		v.(*audioTrackerEntry).cancel()
 		e.audioTrackers.Delete(k)
 		return true
 	})
 
-	// Show beendet → RAM-Cache darf wieder normal evicten.
 	if warmer != nil {
 		warmer.UnlockShow()
 	}
 
-	// AudioStop an alle Audio-Nodes senden (leere CueId = alle stoppen).
-	// Background-Kontext: Stop darf nie verworfen werden.
 	if e.dispatcher != nil {
 		stopCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 		_ = e.dispatcher.DispatchToTask(stopCtx, pb.NodeTask_NODE_TASK_AUDIO_OUTPUT, &pb.NodeCommandRequest{
 			SessionId: e.sessionID,
 			Command: &pb.NodeCommandRequest_AudioStop{
-				AudioStop: &pb.AudioStopCommand{
-					CueId:     "",
-					FadeOutMs: 300,
-				},
+				AudioStop: &pb.AudioStopCommand{CueId: "", FadeOutMs: 300},
 			},
 		})
 	}
@@ -351,15 +376,10 @@ func (e *Engine) Stop(ctx context.Context) error {
 		OccurredAt:  nowProto(),
 	})
 
-	// Re-arm: nach STOP sofort die nächste Cue auf den Nodes vorpreparen,
-	// damit der folgende GO ohne Preload-Wartezeit startet.
 	go e.reArmNext()
-
 	return nil
 }
 
-// reArmNext lädt die nächste (oder erste) Cue nach einem STOP sofort vor.
-// Läuft im Hintergrund damit Stop() nicht blockiert wird.
 func (e *Engine) reArmNext() {
 	next, ok := e.store.NextCue(e.cueListID)
 	if !ok || next == nil {
@@ -368,9 +388,7 @@ func (e *Engine) reArmNext() {
 	e.armCue(context.Background(), next)
 }
 
-// StopCueTracker bricht den Audio-Hintergrund-Tracker einer einzelnen Cue ab,
-// entfernt sie aus runningCueIDs und perCuePausedIDs und broadcastet CUE_DONE.
-// Wird aufgerufen wenn ein Client explizit AudioStop für eine bestimmte Cue sendet.
+// StopCueTracker bricht den Audio-Tracker einer einzelnen Cue ab und broadcastet CUE_DONE.
 func (e *Engine) StopCueTracker(cueId string) {
 	if entry, loaded := e.audioTrackers.LoadAndDelete(cueId); loaded {
 		entry.(*audioTrackerEntry).cancel()
@@ -390,35 +408,18 @@ func (e *Engine) StopCueTracker(cueId string) {
 	})
 }
 
-// pauseFadeMs / resumeFadeMs: kurze Fades gegen Knackser beim Pausieren/Fortsetzen.
+// ── Pause ─────────────────────────────────────────────────────────────────────
+
 const (
 	pauseFadeMs  = 120
 	resumeFadeMs = 120
 )
 
-// Pause hält die aktuelle Cue an: die Voice wird angehalten (Playhead bleibt
-// stehen), der Transport-Timer friert ein. Idempotent.
+// Pause hält die aktuelle Cue an. Einzelne Lock-Region: frozenElapsed wird
+// atomar mit der phase auf phasePaused gesetzt — kein doppelter Lock-Acquire.
 func (e *Engine) Pause(ctx context.Context) error {
-	e.mu.Lock()
-	if e.paused || !e.running {
-		e.mu.Unlock()
-		return nil // bereits pausiert / nichts läuft
-	}
-	if e.cancelFn != nil {
-		e.cancelFn()
-		e.cancelFn = nil
-	}
-	e.paused = true
-	e.pausedAt = time.Now()
-	// Bereits verstrichene Zeit festhalten, damit Resume korrekt fortsetzt.
-	if !e.cueStartedAt.IsZero() {
-		e.pausedElapsed = time.Since(e.cueStartedAt)
-	}
+	// Fade-Parameter aus aktiver Cue lesen (Store-Op ist thread-safe)
 	activeCue := e.store.GetActiveCue(e.cueListID)
-	pausedAt := e.pausedAt
-	e.mu.Unlock()
-
-	// Fade-Dauer aus den Cue-Parametern lesen (falls Audio-Cue mit PauseBehavior gesetzt).
 	fadeOut := float64(pauseFadeMs)
 	if activeCue != nil {
 		if ap, ok := activeCue.Params.(*pb.Cue_Audio); ok && ap != nil {
@@ -428,14 +429,30 @@ func (e *Engine) Pause(ctx context.Context) error {
 		}
 	}
 
-	// Die Fade-Dauer zur bereits verstrichenen Zeit addieren: Audio spielt während
-	// des Ausblendvorgangs weiter. Resume muss den Playhead hinter dem Fade-Ende
-	// verankern, sonst springt der Timer beim Fortsetzen zurück.
+	// Einzige Lock-Region: phase + frozenElapsed atomar setzen.
 	e.mu.Lock()
-	e.pausedElapsed += time.Duration(fadeOut) * time.Millisecond
+	if e.tp.phase != phaseRunning {
+		e.mu.Unlock()
+		return nil
+	}
+	if e.cancelFn != nil {
+		e.cancelFn()
+		e.cancelFn = nil
+	}
+	now := time.Now()
+	var frozenElapsed time.Duration
+	if e.tp.startedAt.IsZero() {
+		// Cue ist noch im Pre-Wait — kein Audio läuft, nur Fade-Dauer merken.
+		frozenElapsed = time.Duration(fadeOut) * time.Millisecond
+	} else {
+		// Tatsächlich verstrichene Zeit + Fade-Dauer: Audio spielt während Fade weiter.
+		frozenElapsed = now.Sub(e.tp.startedAt) + time.Duration(fadeOut)*time.Millisecond
+	}
+	e.tp.phase = phasePaused
+	e.tp.frozenElapsed = frozenElapsed
 	e.mu.Unlock()
 
-	// Audio auf allen Nodes anhalten (nicht stoppen) — mit Fade.
+	// Audio anhalten + Tracker einfrieren + Broadcast — alles außerhalb des Locks.
 	if activeCue != nil && e.dispatcher != nil {
 		opCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -450,9 +467,17 @@ func (e *Engine) Pause(ctx context.Context) error {
 		})
 	}
 
-	// OccurredAt = tatsächliches Stummschalt-Ende (Zeitpunkt + Fade-Dauer).
-	// Flutter-Clients frieren den Timer an dieser Position ein, nicht am Druckzeitpunkt.
-	effectivePausedMs := pausedAt.UnixMilli() + int64(fadeOut)
+	e.audioTrackers.Range(func(k, v any) bool {
+		entry := v.(*audioTrackerEntry)
+		select {
+		case entry.pauseCh <- struct{}{}:
+		default:
+		}
+		return true
+	})
+
+	// OccurredAt = jetzt + Fade-Dauer: Clients frieren den Timer exakt am Stummschalt-Ende ein.
+	effectivePausedMs := time.Now().UnixMilli() + int64(fadeOut)
 	e.store.BroadcastExec(&pb.ShowExecutionEvent{
 		Type:        pb.ShowExecutionEvent_CUE_PAUSED,
 		AffectedCue: activeCue,
@@ -461,48 +486,51 @@ func (e *Engine) Pause(ctx context.Context) error {
 	return nil
 }
 
-// Resume setzt eine pausierte Cue fort: Audio läuft an der angehaltenen Stelle
-// weiter und der Transport-Timer läuft konsistent über alle Geräte weiter.
-// Idempotent.
-func (e *Engine) Resume(ctx context.Context) error {
-	e.mu.Lock()
-	if !e.paused {
-		e.mu.Unlock()
-		return nil // nicht pausiert → nichts zu tun
-	}
-	e.paused = false
-	e.running = true
-	// Startzeit so verschieben, dass die bereits verstrichene Zeit erhalten
-	// bleibt → die verstrichene Zeit läuft auf allen Geräten korrekt weiter.
-	newStart := time.Now().Add(-e.pausedElapsed)
-	e.cueStartedAt = newStart
-	e.mu.Unlock()
+// ── Resume ────────────────────────────────────────────────────────────────────
 
+// Resume setzt eine pausierte Cue fort. Einzelne Lock-Region: newStart wird
+// atomar aus frozenElapsed berechnet und der Phase auf phaseRunning gewechselt.
+func (e *Engine) Resume(ctx context.Context) error {
 	activeCue := e.store.GetActiveCue(e.cueListID)
 
-	// Fade-In-Dauer aus den Cue-Parametern lesen.
 	fadeIn := float64(resumeFadeMs)
 	if activeCue != nil {
 		if ap, ok := activeCue.Params.(*pb.Cue_Audio); ok && ap != nil {
-			if ap.Audio.ResumeBehavior == pb.AudioCueParams_RESUME_FADE_IN && ap.Audio.ResumeFadeMs > 0 {
-				fadeIn = ap.Audio.ResumeFadeMs
-			} else if ap.Audio.ResumeBehavior == pb.AudioCueParams_RESUME_FROM_START {
-				// Von vorne: erst stoppen, dann neu starten
-				_ = e.dispatcher.DispatchToTask(context.Background(), pb.NodeTask_NODE_TASK_AUDIO_OUTPUT, &pb.NodeCommandRequest{
-					SessionId: e.sessionID,
-					Command: &pb.NodeCommandRequest_AudioStop{
-						AudioStop: &pb.AudioStopCommand{CueId: activeCue.CueId},
-					},
-				})
-				_ = e.dispatchAudio(context.Background(), activeCue)
-				return nil
+			switch ap.Audio.ResumeBehavior {
+			case pb.AudioCueParams_RESUME_FADE_IN:
+				if ap.Audio.ResumeFadeMs > 0 {
+					fadeIn = ap.Audio.ResumeFadeMs
+				}
+			case pb.AudioCueParams_RESUME_FROM_START:
+				return e.resumeFromStart(ctx, activeCue)
 			}
 		}
 	}
 
+	now := time.Now()
+	var newStart time.Time
+	var execCtx context.Context
+
+	e.mu.Lock()
+	if e.tp.phase != phasePaused {
+		e.mu.Unlock()
+		return nil
+	}
+	var cancel context.CancelFunc
+	execCtx, cancel = context.WithTimeout(ctx, 30*time.Second)
+	e.cancelFn = cancel
+	// newStart so rekonstruieren dass die verstrichene Zeit konsistent weiterläuft.
+	newStart = now.Add(-e.tp.frozenElapsed)
+	e.tp.phase = phaseRunning
+	e.tp.startedAt = newStart
+	e.tp.frozenElapsed = 0
+	e.mu.Unlock()
+
+	_ = execCtx // wird nur von dispatchCue-Goroutinen benötigt; hier kein neuer Dispatch
+
 	if activeCue != nil && e.dispatcher != nil {
-		opCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
+		opCtx, cancel2 := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel2()
 		_ = e.dispatcher.DispatchToTask(opCtx, pb.NodeTask_NODE_TASK_AUDIO_OUTPUT, &pb.NodeCommandRequest{
 			SessionId: e.sessionID,
 			Command: &pb.NodeCommandRequest_AudioResume{
@@ -514,9 +542,16 @@ func (e *Engine) Resume(ctx context.Context) error {
 		})
 	}
 
+	e.audioTrackers.Range(func(k, v any) bool {
+		entry := v.(*audioTrackerEntry)
+		select {
+		case entry.resumeCh <- struct{}{}:
+		default:
+		}
+		return true
+	})
+
 	if activeCue != nil {
-		// Re-broadcast als CUE_STARTED mit angepasster Startzeit → Clients
-		// setzen die verstrichene Zeit korrekt fort.
 		e.store.BroadcastExec(&pb.ShowExecutionEvent{
 			Type:           pb.ShowExecutionEvent_CUE_STARTED,
 			AffectedCue:    activeCue,
@@ -527,13 +562,50 @@ func (e *Engine) Resume(ctx context.Context) error {
 	return nil
 }
 
-// dispatchCue sendet die Cue-Ausführung an den zuständigen Node.
+// resumeFromStart stoppt die aktuelle Audio und startet sie von vorne.
+// Broadcastet CUE_STARTED mit neuem Zeitstempel — vorher fehlender Broadcast behoben.
+func (e *Engine) resumeFromStart(ctx context.Context, activeCue *pb.Cue) error {
+	newStart := time.Now()
+
+	e.mu.Lock()
+	if e.cancelFn != nil {
+		e.cancelFn()
+		e.cancelFn = nil
+	}
+	execCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	e.cancelFn = cancel
+	e.tp.phase = phaseRunning
+	e.tp.startedAt = newStart
+	e.tp.frozenElapsed = 0
+	e.mu.Unlock()
+
+	if e.dispatcher != nil {
+		_ = e.dispatcher.DispatchToTask(context.Background(), pb.NodeTask_NODE_TASK_AUDIO_OUTPUT,
+			&pb.NodeCommandRequest{
+				SessionId: e.sessionID,
+				Command: &pb.NodeCommandRequest_AudioStop{
+					AudioStop: &pb.AudioStopCommand{CueId: activeCue.CueId},
+				},
+			})
+		_ = e.dispatchAudio(execCtx, activeCue)
+	}
+
+	// CUE_STARTED mit neuem Zeitstempel: alle Clients setzen Fortschrittsbalken zurück.
+	e.store.BroadcastExec(&pb.ShowExecutionEvent{
+		Type:           pb.ShowExecutionEvent_CUE_STARTED,
+		AffectedCue:    activeCue,
+		OccurredAt:     &pb.Timestamp{UnixMillis: newStart.UnixMilli()},
+		CueStartedAtMs: newStart.UnixMilli(),
+	})
+	return nil
+}
+
+// ── dispatchCue ───────────────────────────────────────────────────────────────
+
 func (e *Engine) dispatchCue(ctx context.Context, cue *pb.Cue) {
 	log.Printf("[engine] dispatchCue %s/%q type=%s target=%q",
 		cue.Number, cue.Label, cue.CueType, cue.LogicalOutputId)
-	var err error
 
-	// Pre-Wait
 	if cue.PreWaitMs > 0 {
 		select {
 		case <-time.After(time.Duration(cue.PreWaitMs) * time.Millisecond):
@@ -542,17 +614,18 @@ func (e *Engine) dispatchCue(ctx context.Context, cue *pb.Cue) {
 		}
 	}
 
-	// Startzeit merken (für Pause/Resume-Re-Anchoring) und autoritatives
-	// Start-Signal mit Server-Zeitstempel senden. Alle Clients leiten daraus
-	// (via Clock-Sync) dieselbe verstrichene Zeit ab.
+	// Startzeit nach Pre-Wait setzen (autoritativer Zeitpunkt für alle Clients).
 	startedAt := time.Now()
 	e.mu.Lock()
-	e.cueStartedAt = startedAt
-	e.pausedElapsed = 0
-	e.pausedAt = time.Time{}
+	// Nur updaten wenn wir noch die aktive Cue sind (nicht durch ein neues GO überschrieben).
+	if e.tp.phase == phaseRunning && e.tp.cue != nil && e.tp.cue.CueId == cue.CueId {
+		e.tp.startedAt = startedAt
+		e.tp.frozenElapsed = 0
+	}
 	e.addRunning(cue.CueId)
 	runningIDs := e.runningCueIDsList()
 	e.mu.Unlock()
+
 	e.store.BroadcastExec(&pb.ShowExecutionEvent{
 		Type:           pb.ShowExecutionEvent_CUE_STARTED,
 		AffectedCue:    cue,
@@ -561,8 +634,6 @@ func (e *Engine) dispatchCue(ctx context.Context, cue *pb.Cue) {
 		RunningCueIds:  runningIDs,
 	})
 
-	// Effektiven Typ ermitteln: explizit gesetzt oder aus dem oneof-Params inferieren
-	// (Abwärtskompatibilität mit Cues die vor dem cue_type-Fix gespeichert wurden).
 	effectiveType := cue.CueType
 	if effectiveType == pb.CueType_CUE_TYPE_UNSPECIFIED {
 		switch cue.Params.(type) {
@@ -583,6 +654,8 @@ func (e *Engine) dispatchCue(ctx context.Context, cue *pb.Cue) {
 		}
 	}
 
+	var err error
+	skipNote := false // übersprungene Note → wie AutoContinue
 	switch effectiveType {
 	case pb.CueType_CUE_TYPE_AUDIO:
 		err = e.dispatchAudio(ctx, cue)
@@ -593,9 +666,15 @@ func (e *Engine) dispatchCue(ctx context.Context, cue *pb.Cue) {
 	case pb.CueType_CUE_TYPE_GROUP:
 		err = e.dispatchGroup(ctx, cue)
 	case pb.CueType_CUE_TYPE_NOTE:
-		// Note/Placeholder: kein Execution — sofort fertig.
-		log.Printf("[engine] Cue %s/%q: Note → übersprungen", cue.Number, cue.Label)
-		err = nil
+		if np, ok := cue.Params.(*pb.Cue_Note); ok && np.Note != nil && np.Note.Landable {
+			log.Printf("[engine] Cue %s/%q: Note landable → wartet auf nächstes GO", cue.Number, cue.Label)
+			<-ctx.Done()
+			err = ctx.Err()
+		} else {
+			log.Printf("[engine] Cue %s/%q: Note → übersprungen, starte nächste Cue", cue.Number, cue.Label)
+			skipNote = true
+			err = nil
+		}
 	case pb.CueType_CUE_TYPE_FADE:
 		err = e.dispatchFade(ctx, cue)
 	default:
@@ -612,17 +691,10 @@ func (e *Engine) dispatchCue(ctx context.Context, cue *pb.Cue) {
 	remainingIDs := e.runningCueIDsList()
 	e.mu.Unlock()
 
-	// Audio-Tracked: Lifecycle (removeRunning, CUE_DONE, AutoContinue) wird
-	// von der Background-Goroutine in dispatchAudio verwaltet.
-	// Dieser Pfad wird erreicht wenn execCtx durch ein neues GO gecancelt wurde;
-	// der Tracker läuft mit seinem eigenen Context unabhängig weiter.
 	if isAudioTracked {
 		return
 	}
 
-	// Abgebrochen (Stop/Pause hat den Context gecancelt) → KEIN DONE-Event.
-	// Sonst würde der Client die aktive Cue fälschlich reaktivieren und der
-	// Timer weiterlaufen. Stop/Pause senden bereits ihr eigenes Event.
 	if err == context.Canceled || ctx.Err() == context.Canceled {
 		return
 	}
@@ -641,9 +713,7 @@ func (e *Engine) dispatchCue(ctx context.Context, cue *pb.Cue) {
 		RunningCueIds: remainingIDs,
 	})
 
-	// Auto-Continue: automatisch nächste Cue nach optionalem PostWait auslösen.
-	// Für Audio-Cues übernimmt die Tracker-Goroutine Auto-Continue.
-	if err == nil && cue.AutoContinue {
+	if err == nil && (cue.AutoContinue || skipNote) {
 		if cue.PostWaitMs > 0 {
 			select {
 			case <-time.After(time.Duration(cue.PostWaitMs) * time.Millisecond):
@@ -655,6 +725,8 @@ func (e *Engine) dispatchCue(ctx context.Context, cue *pb.Cue) {
 	}
 }
 
+// ── dispatchAudio ─────────────────────────────────────────────────────────────
+
 func (e *Engine) dispatchAudio(ctx context.Context, cue *pb.Cue) error {
 	params, ok := cue.Params.(*pb.Cue_Audio)
 	if !ok || params == nil {
@@ -664,10 +736,6 @@ func (e *Engine) dispatchAudio(ctx context.Context, cue *pb.Cue) error {
 		return errors.New("no dispatcher")
 	}
 
-	// Commands werden mit einem nicht-cancellierbaren Kontext gesendet.
-	// Der execCtx (ctx) kann durch ein neues GO gecancelt werden — das darf
-	// aber nicht dazu führen dass PRELOAD geht, PLAY aber verworfen wird.
-	// Nur Warte-Phasen (dispatchWait, Auto-Continue) reagieren auf ctx.
 	sendCtx := context.Background()
 
 	dispatch := func(cmd *pb.NodeCommandRequest) error {
@@ -691,7 +759,6 @@ func (e *Engine) dispatchAudio(ctx context.Context, cue *pb.Cue) error {
 	log.Printf("[engine] dispatchAudio cueId=%s asset=%s route=%s vol=%.1fdB loop=%v",
 		cue.CueId, assetDesc, routeDesc, params.Audio.VolumeDb, params.Audio.Loop)
 
-	// 1. Preload senden. asset_id (SHA-256) wird bevorzugt; file_path als Fallback.
 	if params.Audio.AssetId != "" || params.Audio.FilePath != "" {
 		_ = dispatch(&pb.NodeCommandRequest{
 			SessionId:    e.sessionID,
@@ -706,17 +773,11 @@ func (e *Engine) dispatchAudio(ctx context.Context, cue *pb.Cue) error {
 		})
 	}
 
-	// 2. Play mit Server-Startzeit: Node berechnet via ClockSync ob er leicht
-	// überspringen muss (Netzwerklatenz-Kompensation). StartUnixMillis = 0
-	// wäre sofort, aber für Mehrfach-Node-Sync brauchen alle denselben Anker.
 	e.mu.Lock()
-	startMs := e.cueStartedAt.UnixMilli()
+	startMs := e.tp.startedAt.UnixMilli()
 	sd := e.silenceDetector
 	e.mu.Unlock()
 
-	// Effektive Start-Zeit: vom Nutzer gesetztes StartTimeMs, oder — wenn
-	// Auto-Skip-Silence aktiv ist und kein manuelles Offset gesetzt wurde —
-	// der erkannte Stille-Offset aus dem PCM-Buffer.
 	effectiveStartMs := params.Audio.StartTimeMs
 	if effectiveStartMs == 0 && sd != nil && params.Audio.AssetId != "" {
 		if silenceMs, ok := sd.AssetSilenceStartMs(params.Audio.AssetId); ok {
@@ -744,9 +805,6 @@ func (e *Engine) dispatchAudio(ctx context.Context, cue *pb.Cue) error {
 		return err
 	}
 
-	// Nicht-loopende Cues: Hintergrund-Goroutine trackt die Audio-Dauer unabhängig
-	// vom execCtx (der durch ein neues GO gecancelt wird). So bleibt die Cue in
-	// runningCueIds sichtbar und Fade-Buttons funktionieren während andere Cues laufen.
 	if !params.Audio.Loop {
 		waitMs := params.Audio.DeclaredDurationMs
 		end := params.Audio.EndTimeMs
@@ -754,18 +812,20 @@ func (e *Engine) dispatchAudio(ctx context.Context, cue *pb.Cue) error {
 		if end > 0 && end > start {
 			waitMs = end - start
 		} else if waitMs > 0 && effectiveStartMs > 0 {
-			// Silence-Skip: effektive Startzeit vom deklarierten Ende abziehen
 			if rem := waitMs - effectiveStartMs; rem > 0 {
 				waitMs = rem
 			}
 		}
 		if waitMs > 0 {
-			// Vorherigen Tracker für diese Cue abbrechen (Re-Trigger einer Cue).
 			if old, loaded := e.audioTrackers.LoadAndDelete(cue.CueId); loaded {
 				old.(*audioTrackerEntry).cancel()
 			}
 			trackCtx, trackCancel := context.WithCancel(context.Background())
-			entry := &audioTrackerEntry{cancel: trackCancel}
+			entry := &audioTrackerEntry{
+				cancel:   trackCancel,
+				pauseCh:  make(chan struct{}, 1),
+				resumeCh: make(chan struct{}, 1),
+			}
 			e.audioTrackers.Store(cue.CueId, entry)
 
 			autoContinue := cue.AutoContinue
@@ -773,42 +833,65 @@ func (e *Engine) dispatchAudio(ctx context.Context, cue *pb.Cue) error {
 			cueSnapshot := cue
 
 			go func() {
-				// CompareAndDelete: nur OUR entry entfernen (nicht einen neueren Re-Trigger).
 				defer e.audioTrackers.CompareAndDelete(cueSnapshot.CueId, entry)
-				timer := time.NewTimer(time.Duration(waitMs) * time.Millisecond)
-				defer timer.Stop()
-				select {
-				case <-timer.C:
-					// Audio natürlich beendet
-				case <-trackCtx.Done():
-					// STOP oder StopCueTracker hat die Cue abgebrochen.
-					// Cleanup (removeRunning, CUE_DONE) wurde bereits vom Aufrufer erledigt.
-					return
-				}
 
-				e.mu.Lock()
-				e.removeRunning(cueSnapshot.CueId)
-				ids := e.runningCueIDsList()
-				e.mu.Unlock()
+				remaining := time.Duration(waitMs) * time.Millisecond
+				for {
+					timer := time.NewTimer(remaining)
+					timerStarted := time.Now()
 
-				e.store.BroadcastExec(&pb.ShowExecutionEvent{
-					Type:          pb.ShowExecutionEvent_CUE_DONE,
-					AffectedCue:   cueSnapshot,
-					OccurredAt:    nowProto(),
-					RunningCueIds: ids,
-				})
+					select {
+					case <-timer.C:
 
-				if autoContinue {
-					if postWaitMs > 0 {
-						postTimer := time.NewTimer(time.Duration(postWaitMs) * time.Millisecond)
-						defer postTimer.Stop()
+					case <-entry.pauseCh:
+						timer.Stop()
 						select {
-						case <-postTimer.C:
+						case <-timer.C:
+						default:
+						}
+						elapsed := time.Since(timerStarted)
+						remaining -= elapsed
+						if remaining < 0 {
+							remaining = 0
+						}
+						select {
+						case <-entry.resumeCh:
+							continue
 						case <-trackCtx.Done():
 							return
 						}
+
+					case <-trackCtx.Done():
+						timer.Stop()
+						return
 					}
-					_, _, _ = e.Go(context.Background(), "")
+
+					e.mu.Lock()
+					e.removeRunning(cueSnapshot.CueId)
+					ids := e.runningCueIDsList()
+					e.mu.Unlock()
+
+					e.store.BroadcastExec(&pb.ShowExecutionEvent{
+						Type:          pb.ShowExecutionEvent_CUE_DONE,
+						AffectedCue:   cueSnapshot,
+						OccurredAt:    nowProto(),
+						RunningCueIds: ids,
+					})
+
+					if autoContinue {
+						if postWaitMs > 0 {
+							postTimer := time.NewTimer(time.Duration(postWaitMs) * time.Millisecond)
+							select {
+							case <-postTimer.C:
+								postTimer.Stop()
+							case <-trackCtx.Done():
+								postTimer.Stop()
+								return
+							}
+						}
+						_, _, _ = e.Go(context.Background(), "")
+					}
+					return
 				}
 			}()
 		}
@@ -816,9 +899,8 @@ func (e *Engine) dispatchAudio(ctx context.Context, cue *pb.Cue) error {
 	return nil
 }
 
-// ArmAll sendet PRELOAD-Commands für alle Audio-Cues in der aktuellen CueList.
-// Soll beim Session-Start und nach Cue-Listen-Änderungen aufgerufen werden,
-// damit alle Assets vorab dekodiert sind und jeder GO sofort startet.
+// ── ArmCue / ArmAll ───────────────────────────────────────────────────────────
+
 func (e *Engine) ArmAll(ctx context.Context) {
 	list, found := e.store.GetCueList(e.cueListID)
 	if !found || list == nil {
@@ -827,7 +909,6 @@ func (e *Engine) ArmAll(ctx context.Context) {
 	count := 0
 	for _, cue := range list.Cues {
 		if cue.CueType != pb.CueType_CUE_TYPE_AUDIO {
-			// Typ aus params inferieren (Abwärtskompatibilität)
 			if _, ok := cue.Params.(*pb.Cue_Audio); !ok {
 				continue
 			}
@@ -840,12 +921,8 @@ func (e *Engine) ArmAll(ctx context.Context) {
 	}
 }
 
-// ArmCue lädt eine Audio-Cue auf den zuständigen Nodes vor (Preload ohne Play).
 func (e *Engine) ArmCue(ctx context.Context, cue *pb.Cue) { e.armCue(ctx, cue) }
 
-// LiveUpdateVolume wendet eine Lautstärkeänderung sofort auf eine laufende Cue an
-// (duration_ms=0 = instantan). Wird von UpsertCue zusätzlich zu ArmCue gerufen.
-// Wenn die Cue gerade nicht spielt, ignoriert der Audio-Node den Befehl still.
 func (e *Engine) LiveUpdateVolume(cueID, targetNodeID string, volumeDb float64) {
 	if e.dispatcher == nil {
 		return
@@ -869,12 +946,10 @@ func (e *Engine) LiveUpdateVolume(cueID, targetNodeID string, volumeDb float64) 
 	}
 }
 
-// armCue — interne Implementierung.
 func (e *Engine) armCue(_ context.Context, cue *pb.Cue) {
 	if cue == nil || e.dispatcher == nil {
 		return
 	}
-	// Typ aus params inferieren (Abwärtskompatibilität)
 	isAudio := cue.CueType == pb.CueType_CUE_TYPE_AUDIO
 	if !isAudio {
 		_, isAudio = cue.Params.(*pb.Cue_Audio)
@@ -898,7 +973,6 @@ func (e *Engine) armCue(_ context.Context, cue *pb.Cue) {
 			},
 		},
 	}
-	// Arm-Commands immer mit Background-Kontext — dürfen nie verworfen werden.
 	bgCtx := context.Background()
 	if cue.TargetNodeId != "" {
 		_ = e.dispatcher.Dispatch(bgCtx, cue.TargetNodeId, cmd)
@@ -906,6 +980,161 @@ func (e *Engine) armCue(_ context.Context, cue *pb.Cue) {
 		_ = e.dispatcher.DispatchToTask(bgCtx, pb.NodeTask_NODE_TASK_AUDIO_OUTPUT, cmd)
 	}
 }
+
+// ── Per-Cue Audio Dispatch (server-seitig) ────────────────────────────────────
+
+// DispatchPauseCueAudio pausiert eine einzelne Cue direkt vom Server aus.
+// Setzt Engine-State atomar VOR dem Node-Dispatch → Echo-Back ist idempotent.
+func (e *Engine) DispatchPauseCueAudio(ctx context.Context, cueID string, fadeOutMs float64) error {
+	if e.dispatcher == nil {
+		return errors.New("no dispatcher")
+	}
+	cue := e.resolveCue(cueID)
+
+	// State atomar setzen bevor der Befehl den Node erreicht.
+	e.mu.Lock()
+	e.addPerCuePaused(cueID)
+	pausedIds := e.perCuePausedIDsList()
+	runningIds := e.runningCueIDsList()
+	e.mu.Unlock()
+
+	// Tracker-Timer einfrieren bevor der Node-Befehl abgesendet wird.
+	if entry, ok := e.audioTrackers.Load(cueID); ok {
+		select {
+		case entry.(*audioTrackerEntry).pauseCh <- struct{}{}:
+		default:
+		}
+	}
+
+	sendCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := &pb.NodeCommandRequest{
+		SessionId: e.sessionID,
+		Command: &pb.NodeCommandRequest_AudioPause{
+			AudioPause: &pb.AudioPauseCommand{CueId: cueID, FadeOutMs: fadeOutMs},
+		},
+	}
+	var err error
+	if cue != nil && cue.TargetNodeId != "" {
+		err = e.dispatcher.Dispatch(sendCtx, cue.TargetNodeId, cmd)
+	} else {
+		err = e.dispatcher.DispatchToTask(sendCtx, pb.NodeTask_NODE_TASK_AUDIO_OUTPUT, cmd)
+	}
+
+	effectivePausedMs := time.Now().UnixMilli() + int64(fadeOutMs)
+	e.store.BroadcastExec(&pb.ShowExecutionEvent{
+		Type:            pb.ShowExecutionEvent_CUE_CUE_PAUSED,
+		AffectedCue:     &pb.Cue{CueId: cueID},
+		OccurredAt:      &pb.Timestamp{UnixMillis: effectivePausedMs},
+		RunningCueIds:   runningIds,
+		PerCuePausedIds: pausedIds,
+	})
+	return err
+}
+
+// DispatchResumeCueAudio setzt eine per-Cue-pausierte Cue fort.
+func (e *Engine) DispatchResumeCueAudio(ctx context.Context, cueID string, fadeInMs float64) error {
+	if e.dispatcher == nil {
+		return errors.New("no dispatcher")
+	}
+	cue := e.resolveCue(cueID)
+
+	e.mu.Lock()
+	e.removePerCuePaused(cueID)
+	pausedIds := e.perCuePausedIDsList()
+	runningIds := e.runningCueIDsList()
+	e.mu.Unlock()
+
+	// Tracker-Timer fortsetzen.
+	if entry, ok := e.audioTrackers.Load(cueID); ok {
+		select {
+		case entry.(*audioTrackerEntry).resumeCh <- struct{}{}:
+		default:
+		}
+	}
+
+	sendCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := &pb.NodeCommandRequest{
+		SessionId: e.sessionID,
+		Command: &pb.NodeCommandRequest_AudioResume{
+			AudioResume: &pb.AudioResumeCommand{CueId: cueID, FadeInMs: fadeInMs},
+		},
+	}
+	var err error
+	if cue != nil && cue.TargetNodeId != "" {
+		err = e.dispatcher.Dispatch(sendCtx, cue.TargetNodeId, cmd)
+	} else {
+		err = e.dispatcher.DispatchToTask(sendCtx, pb.NodeTask_NODE_TASK_AUDIO_OUTPUT, cmd)
+	}
+
+	e.store.BroadcastExec(&pb.ShowExecutionEvent{
+		Type:            pb.ShowExecutionEvent_CUE_CUE_RESUMED,
+		AffectedCue:     &pb.Cue{CueId: cueID},
+		OccurredAt:      nowProto(),
+		RunningCueIds:   runningIds,
+		PerCuePausedIds: pausedIds,
+	})
+	return err
+}
+
+// DispatchStopCueAudio stoppt eine einzelne Cue und broadcastet CUE_DONE.
+func (e *Engine) DispatchStopCueAudio(ctx context.Context, cueID string, fadeOutMs float64) error {
+	if e.dispatcher == nil {
+		return errors.New("no dispatcher")
+	}
+	cue := e.resolveCue(cueID)
+
+	// Tracker abbrechen
+	if entry, loaded := e.audioTrackers.LoadAndDelete(cueID); loaded {
+		entry.(*audioTrackerEntry).cancel()
+	}
+
+	e.mu.Lock()
+	e.removeRunning(cueID)
+	e.removePerCuePaused(cueID)
+	ids := e.runningCueIDsList()
+	e.mu.Unlock()
+
+	sendCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := &pb.NodeCommandRequest{
+		SessionId: e.sessionID,
+		Command: &pb.NodeCommandRequest_AudioStop{
+			AudioStop: &pb.AudioStopCommand{CueId: cueID, FadeOutMs: fadeOutMs},
+		},
+	}
+	var err error
+	if cue != nil && cue.TargetNodeId != "" {
+		err = e.dispatcher.Dispatch(sendCtx, cue.TargetNodeId, cmd)
+	} else {
+		err = e.dispatcher.DispatchToTask(sendCtx, pb.NodeTask_NODE_TASK_AUDIO_OUTPUT, cmd)
+	}
+
+	e.store.BroadcastExec(&pb.ShowExecutionEvent{
+		Type:          pb.ShowExecutionEvent_CUE_DONE,
+		AffectedCue:   &pb.Cue{CueId: cueID},
+		OccurredAt:    nowProto(),
+		RunningCueIds: ids,
+	})
+	return err
+}
+
+// resolveCue schlägt eine Cue aus der CueList auf (nil wenn nicht gefunden).
+func (e *Engine) resolveCue(cueID string) *pb.Cue {
+	list, found := e.store.GetCueList(e.cueListID)
+	if !found {
+		return nil
+	}
+	for _, c := range list.Cues {
+		if c.CueId == cueID {
+			return c
+		}
+	}
+	return nil
+}
+
+// ── dispatchMaOsc / dispatchWait ──────────────────────────────────────────────
 
 func (e *Engine) dispatchMaOsc(ctx context.Context, cue *pb.Cue) error {
 	params, ok := cue.Params.(*pb.Cue_MaOsc)
@@ -915,7 +1144,6 @@ func (e *Engine) dispatchMaOsc(ctx context.Context, cue *pb.Cue) error {
 	if e.dispatcher == nil {
 		return errors.New("no dispatcher")
 	}
-
 	cmd := &pb.NodeCommandRequest{
 		SessionId:    e.sessionID,
 		TargetNodeId: cue.TargetNodeId,
@@ -926,7 +1154,6 @@ func (e *Engine) dispatchMaOsc(ctx context.Context, cue *pb.Cue) error {
 			},
 		},
 	}
-
 	if cue.TargetNodeId != "" {
 		return e.dispatcher.Dispatch(ctx, cue.TargetNodeId, cmd)
 	}
@@ -946,8 +1173,10 @@ func (e *Engine) dispatchWait(ctx context.Context, cue *pb.Cue) error {
 	}
 }
 
+// ── dispatchFade ──────────────────────────────────────────────────────────────
+
 // dispatchFade sendet einen Lautstärke-Fade an eine laufende Audio-Cue.
-// Nach Ablauf der Fade-Dauer kann die Ziel-Cue gestoppt oder pausiert werden.
+// Bug-Fix: FADE_ACTION_RESUME sendet nur AudioResume (kein zusätzliches AudioFade).
 func (e *Engine) dispatchFade(ctx context.Context, cue *pb.Cue) error {
 	params, ok := cue.Params.(*pb.Cue_Fade)
 	if !ok || params == nil {
@@ -963,23 +1192,8 @@ func (e *Engine) dispatchFade(ctx context.Context, cue *pb.Cue) error {
 
 	sendCtx := context.Background()
 
-	// Fade-Command an alle Audio-Nodes senden.
-	_ = e.dispatcher.DispatchToTask(sendCtx, pb.NodeTask_NODE_TASK_AUDIO_OUTPUT,
-		&pb.NodeCommandRequest{
-			SessionId: e.sessionID,
-			Command: &pb.NodeCommandRequest_AudioFade{
-				AudioFade: &pb.AudioFadeCommand{
-					CueId:          fp.TargetCueId,
-					TargetVolumeDb: fp.TargetVolumeDb,
-					DurationMs:     fp.DurationMs,
-					StopWhenDone:   fp.StopWhenDone || fp.Action == pb.FadeCueParams_FADE_ACTION_STOP,
-					PauseWhenDone:  fp.Action == pb.FadeCueParams_FADE_ACTION_PAUSE,
-				},
-			},
-		})
-
-	// Bei RESUME: Resume-Command mit Fade-In statt Fade-Out senden.
 	if fp.Action == pb.FadeCueParams_FADE_ACTION_RESUME {
+		// Resume: nur AudioResume mit Fade-In senden — kein paralleles AudioFade.
 		_ = e.dispatcher.DispatchToTask(sendCtx, pb.NodeTask_NODE_TASK_AUDIO_OUTPUT,
 			&pb.NodeCommandRequest{
 				SessionId: e.sessionID,
@@ -990,9 +1204,23 @@ func (e *Engine) dispatchFade(ctx context.Context, cue *pb.Cue) error {
 					},
 				},
 			})
+	} else {
+		// Volume/Stop/Pause: AudioFade senden.
+		_ = e.dispatcher.DispatchToTask(sendCtx, pb.NodeTask_NODE_TASK_AUDIO_OUTPUT,
+			&pb.NodeCommandRequest{
+				SessionId: e.sessionID,
+				Command: &pb.NodeCommandRequest_AudioFade{
+					AudioFade: &pb.AudioFadeCommand{
+						CueId:          fp.TargetCueId,
+						TargetVolumeDb: fp.TargetVolumeDb,
+						DurationMs:     fp.DurationMs,
+						StopWhenDone:   fp.StopWhenDone || fp.Action == pb.FadeCueParams_FADE_ACTION_STOP,
+						PauseWhenDone:  fp.Action == pb.FadeCueParams_FADE_ACTION_PAUSE,
+					},
+				},
+			})
 	}
 
-	// Warte die Fade-Dauer ab (damit GO-Screen Fortschritt sieht).
 	fadeDur := time.Duration(fp.DurationMs) * time.Millisecond
 	if fadeDur <= 0 {
 		return nil
@@ -1005,20 +1233,14 @@ func (e *Engine) dispatchFade(ctx context.Context, cue *pb.Cue) error {
 	}
 }
 
-// dispatchGroup führt eine Group-Cue aus: parallel oder sequentiell.
-//
-// Parallel: alle Kind-Cues starten gleichzeitig; die Group ist fertig wenn
-//
-//	die letzte Kind-Cue abgeschlossen ist.
-//
-// Sequentiell: Kind-Cues laufen der Reihe nach; Abbruch bei erstem Fehler.
+// ── dispatchGroup ─────────────────────────────────────────────────────────────
+
 func (e *Engine) dispatchGroup(ctx context.Context, group *pb.Cue) error {
 	params, ok := group.Params.(*pb.Cue_Group)
 	if !ok || params == nil {
 		return errors.New("invalid group cue params")
 	}
 
-	// Kind-Cues aus der CueList auflösen
 	list, found := e.store.GetCueList(e.cueListID)
 	if !found {
 		return errors.New("cue list not found")
@@ -1049,15 +1271,18 @@ func (e *Engine) dispatchGroupSequential(ctx context.Context, children []*pb.Cue
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
+
+		// Lock: addRunning + runningCueIDsList in einer atomischen Region.
 		e.mu.Lock()
 		e.addRunning(child.CueId)
+		runningIDs := e.runningCueIDsList()
 		e.mu.Unlock()
 
 		e.store.BroadcastExec(&pb.ShowExecutionEvent{
 			Type:          pb.ShowExecutionEvent_CUE_STARTED,
 			AffectedCue:   child,
 			OccurredAt:    nowProto(),
-			RunningCueIds: e.runningCueIDsList(),
+			RunningCueIds: runningIDs, // konsistente Kopie
 		})
 
 		var err error
@@ -1094,74 +1319,6 @@ func (e *Engine) dispatchGroupSequential(ctx context.Context, children []*pb.Cue
 		}
 	}
 	return nil
-}
-
-// LookAheadFromStart gibt die asset_ids der ersten n Audio-Cues vom Anfang der
-// CueList zurück (unabhängig von der aktiven Cue). Für Session-Start-Prewarm.
-func (e *Engine) LookAheadFromStart(list *pb.CueList, n int) []string {
-	return e.lookAheadAssetIDs(list, "", n) // activeCueID="" → startet von vorne
-}
-
-// lookAheadAssetIDs sammelt die asset_ids der nächsten n Audio-Cues nach
-// activeCueID in der übergebenen CueList. Gruppe-Cues werden flach expandiert.
-// Duplikate werden entfernt. list darf nil sein (gibt nil zurück).
-func (e *Engine) lookAheadAssetIDs(list *pb.CueList, activeCueID string, n int) []string {
-	if list == nil || n <= 0 {
-		return nil
-	}
-
-	cueByID := make(map[string]*pb.Cue, len(list.Cues))
-	for _, c := range list.Cues {
-		cueByID[c.CueId] = c
-	}
-
-	seen := make(map[string]struct{}, n)
-	ids := make([]string, 0, n)
-	past := activeCueID == ""
-
-	for _, c := range list.Cues {
-		if len(ids) >= n {
-			break
-		}
-		if c.CueId == activeCueID {
-			past = true
-			continue
-		}
-		if !past {
-			continue
-		}
-		ids = collectAssetIDs(c, cueByID, ids, seen, n)
-	}
-	return ids
-}
-
-// collectAssetIDs extrahiert asset_ids aus einer Cue (inkl. Group-Expansion).
-// seen verhindert Duplikate wenn Kinder-Cues auch als Top-Level-Einträge stehen.
-func collectAssetIDs(c *pb.Cue, byID map[string]*pb.Cue, out []string, seen map[string]struct{}, max int) []string {
-	switch c.CueType {
-	case pb.CueType_CUE_TYPE_AUDIO:
-		if ap, ok := c.Params.(*pb.Cue_Audio); ok && ap.Audio.AssetId != "" {
-			id := ap.Audio.AssetId
-			if _, dup := seen[id]; !dup {
-				seen[id] = struct{}{}
-				out = append(out, id)
-			}
-		}
-	case pb.CueType_CUE_TYPE_GROUP:
-		gp, ok := c.Params.(*pb.Cue_Group)
-		if !ok || gp == nil {
-			break
-		}
-		for _, childID := range gp.Group.ChildCueIds {
-			if len(out) >= max {
-				break
-			}
-			if child, ok := byID[childID]; ok {
-				out = collectAssetIDs(child, byID, out, seen, max)
-			}
-		}
-	}
-	return out
 }
 
 func (e *Engine) dispatchGroupParallel(ctx context.Context, children []*pb.Cue) error {
@@ -1225,4 +1382,67 @@ func (e *Engine) dispatchGroupParallel(ctx context.Context, children []*pb.Cue) 
 		}
 	}
 	return nil
+}
+
+// ── LookAhead ─────────────────────────────────────────────────────────────────
+
+func (e *Engine) LookAheadFromStart(list *pb.CueList, n int) []string {
+	return e.lookAheadAssetIDs(list, "", n)
+}
+
+func (e *Engine) lookAheadAssetIDs(list *pb.CueList, activeCueID string, n int) []string {
+	if list == nil || n <= 0 {
+		return nil
+	}
+
+	cueByID := make(map[string]*pb.Cue, len(list.Cues))
+	for _, c := range list.Cues {
+		cueByID[c.CueId] = c
+	}
+
+	seen := make(map[string]struct{}, n)
+	ids := make([]string, 0, n)
+	past := activeCueID == ""
+
+	for _, c := range list.Cues {
+		if len(ids) >= n {
+			break
+		}
+		if c.CueId == activeCueID {
+			past = true
+			continue
+		}
+		if !past {
+			continue
+		}
+		ids = collectAssetIDs(c, cueByID, ids, seen, n)
+	}
+	return ids
+}
+
+func collectAssetIDs(c *pb.Cue, byID map[string]*pb.Cue, out []string, seen map[string]struct{}, max int) []string {
+	switch c.CueType {
+	case pb.CueType_CUE_TYPE_AUDIO:
+		if ap, ok := c.Params.(*pb.Cue_Audio); ok && ap.Audio.AssetId != "" {
+			id := ap.Audio.AssetId
+			if _, dup := seen[id]; !dup {
+				seen[id] = struct{}{}
+				out = append(out, id)
+			}
+		}
+	case pb.CueType_CUE_TYPE_GROUP:
+		gp, ok := c.Params.(*pb.Cue_Group)
+		if !ok || gp == nil {
+			break
+		}
+		for _, childID := range gp.Group.ChildCueIds {
+			if len(out) >= max {
+				break
+			}
+			if child, ok := byID[childID]; ok {
+				out = collectAssetIDs(child, byID, out, seen, max)
+			}
+		}
+	}
+	return out
 }

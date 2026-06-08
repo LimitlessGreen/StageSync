@@ -279,11 +279,18 @@ func (s *Store) broadcastDef(ev *pb.ShowDefinitionEvent) {
 	s.defMu.Lock()
 	s.defSeq++
 	ev.Seq = s.defSeq
+	var toEvict []chan *pb.ShowDefinitionEvent
 	for ch := range s.defSubs {
 		select {
 		case ch <- ev:
 		default:
+			// Langsamer Subscriber: Channel schließen → gRPC-Handler kehrt zurück → Client reconnectet.
+			toEvict = append(toEvict, ch)
 		}
+	}
+	for _, ch := range toEvict {
+		delete(s.defSubs, ch)
+		close(ch)
 	}
 	s.defMu.Unlock()
 }
@@ -317,11 +324,18 @@ func (s *Store) BroadcastExec(ev *pb.ShowExecutionEvent) {
 	s.execMu.Lock()
 	s.execSeq++
 	ev.Seq = s.execSeq
+	var toEvict []chan *pb.ShowExecutionEvent
 	for ch := range s.execSubs {
 		select {
 		case ch <- ev:
 		default:
+			// Langsamer Subscriber: Channel schließen → gRPC-Handler kehrt zurück → Client reconnectet.
+			toEvict = append(toEvict, ch)
 		}
+	}
+	for _, ch := range toEvict {
+		delete(s.execSubs, ch)
+		close(ch)
 	}
 	s.execMu.Unlock()
 }
