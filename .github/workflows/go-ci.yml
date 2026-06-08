@@ -80,9 +80,19 @@ jobs:
           go-version-file: stagesync-server/go.mod
           cache-dependency-path: stagesync-server/go.sum
 
-      - name: Install system dependencies
-        if: matrix.goos == 'linux'
-        run: sudo apt-get update -y && sudo apt-get install -y libasound2-dev gcc-aarch64-linux-gnu
+      - name: Install system dependencies (amd64)
+        if: matrix.goarch == 'amd64'
+        run: sudo apt-get update -y && sudo apt-get install -y libasound2-dev
+
+      - name: Install system dependencies (arm64 cross-compile)
+        if: matrix.goarch == 'arm64'
+        run: |
+          sudo dpkg --add-architecture arm64
+          sudo sed -i 's/^deb /deb [arch=amd64] /' /etc/apt/sources.list
+          echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports $(lsb_release -cs) main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list
+          echo "deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports $(lsb_release -cs)-updates main restricted universe multiverse" | sudo tee -a /etc/apt/sources.list
+          sudo apt-get update -y
+          sudo apt-get install -y gcc-aarch64-linux-gnu libasound2-dev:arm64
 
       - name: Build
         env:
@@ -90,6 +100,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 1
           CC: ${{ matrix.goarch == 'arm64' && 'aarch64-linux-gnu-gcc' || 'gcc' }}
+          PKG_CONFIG_PATH: ${{ matrix.goarch == 'arm64' && '/usr/lib/aarch64-linux-gnu/pkgconfig' || '' }}
         run: go build -v -o stagesync-server-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/server/
 
       - name: Upload binary

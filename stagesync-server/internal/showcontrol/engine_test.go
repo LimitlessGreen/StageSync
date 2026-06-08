@@ -30,6 +30,14 @@ func (d *recordingDispatcher) DispatchToTask(_ context.Context, _ pb.NodeTask, c
 	return nil
 }
 
+func (d *recordingDispatcher) cmds() []*pb.NodeCommandRequest {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	out := make([]*pb.NodeCommandRequest, len(d.commands))
+	copy(out, d.commands)
+	return out
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 func makeStore(cues ...*pb.Cue) *Store {
@@ -742,7 +750,7 @@ func TestEngine_Stop_SendsAudioStopCommand(t *testing.T) {
 	_ = engine.Stop(context.Background())
 
 	var found bool
-	for _, cmd := range disp.commands {
+	for _, cmd := range disp.cmds() {
 		if cmd.GetAudioStop() != nil {
 			found = true
 			break
@@ -930,7 +938,7 @@ func TestEngine_DispatchAudio_SendsPreloadAndPlay(t *testing.T) {
 	}
 
 	var hasPreload, hasPlay bool
-	for _, cmd := range disp.commands {
+	for _, cmd := range disp.cmds() {
 		if cmd.GetAudioPreload() != nil {
 			hasPreload = true
 		}
@@ -958,7 +966,7 @@ func TestEngine_DispatchAudio_PlayContainsCueID(t *testing.T) {
 	cue := audioCue("cue-42", "sha1")
 	_ = engine.dispatchAudio(context.Background(), cue)
 
-	for _, cmd := range disp.commands {
+	for _, cmd := range disp.cmds() {
 		if p := cmd.GetAudioPlay(); p != nil {
 			if p.CueId != "cue-42" {
 				t.Errorf("AudioPlay.CueId = %q, erwartet cue-42", p.CueId)
@@ -1013,7 +1021,7 @@ func TestEngine_DispatchAudio_SilenceDetectorApplied(t *testing.T) {
 	cue := audioCue("c1", "sha1")
 	_ = engine.dispatchAudio(context.Background(), cue)
 
-	for _, cmd := range disp.commands {
+	for _, cmd := range disp.cmds() {
 		if p := cmd.GetAudioPlay(); p != nil {
 			if p.StartTimeMs != 250 {
 				t.Errorf("StartTimeMs = %.0f, erwartet 250 (von SilenceDetector)", p.StartTimeMs)
@@ -1044,7 +1052,7 @@ func TestEngine_DispatchAudio_ManualStartTimeTakesPrecedence(t *testing.T) {
 	}
 	_ = engine.dispatchAudio(context.Background(), cue)
 
-	for _, cmd := range disp.commands {
+	for _, cmd := range disp.cmds() {
 		if p := cmd.GetAudioPlay(); p != nil {
 			if p.StartTimeMs != 500 {
 				t.Errorf("StartTimeMs = %.0f, erwartet 500 (manuell)", p.StartTimeMs)
