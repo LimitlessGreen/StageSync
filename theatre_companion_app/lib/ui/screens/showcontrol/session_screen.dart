@@ -8,6 +8,7 @@ import '../../../showcontrol/grpc/stage_sync_client.dart';
 import '../../../showcontrol/nodes/audio_node/media_server.dart';
 import '../../../showcontrol/preferences/device_preferences.dart';
 import '../../../showcontrol/providers/audio_node_provider.dart';
+import '../../../showcontrol/providers/embedded_server_provider.dart';
 import '../../../showcontrol/providers/ma_node_provider.dart';
 import '../../../showcontrol/providers/session_provider.dart';
 import '../../../showcontrol/session/session_service.dart';
@@ -89,9 +90,21 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
     super.dispose();
   }
 
+  void _useLocalServer() {
+    final port = ref.read(embeddedPortProvider);
+    if (port > 0) {
+      setState(() {
+        _hostCtrl.text = '127.0.0.1';
+        _portCtrl.text = port.toString();
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final sessionState = ref.watch(sessionProvider);
+    // Embedded-Server initialisieren (Desktop: startet Go-Core; Mobile: No-Op).
+    final embeddedAsync = ref.watch(embeddedServerProvider);
 
     // Bereits in Session → GO-Screen
     if (sessionState.isLoading && !sessionState.isInSession) {
@@ -120,6 +133,13 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // ── Eingebetteter Server (Desktop) ───────────────────────────────
+            if (ref.watch(isEmbeddedSupportedProvider))
+              _EmbeddedServerBanner(
+                serverAsync: embeddedAsync,
+                onUseLocal: _useLocalServer,
+              ),
+
             // ── Server-Verbindung ────────────────────────────────────────────
             _SectionHeader('Server'),
             _ServerDiscoveryWidget(
@@ -595,6 +615,81 @@ class _SessionPickerWidget extends StatelessWidget {
           }),
         const SizedBox(height: 8),
       ],
+    );
+  }
+}
+
+// ── Embedded-Server-Banner ────────────────────────────────────────────────────
+
+class _EmbeddedServerBanner extends StatelessWidget {
+  final AsyncValue<bool> serverAsync;
+  final VoidCallback onUseLocal;
+
+  const _EmbeddedServerBanner({
+    required this.serverAsync,
+    required this.onUseLocal,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 20),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            serverAsync.when(
+              loading: () => SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: cs.primary,
+                ),
+              ),
+              data: (running) => Icon(
+                running ? Icons.circle : Icons.circle_outlined,
+                size: 14,
+                color: running ? Colors.greenAccent : Colors.grey,
+              ),
+              error: (_, __) => Icon(
+                Icons.warning_amber_rounded,
+                size: 16,
+                color: cs.error,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: serverAsync.when(
+                loading: () => const Text(
+                  'Lokaler Server startet…',
+                  style: TextStyle(fontSize: 13, color: Colors.white70),
+                ),
+                data: (running) => Text(
+                  running
+                      ? 'Lokaler Server läuft (localhost:50051)'
+                      : 'Lokaler Server nicht verfügbar',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: running ? Colors.white : Colors.white54,
+                  ),
+                ),
+                error: (e, _) => Text(
+                  'Server-Fehler: $e',
+                  style: TextStyle(fontSize: 12, color: cs.error),
+                ),
+              ),
+            ),
+            if (serverAsync.valueOrNull == true)
+              TextButton(
+                onPressed: onUseLocal,
+                child: const Text('Lokal nutzen'),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

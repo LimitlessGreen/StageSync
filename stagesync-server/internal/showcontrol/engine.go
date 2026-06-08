@@ -805,6 +805,9 @@ func (e *Engine) dispatchAudio(ctx context.Context, cue *pb.Cue) error {
 		return err
 	}
 
+	// Pre-preload the next audio cue so its ring buffer is full before Go.
+	go e.preloadNextAudioCue(cue.CueId, dispatch)
+
 	if !params.Audio.Loop {
 		waitMs := params.Audio.DeclaredDurationMs
 		end := params.Audio.EndTimeMs
@@ -1118,6 +1121,47 @@ func (e *Engine) DispatchStopCueAudio(ctx context.Context, cueID string, fadeOut
 		RunningCueIds: ids,
 	})
 	return err
+}
+
+// preloadNextAudioCue sends a Preload command for the next audio cue after
+// afterCueID. Called in a goroutine right after AudioPlay is dispatched so
+// the ring buffer is full by the time the user presses Go again.
+func (e *Engine) preloadNextAudioCue(afterCueID string, dispatch func(*pb.NodeCommandRequest) error) {
+	list, found := e.store.GetCueList(e.cueListID)
+	if !found || len(list.Cues) == 0 {
+		return
+	}
+	// Find the cue after afterCueID in the list.
+	var nextAudio *pb.Cue
+	found = false
+	for _, c := range list.Cues {
+		if found {
+			if a, ok := c.Params.(*pb.Cue_Audio); ok && a != nil &&
+				(a.Audio.AssetId != "" || a.Audio.FilePath != "") {
+				nextAudio = c
+				break
+			}
+		}
+		if c.CueId == afterCueID {
+			found = true
+		}
+	}
+	if nextAudio == nil {
+		return
+	}
+	a := nextAudio.Params.(*pb.Cue_Audio).Audio
+	_ = dispatch(&pb.NodeCommandRequest{
+		SessionId:    e.sessionID,
+		TargetNodeId: nextAudio.TargetNodeId,
+		Command: &pb.NodeCommandRequest_AudioPreload{
+			AudioPreload: &pb.AudioPreloadCommand{
+				CueId:   nextAudio.CueId,
+				AssetId: a.AssetId,
+				FilePath: a.FilePath,
+			},
+		},
+	})
+	log.Printf("[engine] pre-preload next audio cueId=%s", nextAudio.CueId)
 }
 
 // resolveCue schlägt eine Cue aus der CueList auf (nil wenn nicht gefunden).

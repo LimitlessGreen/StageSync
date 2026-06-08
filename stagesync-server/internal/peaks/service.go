@@ -9,7 +9,7 @@ import (
 	"os"
 	"sync"
 
-	"stagesync-server/internal/audioengine"
+	"stagesync-server/internal/decode"
 )
 
 // peakRate: Mono-Decode-Rate für die Peak-Berechnung. Ausreichend hoch, damit
@@ -71,7 +71,7 @@ func (s *Service) Generate(assetID string, buckets int) (*Waveform, error) {
 		return nil, fmt.Errorf("resolve asset: %w", err)
 	}
 
-	pcm, _, _, err := audioengine.DecodePCM(path, peakRate, 1)
+	pcm, _, _, err := decode.PCM(path, peakRate, 1)
 	if err != nil {
 		return nil, fmt.Errorf("decode: %w", err)
 	}

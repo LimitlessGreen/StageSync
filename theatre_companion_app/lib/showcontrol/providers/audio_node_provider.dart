@@ -45,6 +45,17 @@ class AudioNodeNotifier extends StateNotifier<AudioNodeStatus> {
 
   Future<void> auditionStop() => _service?.auditionStop() ?? Future.value();
 
+  /// Scans [filePath] for silence boundaries.
+  /// Returns (startMs, endMs) of actual audio content or null on failure.
+  Future<({double startMs, double endMs})?> detectSilence(
+    String filePath, {
+    double thresholdDb = -60.0,
+    double padMs = 50.0,
+  }) =>
+      _service?.detectSilence(filePath,
+          thresholdDb: thresholdDb, padMs: padMs) ??
+      Future.value(null);
+
   /// Sets the master output volume in dB immediately.
   /// Affects all active handles; safe to call while cues are playing.
   void setMasterVolume(double db) {

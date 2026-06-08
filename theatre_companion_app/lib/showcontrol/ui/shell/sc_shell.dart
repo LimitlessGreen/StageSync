@@ -39,6 +39,9 @@ import '../screens/nodes/node_management_panel.dart';
 import '../screens/settings/settings_screen.dart';
 import '../screens/media/media_manager_screen.dart';
 import '../screens/audio/local_audio_panel.dart';
+import '../../providers/embedded_server_provider.dart';
+import '../../providers/standalone_bootstrap_provider.dart';
+import '../../preferences/device_preferences.dart';
 import '../../providers/grid_provider.dart';
 import '../../domain/patch_config.dart';
 import '../../domain/show.dart';
@@ -447,11 +450,65 @@ class _HeaderBar extends ConsumerWidget {
     ));
   }
 
+  void _showShareDialog(BuildContext context, WidgetRef ref) {
+    final session   = ref.read(sessionProvider).session;
+    final port      = ref.read(embeddedPortProvider);
+    final sessionId = session?.sessionId ?? '—';
+    final sessionName = session?.name ?? '—';
+
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.share_outlined, size: 20),
+            SizedBox(width: 8),
+            Text('Session teilen'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Andere Geräte im Netz können dieser Session beitreten:',
+              style: TextStyle(color: Colors.white70, fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            _ShareInfoRow(label: 'Session', value: sessionName),
+            _ShareInfoRow(label: 'Port', value: '$port'),
+            _ShareInfoRow(label: 'Session-ID', value: sessionId),
+            const SizedBox(height: 8),
+            const Text(
+              'Tipp: Der Server kündigt sich via mDNS an — andere StageSync-Geräte '
+              'finden ihn automatisch über "Im Netz suchen".',
+              style: TextStyle(color: Colors.white38, fontSize: 11),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Schließen'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSwitchSessionDialog(BuildContext context, WidgetRef ref) {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => _SwitchSessionDialog(onLeave: onLeave),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final audioStatus = ref.watch(audioNodeProvider);
-    final maStatus    = ref.watch(maNodeProvider);
-    final tasks       = ref.watch(sessionProvider).myNode?.tasks.toList() ?? [];
+    final audioStatus  = ref.watch(audioNodeProvider);
+    final maStatus     = ref.watch(maNodeProvider);
+    final tasks        = ref.watch(sessionProvider).myNode?.tasks.toList() ?? [];
+    final isStandalone = ref.watch(isStandaloneSupportedProvider);
 
     return Container(
       height: 36,
@@ -495,14 +552,33 @@ class _HeaderBar extends ConsumerWidget {
             constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             onPressed: () => _openSettings(context),
           ),
-          IconButton(
-            icon: const Icon(Icons.logout, size: 16),
-            color: ScColors.textDim,
-            tooltip: 'Session verlassen',
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-            onPressed: onLeave,
-          ),
+          // Standalone: Share + Switch; Remote: nur Logout.
+          if (isStandalone) ...[
+            IconButton(
+              icon: const Icon(Icons.group_add_outlined, size: 16),
+              color: ScColors.textDim,
+              tooltip: 'Session teilen — andere Geräte einladen',
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              onPressed: () => _showShareDialog(context, ref),
+            ),
+            IconButton(
+              icon: const Icon(Icons.swap_horiz, size: 16),
+              color: ScColors.textDim,
+              tooltip: 'Andere Session verbinden',
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              onPressed: () => _showSwitchSessionDialog(context, ref),
+            ),
+          ] else
+            IconButton(
+              icon: const Icon(Icons.logout, size: 16),
+              color: ScColors.textDim,
+              tooltip: 'Session verlassen',
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              onPressed: onLeave,
+            ),
         ],
       ),
     );
@@ -550,6 +626,144 @@ class _HeaderBar extends ConsumerWidget {
     _                     => 'GrandMA OSC nicht verbunden  ·  Klicken → Nodes-Panel',
   };
 }
+
+// ── Share-Dialog Helper ───────────────────────────────────────────────────────
+
+class _ShareInfoRow extends StatelessWidget {
+  final String label;
+  final String value;
+  const _ShareInfoRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 80,
+              child: Text('$label:',
+                  style: const TextStyle(color: Colors.white54, fontSize: 12)),
+            ),
+            Expanded(
+              child: SelectableText(
+                value,
+                style: const TextStyle(
+                    fontFamily: 'monospace', fontSize: 13, color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+// ── Switch-Session-Dialog ─────────────────────────────────────────────────────
+
+class _SwitchSessionDialog extends ConsumerStatefulWidget {
+  final VoidCallback onLeave;
+  const _SwitchSessionDialog({required this.onLeave});
+
+  @override
+  ConsumerState<_SwitchSessionDialog> createState() => _SwitchSessionDialogState();
+}
+
+class _SwitchSessionDialogState extends ConsumerState<_SwitchSessionDialog> {
+  final _hostCtrl = TextEditingController(text: '');
+  final _portCtrl = TextEditingController(text: '50051');
+  String? _error;
+
+  @override
+  void dispose() {
+    _hostCtrl.dispose();
+    _portCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _connect() async {
+    final host = _hostCtrl.text.trim();
+    final port = int.tryParse(_portCtrl.text.trim()) ?? 50051;
+    if (host.isEmpty) {
+      setState(() => _error = 'IP-Adresse eingeben.');
+      return;
+    }
+    // Host/Port in Preferences speichern — SessionScreen liest sie beim Start.
+    // deviceName aus bestehenden Prefs übernehmen um ihn nicht zu löschen.
+    final existing = await DevicePreferences.loadConnectDefaults();
+    await DevicePreferences.saveConnectDefaults(
+        host: host, port: port, deviceName: existing.deviceName);
+    if (!mounted) return;
+    // Dialog schließen, dann Session verlassen.
+    // _StandaloneBootstrapScreen erkennt !isInSession und zeigt SessionScreen.
+    Navigator.pop(context);
+    widget.onLeave();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.swap_horiz, size: 20),
+            SizedBox(width: 8),
+            Text('Andere Session verbinden'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Verlässt die lokale Standalone-Session und öffnet die Verbindungsansicht '
+              'für einen Remote-Server.',
+              style: TextStyle(color: Colors.white70, fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _hostCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'IP-Adresse (optional)',
+                      border: OutlineInputBorder(),
+                    ),
+                    autofocus: true,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 80,
+                  child: TextField(
+                    controller: _portCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Port',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Text(_error!,
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.error, fontSize: 12)),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: _connect,
+            child: const Text('Weiter'),
+          ),
+        ],
+      );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _ServiceStatusPill extends StatelessWidget {
   final IconData icon;

@@ -62,8 +62,9 @@ static int64_t now_unix_ms(void) {
 typedef struct {
     char         cue_id[CUE_ID_LEN];
     ma_sound     sound;
-    int          active;      // 1 = in use
-    int          initialised; // ma_sound_init called
+    int          active;         /* 1 = in use */
+    int          initialised;    /* ma_sound_init called */
+    float        volume_linear;  /* last set playback volume (for resume fade) */
 } Handle;
 
 static Handle   g_handles[MAX_HANDLES];
@@ -159,9 +160,10 @@ static ma_backend backend_from_name(const char* name) {
     if (strcmp(name, "alsa") == 0) return ma_backend_alsa;
     if (strcmp(name, "coreaudio") == 0) return ma_backend_coreaudio;
     if (strcmp(name, "wasapi") == 0) return ma_backend_wasapi;
-    // Vendored miniaudio in this repo has no ASIO backend symbol.
-    // Treat "asio" as preferred low-latency intent and fall back to WASAPI.
-    if (strcmp(name, "asio") == 0) return ma_backend_wasapi;
+    if (strcmp(name, "asio") == 0) {
+        /* miniaudio 0.11.x has no native ASIO backend — map to WASAPI */
+        return ma_backend_wasapi;
+    }
     if (strcmp(name, "directsound") == 0 || strcmp(name, "dsound") == 0) return ma_backend_dsound;
     if (strcmp(name, "aaudio") == 0) return ma_backend_aaudio;
     if (strcmp(name, "opensl") == 0 || strcmp(name, "opensles") == 0) return ma_backend_opensl;
@@ -383,35 +385,75 @@ void ma_wrapper_deinit(void) {
 
 // ── Device management ─────────────────────────────────────────────────────────
 
+/* Replace any byte that would produce invalid UTF-8 in JSON with '?'.
+   Handles incomplete multi-byte sequences and lone continuation bytes. */
+static void sanitize_utf8(char* s, size_t max_bytes) {
+    size_t i = 0;
+    size_t len = strnlen(s, max_bytes);
+    while (i < len) {
+        unsigned char c = (unsigned char)s[i];
+        int seq = 0;
+        if      (c < 0x80)              { i++;    continue; }  /* ASCII */
+        else if ((c & 0xE0) == 0xC0)   seq = 2;
+        else if ((c & 0xF0) == 0xE0)   seq = 3;
+        else if ((c & 0xF8) == 0xF0)   seq = 4;
+        else                            { s[i++] = '?'; continue; } /* bare continuation */
+
+        if (i + (size_t)seq > len) { /* truncated sequence — replace leader + rest */
+            for (size_t j = i; j < len; j++) s[j] = '?';
+            break;
+        }
+        int ok = 1;
+        for (int k = 1; k < seq; k++)
+            if (((unsigned char)s[i + k] & 0xC0) != 0x80) { ok = 0; break; }
+        if (!ok) { s[i++] = '?'; continue; }
+        i += (size_t)seq;
+    }
+}
+
 char* ma_wrapper_list_devices(void) {
     refresh_device_catalog();
 
-    // Each entry: ~320 bytes worst case for name + JSON overhead.
-    size_t buf_size = 2 + (size_t)g_device_count * 320 + 4;
+    /* 640 bytes per entry: 512 for name (worst-case escaped) + JSON wrapper */
+    size_t buf_size = 4 + (size_t)g_device_count * 640 + 4;
     char* buf = (char*)malloc(buf_size);
-    if (!buf) {
-        return NULL;
-    }
+    if (!buf) return NULL;
 
-    int pos = 0;
+    size_t pos = 0;
     buf[pos++] = '[';
     for (int32_t i = 0; i < g_device_count; i++) {
         if (i > 0) buf[pos++] = ',';
-        // Escape double quotes in device name.
-        char escaped[256] = {0};
+
+        /* Copy and sanitize device name before escaping. */
+        char name_clean[256];
+        strncpy(name_clean, g_devices[i].name, sizeof(name_clean) - 1);
+        name_clean[sizeof(name_clean) - 1] = '\0';
+        sanitize_utf8(name_clean, sizeof(name_clean));
+
+        /* JSON-escape: backslash and double-quote only (sanitize_utf8 already
+           removed invalid UTF-8, so no other escaping is needed for JSON). */
+        char escaped[512] = {0};
         int ei = 0;
-        const char* n = g_devices[i].name;
-        for (int ni = 0; n[ni] && ei < 250; ni++) {
-            if (n[ni] == '"' || n[ni] == '\\') escaped[ei++] = '\\';
-            escaped[ei++] = n[ni];
+        for (int ni = 0; name_clean[ni] && ei < 506; ni++) {
+            if (name_clean[ni] == '"' || name_clean[ni] == '\\')
+                escaped[ei++] = '\\';
+            escaped[ei++] = name_clean[ni];
         }
+        /* Trim any partial UTF-8 sequence introduced by the 506-byte cut. */
+        while (ei > 0 && ((unsigned char)escaped[ei - 1] & 0xC0) == 0x80) ei--;
+        escaped[ei] = '\0';
+
         const char* backend_name = backend_to_name(g_devices[i].backend);
-        pos += snprintf(buf + pos, buf_size - (size_t)pos,
+        int written = snprintf(buf + pos, buf_size - pos,
             "{\"index\":%d,\"name\":\"%s\",\"backend\":\"%s\",\"isDefault\":%s}",
-            g_devices[i].index, escaped, backend_name, g_devices[i].is_default ? "true" : "false");
+            g_devices[i].index, escaped, backend_name,
+            g_devices[i].is_default ? "true" : "false");
+        if (written > 0) pos += (size_t)written;
     }
-    buf[pos++] = ']';
-    buf[pos]   = '\0';
+    if (pos < buf_size - 2) {
+        buf[pos++] = ']';
+        buf[pos]   = '\0';
+    }
     return buf;
 }
 
@@ -434,8 +476,12 @@ int32_t ma_wrapper_preload(const char* cue_id, const char* file_path) {
     Handle* h = alloc_handle(cue_id);
     if (!h) { ma_mutex_unlock(&g_mutex); return -1; }
 
+    /* MA_SOUND_FLAG_DECODE would decode the whole file to RAM here — that takes
+       100–400 ms for a typical MP3 and causes audible delay on Go.
+       Streaming mode (no DECODE flag) opens the file and fills a ring buffer
+       in a background thread instead. On any local SSD this is transparent. */
     ma_result r = ma_sound_init_from_file(&g_engine, file_path,
-        MA_SOUND_FLAG_DECODE | MA_SOUND_FLAG_NO_SPATIALIZATION,
+        MA_SOUND_FLAG_NO_SPATIALIZATION,
         NULL, NULL, &h->sound);
 
     if (r == MA_SUCCESS) {
@@ -461,7 +507,9 @@ int32_t ma_wrapper_play(
     float       volume_db,
     float       fade_in_ms,
     float       fade_out_ms,
-    int32_t     loop)
+    int32_t     loop,
+    float       start_time_ms,
+    float       end_time_ms)
 {
     if (!g_engine_ready || !g_mutex_ready || !cue_id) return -1;
 
@@ -469,34 +517,78 @@ int32_t ma_wrapper_play(
     Handle* h = find_handle(cue_id);
     if (!h || !h->initialised) { ma_mutex_unlock(&g_mutex); return -1; }
 
-    // Apply volume (linear from dB).
-    float linear_vol = (volume_db <= -100.0f) ? 0.0f
-                     : powf(10.0f, volume_db / 20.0f);
+    uint32_t sr = ma_engine_get_sample_rate(&g_engine);
+
+    /* ── Volume ─────────────────────────────────────────────────────────── */
+    float linear_vol = (volume_db <= -100.0f) ? 0.0f : powf(10.0f, volume_db / 20.0f);
     ma_sound_set_volume(&h->sound, linear_vol);
+    h->volume_linear = linear_vol;
     ma_sound_set_looping(&h->sound, loop ? MA_TRUE : MA_FALSE);
 
-    // Fade in.
-    if (fade_in_ms > 0.0f) {
-        ma_sound_set_fade_in_milliseconds(&h->sound, 0.0f, linear_vol,
-            (ma_uint64)fade_in_ms);
+    if (fade_in_ms > 0.0f)
+        ma_sound_set_fade_in_milliseconds(&h->sound, 0.0f, linear_vol, (ma_uint64)fade_in_ms);
+
+    /* ── File start position ─────────────────────────────────────────────── */
+    ma_uint64 start_file_frames = 0;
+    if (start_time_ms > 0.0f) {
+        start_file_frames = (ma_uint64)((double)start_time_ms * sr / 1000.0);
+        ma_sound_seek_to_pcm_frame(&h->sound, start_file_frames);
     }
 
-    // Timestamp scheduling.
+    /* ── Timestamp scheduling / late-join compensation ───────────────────── */
+    ma_uint64 engine_start_frame = ma_engine_get_time_in_pcm_frames(&g_engine);
+    double    late_ms            = 0.0;   /* how many ms we are past the intended start */
+
     if (start_unix_ms > 0) {
-        int64_t now_ms  = now_unix_ms();
-        int64_t delta   = start_unix_ms - now_ms;
-        uint32_t sr     = ma_engine_get_sample_rate(&g_engine);
+        int64_t now_ms = now_unix_ms();
+        int64_t delta  = start_unix_ms - now_ms;
 
         if (delta > 0) {
-            // Future start: schedule in engine PCM frames.
-            ma_uint64 engine_time = ma_engine_get_time_in_pcm_frames(&g_engine);
+            /* Future: schedule start */
             ma_uint64 delay_frames = (ma_uint64)((double)delta * sr / 1000.0);
-            ma_sound_set_start_time_in_pcm_frames(&h->sound,
-                engine_time + delay_frames);
+            engine_start_frame += delay_frames;
+            ma_sound_set_start_time_in_pcm_frames(&h->sound, engine_start_frame);
         } else if (delta < -50) {
-            // Past start (>50ms): seek to correct offset so timeline stays aligned.
-            ma_uint64 offset_frames = (ma_uint64)((-delta) * (double)sr / 1000.0);
-            ma_sound_seek_to_pcm_frame(&h->sound, offset_frames);
+            /* Past by > 50 ms: seek further into file to align timeline */
+            late_ms = (double)(-delta);
+            ma_uint64 offset_frames = (ma_uint64)(late_ms * sr / 1000.0);
+            ma_sound_seek_to_pcm_frame(&h->sound, start_file_frames + offset_frames);
+        }
+    }
+
+    /* ── End time / scheduled stop ───────────────────────────────────────── */
+    if (end_time_ms > 0.0f) {
+        double play_from_ms  = (start_time_ms > 0.0f ? start_time_ms : 0.0f) + late_ms;
+        double remaining_ms  = (double)end_time_ms - play_from_ms;
+
+        if (remaining_ms <= 0.0) {
+            /* Already past the end — do not start */
+            ma_mutex_unlock(&g_mutex);
+            return 0;
+        }
+
+        ma_uint64 remaining_frames = (ma_uint64)(remaining_ms * sr / 1000.0);
+
+        if (fade_out_ms > 0.0f && remaining_ms > fade_out_ms) {
+            /* Schedule fade-out to start before hard stop */
+            ma_uint64 fade_frames  = (ma_uint64)((double)fade_out_ms * sr / 1000.0);
+            ma_uint64 fade_engine  = engine_start_frame + remaining_frames - fade_frames;
+            ma_uint64 stop_engine  = engine_start_frame + remaining_frames;
+            /* miniaudio has no "start fade at engine time T" API, so we approximate:
+               if the fade start is already past, begin the fade immediately. */
+            ma_uint64 now_engine = ma_engine_get_time_in_pcm_frames(&g_engine);
+            if (fade_engine <= now_engine) {
+                float cur_vol = ma_sound_get_volume(&h->sound);
+                ma_sound_set_fade_in_milliseconds(&h->sound, cur_vol, 0.0f, (ma_uint64)fade_out_ms);
+            } else {
+                /* Store the stop time; the fade-out will be applied by the server
+                   via ma_wrapper_fade_volume() at the appropriate moment. */
+                (void)fade_engine; /* suppress unused warning */
+            }
+            ma_sound_set_stop_time_in_pcm_frames(&h->sound, stop_engine);
+        } else {
+            ma_sound_set_stop_time_in_pcm_frames(&h->sound,
+                engine_start_frame + remaining_frames);
         }
     }
 
@@ -527,19 +619,70 @@ void ma_wrapper_stop(const char* cue_id, float fade_out_ms) {
     ma_mutex_unlock(&g_mutex);
 }
 
-void ma_wrapper_pause(const char* cue_id) {
+void ma_wrapper_set_master_volume(float volume_db) {
+    if (!g_engine_ready) return;
+    float linear = (volume_db <= -100.0f) ? 0.0f : powf(10.0f, volume_db / 20.0f);
+    ma_engine_set_volume(&g_engine, linear);
+}
+
+void ma_wrapper_pause(const char* cue_id, float fade_ms) {
     if (!g_mutex_ready || !cue_id) return;
     ma_mutex_lock(&g_mutex);
     Handle* h = find_handle(cue_id);
-    if (h && h->initialised) ma_sound_stop(&h->sound);
+    if (h && h->initialised) {
+        if (fade_ms > 0.0f && g_engine_ready) {
+            float cur_vol = ma_sound_get_volume(&h->sound);
+            ma_sound_set_fade_in_milliseconds(&h->sound, cur_vol, 0.0f, (ma_uint64)fade_ms);
+            uint32_t  sr           = ma_engine_get_sample_rate(&g_engine);
+            ma_uint64 engine_time  = ma_engine_get_time_in_pcm_frames(&g_engine);
+            ma_uint64 fade_frames  = (ma_uint64)((double)fade_ms * sr / 1000.0);
+            /* ma_sound_stop() after the fade (doesn't reset playhead = true pause) */
+            ma_sound_set_stop_time_in_pcm_frames(&h->sound, engine_time + fade_frames);
+        } else {
+            ma_sound_stop(&h->sound);
+        }
+    }
     ma_mutex_unlock(&g_mutex);
 }
 
-void ma_wrapper_resume(const char* cue_id) {
+void ma_wrapper_resume(const char* cue_id, float fade_ms) {
     if (!g_mutex_ready || !cue_id) return;
     ma_mutex_lock(&g_mutex);
     Handle* h = find_handle(cue_id);
-    if (h && h->initialised) ma_sound_start(&h->sound);
+    if (h && h->initialised) {
+        /* Clear any pending stop time from the pause fade */
+        ma_sound_set_stop_time_in_pcm_frames(&h->sound, (~(ma_uint64)0));
+        if (fade_ms > 0.0f) {
+            float target = h->volume_linear > 0.0f ? h->volume_linear : 1.0f;
+            ma_sound_set_volume(&h->sound, 0.0f);
+            ma_sound_set_fade_in_milliseconds(&h->sound, 0.0f, target, (ma_uint64)fade_ms);
+        }
+        ma_sound_start(&h->sound);
+    }
+    ma_mutex_unlock(&g_mutex);
+}
+
+void ma_wrapper_fade_volume(
+    const char* cue_id,
+    float       target_db,
+    float       duration_ms,
+    int32_t     stop_when_done)
+{
+    if (!g_mutex_ready || !g_engine_ready || !cue_id) return;
+    ma_mutex_lock(&g_mutex);
+    Handle* h = find_handle(cue_id);
+    if (h && h->initialised) {
+        float cur_vol    = ma_sound_get_volume(&h->sound);
+        float target_lin = (target_db <= -100.0f) ? 0.0f : powf(10.0f, target_db / 20.0f);
+        ma_sound_set_fade_in_milliseconds(&h->sound, cur_vol, target_lin, (ma_uint64)duration_ms);
+        h->volume_linear = target_lin;
+        if (stop_when_done) {
+            uint32_t  sr          = ma_engine_get_sample_rate(&g_engine);
+            ma_uint64 engine_time = ma_engine_get_time_in_pcm_frames(&g_engine);
+            ma_uint64 fade_frames = (ma_uint64)((double)duration_ms * sr / 1000.0);
+            ma_sound_set_stop_time_in_pcm_frames(&h->sound, engine_time + fade_frames);
+        }
+    }
     ma_mutex_unlock(&g_mutex);
 }
 
@@ -552,6 +695,77 @@ void ma_wrapper_stop_all(void) {
         }
     }
     ma_mutex_unlock(&g_mutex);
+}
+
+/* ── Silence detection ───────────────────────────────────────────────────────
+   Scans the entire file as mono f32 PCM and finds the first/last frame whose
+   peak amplitude exceeds threshold_db. Adds pad_ms of margin on both sides.
+   Returns 0 on success, -1 on bad args, -2 if the file could not be opened.   */
+int32_t ma_wrapper_detect_silence(
+    const char* file_path,
+    float       threshold_db,
+    float       pad_ms,
+    float*      out_start_ms,
+    float*      out_end_ms)
+{
+    if (!file_path || !out_start_ms || !out_end_ms) return -1;
+    *out_start_ms = 0.0f;
+    *out_end_ms   = 0.0f;
+
+    /* Decode to mono f32 at native sample rate for fast scanning */
+    ma_decoder_config cfg = ma_decoder_config_init(ma_format_f32, 1, 0);
+    ma_decoder decoder;
+    if (ma_decoder_init_file(file_path, &cfg, &decoder) != MA_SUCCESS) return -2;
+
+    float threshold_lin = (threshold_db <= -100.0f) ? 0.0f
+                        : powf(10.0f, threshold_db / 20.0f);
+    uint32_t sr = decoder.outputSampleRate;
+    if (sr == 0) { ma_decoder_uninit(&decoder); return -2; }
+
+#define SILENCE_CHUNK 2048
+    float     buf[SILENCE_CHUNK];
+    ma_uint64 total_frames       = 0;
+    ma_uint64 first_nonsilent    = (ma_uint64)-1;
+    ma_uint64 last_nonsilent     = 0;
+    int       found_any          = 0;
+
+    for (;;) {
+        ma_uint64 frames_read = 0;
+        ma_result r = ma_decoder_read_pcm_frames(&decoder, buf, SILENCE_CHUNK, &frames_read);
+        if (frames_read == 0) break;
+
+        for (ma_uint64 i = 0; i < frames_read; i++) {
+            float s = buf[i] < 0.0f ? -buf[i] : buf[i];
+            if (s >= threshold_lin) {
+                ma_uint64 abs_frame = total_frames + i;
+                if (!found_any || abs_frame < first_nonsilent)
+                    first_nonsilent = abs_frame;
+                last_nonsilent = abs_frame;
+                found_any = 1;
+            }
+        }
+        total_frames += frames_read;
+        if (r != MA_SUCCESS) break; /* MA_AT_END or error */
+    }
+    ma_decoder_uninit(&decoder);
+
+    double total_ms = (double)total_frames / sr * 1000.0;
+
+    if (!found_any) {
+        /* Completely silent — return full duration so caller can decide */
+        *out_start_ms = 0.0f;
+        *out_end_ms   = (float)total_ms;
+        return 0;
+    }
+
+    double raw_start = (double)first_nonsilent / sr * 1000.0;
+    double raw_end   = (double)last_nonsilent  / sr * 1000.0;
+
+    double s = raw_start - pad_ms;
+    double e = raw_end   + pad_ms;
+    *out_start_ms = (float)(s < 0.0       ? 0.0       : s);
+    *out_end_ms   = (float)(e > total_ms  ? total_ms  : e);
+    return 0;
 }
 
 void ma_wrapper_free_string(char* str) {

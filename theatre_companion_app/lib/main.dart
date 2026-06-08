@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'network/isolate/isolate_messages.dart';
 import 'showcontrol/providers/session_provider.dart';
+import 'showcontrol/providers/standalone_bootstrap_provider.dart';
+import 'showcontrol/ui/shell/sc_adaptive_shell.dart';
 import 'ui/providers/network_state_provider.dart';
 import 'ui/screens/chat_screen.dart';
 import 'ui/screens/home_screen.dart';
@@ -67,18 +69,107 @@ class _NetworkBootstrap extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // BLE-Mesh-Netzwerk-Stack vorübergehend deaktiviert — startet direkt in Show-Ansicht.
-    // Original:
-    // final managerAsync = ref.watch(networkIsolateManagerProvider);
-    // return managerAsync.when(
-    //   loading: () => const _SplashScreen(),
-    //   error: (e, st) => _ErrorScreen(error: e.toString()),
-    //   // data: (_) => const _AppShell(),
-    //   data: (_) => const SessionScreen(),
-    // );
+    // Desktop: automatischer Standalone-Start via embedded Go-Server.
+    if (ref.watch(isStandaloneSupportedProvider)) {
+      return const _StandaloneBootstrapScreen();
+    }
+    // Mobile / kein embedded server: manuelle Session-Konfiguration.
     return const SessionScreen();
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Standalone-Bootstrap — Desktop only
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _StandaloneBootstrapScreen extends ConsumerWidget {
+  const _StandaloneBootstrapScreen();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Wenn der User explizit eine andere Session gewählt hat (z.B. nach
+    // "Andere Session verbinden"), gilt sessionProvider als Quelle der Wahrheit.
+    final sessionState = ref.watch(sessionProvider);
+    if (sessionState.isInSession) {
+      return const ScAdaptiveShell();
+    }
+
+    final bootstrap = ref.watch(standaloneBootstrapProvider);
+    return bootstrap.when(
+      loading: () => const _SplashScreen(),
+      data: (_) {
+        // Session sollte jetzt aktiv sein — sessionProvider-Watch oben greift.
+        // Falls nicht (edge case: Audio-Fehler aber Session ok), zeigen wir
+        // trotzdem die Shell falls session aktiv ist, sonst Session-Screen.
+        final s = ref.read(sessionProvider);
+        return s.isInSession ? const ScAdaptiveShell() : const SessionScreen();
+      },
+      error: (e, _) => _BootstrapErrorScreen(error: e.toString()),
+    );
+  }
+}
+
+class _BootstrapErrorScreen extends ConsumerWidget {
+  final String error;
+  const _BootstrapErrorScreen({required this.error});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Scaffold(
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.theater_comedy,
+                  size: 64,
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.6)),
+              const SizedBox(height: 24),
+              const Text('StageSync',
+                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 32),
+              Icon(Icons.warning_amber_rounded,
+                  size: 36, color: Theme.of(context).colorScheme.error),
+              const SizedBox(height: 12),
+              Text(
+                'Lokaler Server nicht erreichbar',
+                style: Theme.of(context).textTheme.titleMedium,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                error,
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 32),
+              FilledButton.icon(
+                icon: const Icon(Icons.refresh),
+                label: const Text('Erneut versuchen'),
+                onPressed: () => ref.invalidate(standaloneBootstrapProvider),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.dns_outlined),
+                label: const Text('Manuell verbinden'),
+                onPressed: () {
+                  // Zeigt den normalen Session-Screen als Fallback.
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const SessionScreen()),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ScAdaptiveShell muss importiert werden für _StandaloneBootstrapScreen.
+// Wir importieren es direkt via den bestehenden Pfad.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Splash

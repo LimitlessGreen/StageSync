@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
@@ -30,18 +32,29 @@ typedef _UnloadNative = Void Function(Pointer<Utf8>);
 typedef _UnloadDart = void Function(Pointer<Utf8>);
 
 typedef _PlayNative = Int32 Function(
-    Pointer<Utf8>, Int64, Float, Float, Float, Int32);
+    Pointer<Utf8>, Int64, Float, Float, Float, Int32, Float, Float);
 typedef _PlayDart = int Function(
-    Pointer<Utf8>, int, double, double, double, int);
+    Pointer<Utf8>, int, double, double, double, int, double, double);
 
 typedef _StopNative = Void Function(Pointer<Utf8>, Float);
 typedef _StopDart = void Function(Pointer<Utf8>, double);
 
-typedef _PauseNative = Void Function(Pointer<Utf8>);
-typedef _PauseDart = void Function(Pointer<Utf8>);
+typedef _PauseNative = Void Function(Pointer<Utf8>, Float);
+typedef _PauseDart = void Function(Pointer<Utf8>, double);
 
-typedef _ResumNative = Void Function(Pointer<Utf8>);
-typedef _ResumDart = void Function(Pointer<Utf8>);
+typedef _ResumNative = Void Function(Pointer<Utf8>, Float);
+typedef _ResumDart = void Function(Pointer<Utf8>, double);
+
+typedef _FadeVolNative = Void Function(Pointer<Utf8>, Float, Float, Int32);
+typedef _FadeVolDart = void Function(Pointer<Utf8>, double, double, int);
+
+typedef _SetMasterVolNative = Void Function(Float);
+typedef _SetMasterVolDart = void Function(double);
+
+typedef _DetectSilenceNative = Int32 Function(
+    Pointer<Utf8>, Float, Float, Pointer<Float>, Pointer<Float>);
+typedef _DetectSilenceDart = int Function(
+    Pointer<Utf8>, double, double, Pointer<Float>, Pointer<Float>);
 
 typedef _StopAllNative = Void Function();
 typedef _StopAllDart = void Function();
@@ -86,8 +99,11 @@ class MiniaudioEngine implements AbstractAudioEngine {
   late final _StopDart _stop;
   late final _PauseDart _pause;
   late final _ResumDart _resume;
+  late final _FadeVolDart _fadeVol;
+  late final _SetMasterVolDart _setMasterVol;
   late final _StopAllDart _stopAll;
   late final _FreeStrDart _freeStr;
+  late final _DetectSilenceDart _detectSilence;
 
   bool _initialized = false;
   AudioDevice? _selectedDevice;
@@ -109,12 +125,12 @@ class MiniaudioEngine implements AbstractAudioEngine {
     _play = _lib.lookupFunction<_PlayNative, _PlayDart>('ma_wrapper_play');
     _stop = _lib.lookupFunction<_StopNative, _StopDart>('ma_wrapper_stop');
     _pause = _lib.lookupFunction<_PauseNative, _PauseDart>('ma_wrapper_pause');
-    _resume =
-        _lib.lookupFunction<_ResumNative, _ResumDart>('ma_wrapper_resume');
-    _stopAll = _lib
-        .lookupFunction<_StopAllNative, _StopAllDart>('ma_wrapper_stop_all');
-    _freeStr = _lib
-        .lookupFunction<_FreeStrNative, _FreeStrDart>('ma_wrapper_free_string');
+    _resume = _lib.lookupFunction<_ResumNative, _ResumDart>('ma_wrapper_resume');
+    _fadeVol = _lib.lookupFunction<_FadeVolNative, _FadeVolDart>('ma_wrapper_fade_volume');
+    _setMasterVol = _lib.lookupFunction<_SetMasterVolNative, _SetMasterVolDart>('ma_wrapper_set_master_volume');
+    _stopAll = _lib.lookupFunction<_StopAllNative, _StopAllDart>('ma_wrapper_stop_all');
+    _freeStr = _lib.lookupFunction<_FreeStrNative, _FreeStrDart>('ma_wrapper_free_string');
+    _detectSilence = _lib.lookupFunction<_DetectSilenceNative, _DetectSilenceDart>('ma_wrapper_detect_silence');
   }
 
   // ── AbstractAudioEngine ────────────────────────────────────────────────────
@@ -127,8 +143,7 @@ class MiniaudioEngine implements AbstractAudioEngine {
   @override
   void setMasterVolume(double db) {
     _masterVolumeDb = db;
-    // TODO(native): expose ma_engine_set_volume() via FFI (ma_wrapper_set_master_volume).
-    // Until then, master volume changes have no effect on output.
+    _setMasterVol(db);
   }
 
   @override
@@ -174,7 +189,7 @@ class MiniaudioEngine implements AbstractAudioEngine {
     final ptr = _listDev();
     if (ptr == nullptr) return [];
     try {
-      final json = ptr.toDartString();
+      final json = _ptrToString(ptr);
       final list = (jsonDecode(json) as List).cast<Map<String, dynamic>>();
       return list
           .map((e) => AudioDevice(
@@ -262,6 +277,8 @@ class MiniaudioEngine implements AbstractAudioEngine {
         fadeInMs.toDouble(),
         fadeOutMs.toDouble(),
         loop ? 1 : 0,
+        startTimeMs,
+        endTimeMs,
       );
       if (r == 0) {
         _activeCueIds.add(cueId);
@@ -307,13 +324,9 @@ class MiniaudioEngine implements AbstractAudioEngine {
 
   @override
   Future<void> pause(String cueId, {double fadeOutMs = 0.0}) async {
-    // TODO(native): ma_wrapper_pause does not accept a fadeOutMs parameter yet.
-    // The native signature is Void Function(Pointer<Utf8>) — no fade duration.
-    // This causes an audible click on pause. Fix: extend the native wrapper to
-    // accept a fade_ms argument and apply ma_sound_set_fade_in_milliseconds().
     final ptr = cueId.toNativeUtf8();
     try {
-      _pause(ptr);
+      _pause(ptr, fadeOutMs);
     } finally {
       malloc.free(ptr);
     }
@@ -321,11 +334,9 @@ class MiniaudioEngine implements AbstractAudioEngine {
 
   @override
   Future<void> resume(String cueId, {double fadeInMs = 0.0}) async {
-    // TODO(native): same as pause — fadeInMs is silently ignored.
-    // Extend ma_wrapper_resume to accept a fade_ms argument.
     final ptr = cueId.toNativeUtf8();
     try {
-      _resume(ptr);
+      _resume(ptr, fadeInMs);
     } finally {
       malloc.free(ptr);
     }
@@ -339,14 +350,38 @@ class MiniaudioEngine implements AbstractAudioEngine {
     bool stopWhenDone = false,
     bool pauseWhenDone = false,
   }) async {
-    // TODO(native): smooth volume ramp not implemented in native wrapper.
-    // Need ma_wrapper_fade_volume(cueId, targetLinear, durationMs) using
-    // ma_sound_set_fade_in_milliseconds() with a scheduled stop/pause callback.
-    // Current behaviour: volume change is instantaneous (no ramp).
-    if (stopWhenDone) {
-      await stop(cueId);
-    } else if (pauseWhenDone) {
-      await pause(cueId);
+    final targetDb = targetLinear <= 0.0
+        ? -100.0
+        : 20.0 * (math.log(targetLinear) / math.ln10);
+    final ptr = cueId.toNativeUtf8();
+    try {
+      _fadeVol(ptr, targetDb, durationMs, stopWhenDone ? 1 : 0);
+      if (pauseWhenDone && !stopWhenDone) {
+        // Pause after fade: fade to silent then stop (native side will stop).
+        _fadeVol(ptr, -100.0, durationMs, 1);
+      }
+    } finally {
+      malloc.free(ptr);
+    }
+  }
+
+  @override
+  Future<({double startMs, double endMs})?> detectSilence(
+    String filePath, {
+    double thresholdDb = -60.0,
+    double padMs = 50.0,
+  }) async {
+    final pathPtr = filePath.toNativeUtf8();
+    final outStart = calloc<Float>();
+    final outEnd = calloc<Float>();
+    try {
+      final result = _detectSilence(pathPtr, thresholdDb, padMs, outStart, outEnd);
+      if (result != 0) return null;
+      return (startMs: outStart.value.toDouble(), endMs: outEnd.value.toDouble());
+    } finally {
+      malloc.free(pathPtr);
+      calloc.free(outStart);
+      calloc.free(outEnd);
     }
   }
 
@@ -363,6 +398,16 @@ class MiniaudioEngine implements AbstractAudioEngine {
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
+
+  /// Reads a C string pointer as UTF-8 with malformed-byte tolerance.
+  /// Avoids [FormatException] when Windows device names contain bytes that
+  /// miniaudio could not fully convert to UTF-8 (e.g. truncated surrogates).
+  static String _ptrToString(Pointer<Utf8> ptr) {
+    final bytes = ptr.cast<Uint8>();
+    var len = 0;
+    while (bytes[len] != 0) len++;
+    return utf8.decode(bytes.asTypedList(len), allowMalformed: true);
+  }
 
   static AudioBackend _parseBackend(String name) =>
       audioBackendFromWireName(name);

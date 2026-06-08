@@ -98,4 +98,17 @@ abstract class AbstractAudioEngine {
 
   /// Releases all preloaded handles without deinitialising the engine.
   Future<void> disposeAll();
+
+  /// Scans [filePath] for silence and returns the start/end of actual audio
+  /// content (in milliseconds, with [padMs] of margin on each side).
+  ///
+  /// [thresholdDb]: frames below this peak level are considered silent.
+  /// [padMs]: extra buffer added around the detected content boundaries.
+  ///
+  /// Returns null if the file could not be analysed.
+  Future<({double startMs, double endMs})?> detectSilence(
+    String filePath, {
+    double thresholdDb = -60.0,
+    double padMs = 50.0,
+  });
 }

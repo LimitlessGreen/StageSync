@@ -872,6 +872,14 @@ class AudioNodeService {
     _statusController.add(_status);
   }
 
+  /// Delegates silence detection to the underlying audio engine.
+  Future<({double startMs, double endMs})?> detectSilence(
+    String filePath, {
+    double thresholdDb = -60.0,
+    double padMs = 50.0,
+  }) =>
+      _engine.detectSilence(filePath, thresholdDb: thresholdDb, padMs: padMs);
+
   void dispose() {
     _commandSub?.cancel();
     _engine.deinit();

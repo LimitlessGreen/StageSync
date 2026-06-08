@@ -71,7 +71,39 @@ if(NOT MINIAUDIO_H)
   )
 endif()
 
-# ── Library target ────────────────────────────────────────────────────────────
+# ── ASIO SDK Detection (Windows only) ────────────────────────────────────────
+# Download the free Steinberg ASIO SDK from:
+#   https://www.steinberg.net/asiosdk
+# Then either:
+#   a) Set env var ASIO_SDK_DIR to the extracted SDK directory, OR
+#   b) Place/symlink it at native/../asio_sdk/ (next to this file's parent)
+#
+# Without the SDK, WASAPI is used (good latency but not ASIO-exclusive).
+set(ASIO_SDK_DIR "")
+if(WIN32)
+  set(_ASIO_SEARCH_PATHS
+    "$ENV{ASIO_SDK_DIR}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../asio_sdk"
+    "${CMAKE_CURRENT_SOURCE_DIR}/asio_sdk"
+    "C:/ASIOSDK2.3.3"
+    "C:/ASIOSDK"
+    "$ENV{USERPROFILE}/ASIOSDK2.3.3"
+    "$ENV{USERPROFILE}/asio_sdk"
+  )
+  foreach(_p ${_ASIO_SEARCH_PATHS})
+    if(EXISTS "${_p}/common/iasiodrv.h")
+      set(ASIO_SDK_DIR "${_p}")
+      message(STATUS "[miniaudio] ASIO SDK found: ${_p}")
+      break()
+    endif()
+  endforeach()
+  if(NOT ASIO_SDK_DIR)
+    message(STATUS "[miniaudio] ASIO SDK not found — using WASAPI. "
+      "Set ASIO_SDK_DIR env var or place SDK at native/../asio_sdk/ to enable ASIO.")
+  endif()
+endif()
+
+# ── miniaudio_wrapper library ─────────────────────────────────────────────────
 add_library(miniaudio_wrapper SHARED
   "${CMAKE_CURRENT_SOURCE_DIR}/miniaudio_wrapper.c"
 )
@@ -86,10 +118,16 @@ target_compile_definitions(miniaudio_wrapper PRIVATE MINIAUDIO_WRAPPER_BUILD)
 
 # ── Platform flags ────────────────────────────────────────────────────────────
 if(WIN32)
-  target_compile_definitions(miniaudio_wrapper PRIVATE
-    MA_ENABLE_WASAPI
-    # MA_ENABLE_ASIO  # uncomment + add Steinberg ASIO SDK include path
-  )
+  target_compile_definitions(miniaudio_wrapper PRIVATE MA_ENABLE_WASAPI)
+  if(ASIO_SDK_DIR)
+    target_compile_definitions(miniaudio_wrapper PRIVATE MA_ENABLE_ASIO)
+    target_include_directories(miniaudio_wrapper PRIVATE
+      "${ASIO_SDK_DIR}/common"
+      "${ASIO_SDK_DIR}/host"
+      "${ASIO_SDK_DIR}/host/pc"
+    )
+    message(STATUS "[miniaudio] ASIO enabled for miniaudio_wrapper")
+  endif()
   target_link_libraries(miniaudio_wrapper PRIVATE ole32 winmm)
   # Suppress MSVC warnings from miniaudio (it's not our code).
   target_compile_options(miniaudio_wrapper PRIVATE /W0)
@@ -118,3 +156,72 @@ endif()
 target_compile_options(miniaudio_wrapper PRIVATE
   $<$<AND:$<C_COMPILER_ID:GNU,Clang>,$<NOT:$<PLATFORM_ID:Windows>>>: -O2 -ffast-math>
 )
+
+# ── stagesync_core: Embedded Go gRPC-Server ───────────────────────────────────
+# Builds the CGo-free Go core library (cmd/corelib) as a platform shared library.
+# The output is copied next to the app executable so Flutter can load it via FFI.
+#
+# Requirements:
+#   - Go toolchain must be in PATH (https://go.dev)
+#   - CGO_ENABLED=1 and a C compiler (MSVC via cl.exe on Windows, clang/gcc on others)
+#
+# To skip the Go build (e.g. for CI without Go installed), set:
+#   cmake -DSTAGESYNC_BUILD_CORE=OFF ...
+option(STAGESYNC_BUILD_CORE "Build the embedded Go gRPC core library" ON)
+
+if(STAGESYNC_BUILD_CORE)
+  # Path to the Go source relative to this CMakeLists.txt
+  set(_CORELIB_SRC "${CMAKE_CURRENT_SOURCE_DIR}/../../stagesync-server/cmd/corelib")
+
+  if(WIN32)
+    set(_CORELIB_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/stagesync_core.dll")
+    set(_CORELIB_HEADER "${CMAKE_CURRENT_BINARY_DIR}/stagesync_core.h")
+    set(_GO_OUTPUT_FLAG "-o" "${_CORELIB_OUTPUT}")
+  elseif(APPLE)
+    set(_CORELIB_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/libstagesync_core.dylib")
+    set(_CORELIB_HEADER "${CMAKE_CURRENT_BINARY_DIR}/libstagesync_core.h")
+    set(_GO_OUTPUT_FLAG "-o" "${_CORELIB_OUTPUT}")
+  else()
+    set(_CORELIB_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/libstagesync_core.so")
+    set(_CORELIB_HEADER "${CMAKE_CURRENT_BINARY_DIR}/libstagesync_core.h")
+    set(_GO_OUTPUT_FLAG "-o" "${_CORELIB_OUTPUT}")
+  endif()
+
+  # Collect Go source files for dependency tracking.
+  file(GLOB_RECURSE _CORELIB_GO_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../stagesync-server/**/*.go"
+  )
+
+  # Build Go corelib into CMAKE_CURRENT_BINARY_DIR first.
+  add_custom_command(
+    OUTPUT "${_CORELIB_OUTPUT}" "${_CORELIB_HEADER}"
+    COMMAND ${CMAKE_COMMAND} -E env
+      CGO_ENABLED=1
+      go build
+        -buildmode=c-shared
+        ${_GO_OUTPUT_FLAG}
+        .
+    WORKING_DIRECTORY "${_CORELIB_SRC}"
+    DEPENDS ${_CORELIB_GO_SOURCES}
+    COMMENT "[stagesync_core] Building embedded Go gRPC server..."
+    VERBATIM
+  )
+
+  add_custom_target(stagesync_core_build ALL
+    DEPENDS "${_CORELIB_OUTPUT}"
+  )
+
+  # Copy the Go DLL next to miniaudio_wrapper.dll using a POST_BUILD command.
+  # $<TARGET_FILE_DIR:miniaudio_wrapper> resolves at build time to the correct
+  # per-config output folder (runner/Debug, runner/Release, …) without needing
+  # INSTALL_BUNDLE_LIB_DIR, which is only set after native/ is processed.
+  cmake_path(GET _CORELIB_OUTPUT FILENAME _CORELIB_FILENAME)
+  add_dependencies(miniaudio_wrapper stagesync_core_build)
+  add_custom_command(TARGET miniaudio_wrapper POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+      "${_CORELIB_OUTPUT}"
+      "$<TARGET_FILE_DIR:miniaudio_wrapper>/${_CORELIB_FILENAME}"
+    COMMENT "[stagesync_core] Copying ${_CORELIB_FILENAME} to output directory"
+    VERBATIM
+  )
+endif()
