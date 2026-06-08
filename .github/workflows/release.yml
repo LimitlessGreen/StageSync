@@ -24,7 +24,7 @@ concurrency:
 
 env:
   FLUTTER_VERSION: '3.41.9'
-  GO_VERSION: '1.22'
+  GO_VERSION: '1.25'
 
 jobs:
   # ── Windows Installer (NSIS) ─────────────────────────────────────────────────
