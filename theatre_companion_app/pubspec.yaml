@@ -91,6 +91,16 @@ dependency_overrides:
   record_windows:
     path: local_packages/record_windows
 
+  # opus_flutter_windows 3.0.0 auf pub.dev fehlt windows/ directory.
+  # Diese lokale Kopie enthält den Stub-CMakeLists.txt.
+  opus_flutter_windows:
+    path: local_packages/opus_flutter_windows
+
+  # flutter_midi_command_linux 0.3.0 verwendet FIEventChannel (umbenannt zu FlEventChannel in Flutter 3.x).
+  # Diese lokale Kopie enthält den Fix.
+  flutter_midi_command_linux:
+    path: local_packages/flutter_midi_command_linux
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

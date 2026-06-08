@@ -7,7 +7,6 @@ list(APPEND FLUTTER_PLUGIN_LIST
   desktop_drop
   flutter_midi_command_linux
   record_linux
-  sqlite3_flutter_libs
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
