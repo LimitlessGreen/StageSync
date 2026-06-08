@@ -1,118 +1,55 @@
-import 'package:meta/meta.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
 import 'cue_params.dart';
 import 'cue_trigger.dart';
 
+part 'show.freezed.dart';
+
 enum CueListPlayMode { sequential, follow, manual }
 
-@immutable
-class CueTiming {
-  final double preWaitMs;
-  final double postWaitMs;
-  final bool autoContinue;
-  final double? durationMs;
-
-  const CueTiming({
-    this.preWaitMs = 0.0,
-    this.postWaitMs = 0.0,
-    this.autoContinue = false,
-    this.durationMs,
-  });
-
-  CueTiming copyWith({
-    double? preWaitMs,
-    double? postWaitMs,
-    bool? autoContinue,
+@freezed
+class CueTiming with _$CueTiming {
+  const factory CueTiming({
+    @Default(0.0) double preWaitMs,
+    @Default(0.0) double postWaitMs,
+    @Default(false) bool autoContinue,
     double? durationMs,
-  }) =>
-      CueTiming(
-        preWaitMs: preWaitMs ?? this.preWaitMs,
-        postWaitMs: postWaitMs ?? this.postWaitMs,
-        autoContinue: autoContinue ?? this.autoContinue,
-        durationMs: durationMs ?? this.durationMs,
-      );
+  }) = _CueTiming;
 }
 
-@immutable
-class Cue {
-  final String id;
-  final String number; // display number: "1", "1.5", "2A"
-  final String label;
-  final CueParams params;
-  final CueTrigger trigger;
-  final CueTiming timing;
+@freezed
+class Cue with _$Cue {
+  const Cue._();
 
-  /// References a [LogicalOutput.id] in [PatchConfig] (proto: logical_output_id).
-  /// Determines which physical outputs this cue is routed to via PatchConfig.
-  final String? logicalOutputId;
-
-  final bool armed;
-
-  const Cue({
-    required this.id,
-    required this.number,
-    required this.label,
-    required this.params,
-    this.trigger = const CueTrigger(),
-    this.timing = const CueTiming(),
-    this.logicalOutputId,
-    this.armed = false,
-  });
-
-  Cue copyWith({
-    String? id,
-    String? number,
-    String? label,
-    CueParams? params,
-    CueTrigger? trigger,
-    CueTiming? timing,
+  const factory Cue({
+    required String id,
+    required String number, // display number: "1", "1.5", "2A"
+    required String label,
+    required CueParams params,
+    @Default(CueTrigger()) CueTrigger trigger,
+    @Default(CueTiming()) CueTiming timing,
     String? logicalOutputId,
-    bool? armed,
-  }) =>
-      Cue(
-        id: id ?? this.id,
-        number: number ?? this.number,
-        label: label ?? this.label,
-        params: params ?? this.params,
-        trigger: trigger ?? this.trigger,
-        timing: timing ?? this.timing,
-        logicalOutputId: logicalOutputId ?? this.logicalOutputId,
-        armed: armed ?? this.armed,
-      );
+    @Default(false) bool armed,
+  }) = _Cue;
 
   /// Derived display duration in ms (from params).
   double? get displayDurationMs => switch (params) {
         AudioParams p => p.effectiveDurationMs ?? p.declaredDurationMs,
         WaitParams p  => p.durationMs,
+        FadeParams p  => p.durationMs,
         _             => null,
       };
 }
 
-@immutable
-class CueList {
-  final String id;
-  final String name;
-  final CueListPlayMode playMode;
-  final List<Cue> cues;
+@freezed
+class CueList with _$CueList {
+  const CueList._();
 
-  const CueList({
-    required this.id,
-    required this.name,
-    this.playMode = CueListPlayMode.sequential,
-    required this.cues,
-  });
-
-  CueList copyWith({
-    String? id,
-    String? name,
-    CueListPlayMode? playMode,
-    List<Cue>? cues,
-  }) =>
-      CueList(
-        id: id ?? this.id,
-        name: name ?? this.name,
-        playMode: playMode ?? this.playMode,
-        cues: cues ?? this.cues,
-      );
+  const factory CueList({
+    required String id,
+    required String name,
+    @Default(CueListPlayMode.sequential) CueListPlayMode playMode,
+    required List<Cue> cues,
+  }) = _CueList;
 
   Cue? cueById(String id) {
     for (final c in cues) {

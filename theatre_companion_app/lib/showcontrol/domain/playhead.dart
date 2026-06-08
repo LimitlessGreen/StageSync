@@ -1,5 +1,7 @@
-import 'package:meta/meta.dart';
+import 'package:freezed_annotation/freezed_annotation.dart';
 import '../session/clock_sync.dart';
+
+part 'playhead.freezed.dart';
 
 enum CueListPhase {
   idle,    // kein aktiver Eintrag, Timer = 0:00
@@ -32,20 +34,17 @@ enum NodeExecPhase {
   error,
 }
 
-@immutable
-class NodeExecState {
-  final NodeExecPhase phase;
-  final double? bufferPct; // 0.0–1.0, meaningful only during [buffering]
-  final String? errorMessage;
+@freezed
+class NodeExecState with _$NodeExecState {
+  const NodeExecState._();
 
-  const NodeExecState({
-    required this.phase,
-    this.bufferPct,
-    this.errorMessage,
-  });
+  const factory NodeExecState({
+    required NodeExecPhase phase,
+    double? bufferPct, // 0.0–1.0, meaningful only during [buffering]
+    String? errorMessage,
+  }) = _NodeExecState;
 
-  static const NodeExecState idle =
-      NodeExecState(phase: NodeExecPhase.idle);
+  static const NodeExecState idle = NodeExecState(phase: NodeExecPhase.idle);
 
   bool get isActive =>
       phase == NodeExecPhase.playing ||
@@ -53,49 +52,27 @@ class NodeExecState {
       phase == NodeExecPhase.preloading;
 
   bool get hasError => phase == NodeExecPhase.error;
-
-  NodeExecState copyWith({
-    NodeExecPhase? phase,
-    double? bufferPct,
-    String? errorMessage,
-  }) =>
-      NodeExecState(
-        phase: phase ?? this.phase,
-        bufferPct: bufferPct ?? this.bufferPct,
-        errorMessage: errorMessage ?? this.errorMessage,
-      );
 }
 
-@immutable
-class CueRunState {
-  final CueLifecycle lifecycle;
+@freezed
+class CueRunState with _$CueRunState {
+  const CueRunState._();
 
-  /// nodeId → per-node execution state.
-  final Map<String, NodeExecState> nodes;
-  final String? errorMessage;
-
-  const CueRunState({
-    required this.lifecycle,
-    this.nodes = const {},
-    this.errorMessage,
-  });
-
-  CueRunState copyWith({
-    CueLifecycle? lifecycle,
-    Map<String, NodeExecState>? nodes,
+  const factory CueRunState({
+    required CueLifecycle lifecycle,
+    /// nodeId → per-node execution state.
+    @Default({}) Map<String, NodeExecState> nodes,
     String? errorMessage,
-  }) =>
-      CueRunState(
-        lifecycle: lifecycle ?? this.lifecycle,
-        nodes: nodes ?? this.nodes,
-        errorMessage: errorMessage ?? this.errorMessage,
-      );
+  }) = _CueRunState;
 
   bool get hasNodeError =>
       nodes.values.any((n) => n.phase == NodeExecPhase.error);
 }
 
-@immutable
+// ── PlayheadState bleibt manuell ─────────────────────────────────────────────
+// Die copyWith-Semantik von PlayheadState nutzt direktes null-Durchreichen
+// (keine ?? Fallbacks) für nullable Felder, was sich von freezed unterscheidet.
+
 class PlayheadState {
   final String cueListId;
   final String? activeCueId;
@@ -115,23 +92,18 @@ class PlayheadState {
   final int? pausedAtServerMs;
 
   /// Server-Zeit (Unix-ms) zu der die Cue natürlich endete (CUE_DONE).
-  /// Gesetzt → phase = done, Timer eingefroren bei (doneServerMs - startedServerMs).
   final int? doneServerMs;
 
   /// Per-cue runtime state map. Key = cueId.
   final Map<String, CueRunState> perCue;
 
   /// Cue-IDs die per-Cue pausiert sind (server-autoritativ).
-  /// Unabhängig von globaler CueList-Pause ([phase] == paused).
   final Set<String> perCuePausedIds;
 
   /// Einfrierzeitpunkte pro per-Cue-pausierter Cue in Unix-ms.
-  /// Gesetzt wenn CUE_CUE_PAUSED eintrifft (= now + fadeOutMs); gelöscht bei Resume/Done.
-  /// Bis zu diesem Zeitpunkt läuft die Uhr weiter (Fade-Fenster), danach eingefroren.
   final Map<String, int> perCuePausedAtServerMs;
 
   /// Zeitpunkt des letzten CUE_CUE_RESUMED pro Cue in Unix-ms.
-  /// Wird von _audioPhase genutzt um das Fade-In-Fenster nach Resume zu erkennen.
   final Map<String, int> perCueResumedAtServerMs;
 
   const PlayheadState({
@@ -160,8 +132,6 @@ class PlayheadState {
 
   CueRunState? runStateFor(String cueId) => perCue[cueId];
 
-  /// true wenn diese Cue per-Cue auf dem Audio-Node pausiert ist.
-  /// Unabhängig von der globalen CueList-Pause.
   bool isCuePaused(String cueId) => perCuePausedIds.contains(cueId);
 
   PlayheadState copyWith({
@@ -200,13 +170,6 @@ class PlayheadState {
 // ── Timing-Hilfsfunktion ──────────────────────────────────────────────────────
 
 extension PlayheadTiming on PlayheadState {
-  /// Effektive "jetzt"-Zeit in Unix-Millisekunden, Pause-Fade-Fenster berücksichtigt.
-  ///
-  /// - Running  → laufende Serveruhr
-  /// - Paused, Fade noch aktiv (now < pausedAtServerMs) → laufende Serveruhr
-  /// - Paused, Fade abgeschlossen (now ≥ pausedAtServerMs) → eingefroren bei pausedAtServerMs
-  /// - Done     → eingefroren bei doneServerMs
-  /// - pausedAtServerMs == null (Server-Event noch nicht angekommen) → laufende Serveruhr
   int effectiveNowMs() {
     if (isDone) return doneServerMs ?? ClockSync.instance.serverNow();
     if (isPaused) {
@@ -218,13 +181,6 @@ extension PlayheadTiming on PlayheadState {
     return ClockSync.instance.serverNow();
   }
 
-  /// Effektive "jetzt"-Zeit für eine bestimmte Cue — spiegelt die globale
-  /// Fade-Fenster-Logik: während des Ausblendens läuft die Zeit weiter,
-  /// erst nach Ablauf des Fades wird der Balken eingefroren.
-  ///
-  /// - Fading (now < frozenAt) → laufende Serveruhr
-  /// - Paused  (now ≥ frozenAt) → eingefroren bei frozenAt
-  /// - Sonst → [effectiveNowMs]
   int effectiveNowMsForCue(String cueId) {
     if (perCuePausedIds.contains(cueId)) {
       final frozenAt = perCuePausedAtServerMs[cueId];
@@ -235,8 +191,6 @@ extension PlayheadTiming on PlayheadState {
     return effectiveNowMs();
   }
 
-  /// true solange der Fade-Out noch läuft (Zeit < frozenAt).
-  /// Während dieses Fensters tickt der Bar weiter und zeigt pauseFading-Farbe.
   bool isCueFading(String cueId) {
     if (!perCuePausedIds.contains(cueId)) return false;
     final frozenAt = perCuePausedAtServerMs[cueId];
@@ -244,11 +198,9 @@ extension PlayheadTiming on PlayheadState {
     return ClockSync.instance.serverNow() < frozenAt;
   }
 
-  /// true wenn diese Cue vollständig per-Cue pausiert ist (Fade abgeschlossen).
   bool isCuePaused(String cueId) =>
       perCuePausedIds.contains(cueId) && !isCueFading(cueId);
 
-  /// true solange das Fade-In nach einem Resume noch läuft.
   bool isCueResuming(String cueId, double resumeFadeMs) {
     if (resumeFadeMs <= 0) return false;
     final resumedAt = perCueResumedAtServerMs[cueId];
@@ -256,6 +208,5 @@ extension PlayheadTiming on PlayheadState {
     return ClockSync.instance.serverNow() < resumedAt + resumeFadeMs;
   }
 
-  /// true solange der Widget-Ticker laufen muss.
   bool get needsTick => isRunning || isPaused;
 }

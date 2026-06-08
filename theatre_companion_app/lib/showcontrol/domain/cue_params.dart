@@ -225,12 +225,13 @@ final class ScriptParams extends CueParams {
 @immutable
 final class NoteParams extends CueParams {
   final String text;
-  final Color? color; // null = Standard-Grau
+  final Color? color;   // null = Standard-Grau
+  final bool landable;  // false = GO überspringt, true = GO landet hier
 
-  const NoteParams({this.text = '', this.color});
+  const NoteParams({this.text = '', this.color, this.landable = false});
 
-  NoteParams copyWith({String? text, Color? color}) =>
-      NoteParams(text: text ?? this.text, color: color ?? this.color);
+  NoteParams copyWith({String? text, Color? color, bool? landable}) =>
+      NoteParams(text: text ?? this.text, color: color ?? this.color, landable: landable ?? this.landable);
 }
 
 // ── Fade / Control cue ────────────────────────────────────────────────────────
