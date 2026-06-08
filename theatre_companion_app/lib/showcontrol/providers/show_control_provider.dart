@@ -16,6 +16,7 @@ import '../domain/patch_config.dart';
 import '../session/clock_sync.dart';
 import 'session_provider.dart';
 import 'session_context.dart';
+import 'settings_provider.dart';
 import 'async_notifier_ext.dart';
 import 'media_provider.dart';
 import 'execution_event_reducer.dart';
@@ -737,10 +738,12 @@ class ShowControlNotifier extends StateNotifier<ShowControlState>
   }
 
   void _startGoLock() {
-    final until = DateTime.now().add(const Duration(milliseconds: kGoCooldownMs));
+    final ms = _ref.read(settingsProvider).goLockDurationMs;
+    if (ms <= 0) return;
+    final until = DateTime.now().add(Duration(milliseconds: ms));
     state = state.copyWith(goLockedUntil: until);
     _goLockTimer?.cancel();
-    _goLockTimer = Timer(const Duration(milliseconds: kGoCooldownMs), () {
+    _goLockTimer = Timer(Duration(milliseconds: ms), () {
       if (mounted) state = state.copyWith(goLockedUntil: null);
     });
   }

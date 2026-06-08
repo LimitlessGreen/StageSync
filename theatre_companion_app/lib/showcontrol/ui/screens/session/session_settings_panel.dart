@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../providers/session_provider.dart';
 import '../../../providers/embedded_server_provider.dart';
+import '../../../providers/settings_provider.dart';
 import '../../design_system/sc_colors.dart';
 import '../../design_system/sc_spacing.dart';
 import '../../design_system/sc_typography.dart';
@@ -24,10 +25,35 @@ class _SessionSettingsPanelState extends ConsumerState<SessionSettingsPanel> {
   List<_IfaceInfo> _interfaces = [];
   bool _loadingIfaces = true;
 
+  late final TextEditingController _nameCtrl;
+  late final TextEditingController _goLockCtrl;
+
   @override
   void initState() {
     super.initState();
     _loadInterfaces();
+    final settings = ref.read(settingsProvider);
+    _nameCtrl = TextEditingController(text: settings.sessionLocalName ?? '');
+    _goLockCtrl =
+        TextEditingController(text: settings.goLockDurationMs.toString());
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _goLockCtrl.dispose();
+    super.dispose();
+  }
+
+  void _saveName() {
+    ref.read(settingsProvider.notifier)
+        .setSessionLocalName(_nameCtrl.text.isEmpty ? null : _nameCtrl.text);
+  }
+
+  void _saveGoLock() {
+    final ms = int.tryParse(_goLockCtrl.text);
+    if (ms == null) return;
+    ref.read(settingsProvider.notifier).setGoLockDurationMs(ms);
   }
 
   Future<void> _loadInterfaces() async {
@@ -61,6 +87,7 @@ class _SessionSettingsPanelState extends ConsumerState<SessionSettingsPanel> {
     final session = ref.watch(sessionProvider);
     final s = session.session;
     final port = ref.watch(embeddedPortProvider);
+    ref.watch(settingsProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -103,10 +130,29 @@ class _SessionSettingsPanelState extends ConsumerState<SessionSettingsPanel> {
               children: [
                 // ── Session-Info ─────────────────────────────────────────────
                 _SectionHeader('INFO'),
-                _InfoRow('Name', s?.name ?? '—'),
+                _EditRow(
+                  label: 'Name',
+                  controller: _nameCtrl,
+                  hint: s?.name ?? '—',
+                  onChanged: (_) => _saveName(),
+                  onSave: _saveName,
+                ),
                 _InfoRow('Port', '$port'),
                 if (s != null)
                   _CopyRow('Session-ID', s.sessionId),
+                // ── Einstellungen ────────────────────────────────────────────
+                const Divider(height: 1, color: ScColors.divider),
+                _SectionHeader('EINSTELLUNGEN'),
+                _EditRow(
+                  label: 'GO-Sperre',
+                  controller: _goLockCtrl,
+                  hint: '1000',
+                  suffix: 'ms',
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  onChanged: (_) => _saveGoLock(),
+                  onSave: _saveGoLock,
+                ),
                 // ── Dieses Gerät ─────────────────────────────────────────────
                 if (session.myNode != null) ...[
                   const Divider(height: 1, color: ScColors.divider),
@@ -360,6 +406,72 @@ class _IfaceRow extends StatelessWidget {
                 padding: EdgeInsets.all(4),
                 child: Icon(Icons.copy, size: 12, color: ScColors.textDim),
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EditRow extends StatelessWidget {
+  final String label;
+  final TextEditingController controller;
+  final String hint;
+  final String? suffix;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onSave;
+  final TextInputType keyboardType;
+  final List<TextInputFormatter>? inputFormatters;
+
+  const _EditRow({
+    required this.label,
+    required this.controller,
+    required this.hint,
+    required this.onChanged,
+    required this.onSave,
+    this.suffix,
+    this.keyboardType = TextInputType.text,
+    this.inputFormatters,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 32,
+      padding: const EdgeInsets.symmetric(horizontal: ScSpacing.panelPad),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 72,
+            child: Text(label, style: ScText.label),
+          ),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              style: ScText.label.copyWith(color: ScColors.textPrimary),
+              decoration: InputDecoration(
+                hintText: hint,
+                hintStyle: ScText.label.copyWith(color: ScColors.textDim),
+                suffixText: suffix,
+                suffixStyle: ScText.label.copyWith(color: ScColors.textDim),
+                isDense: true,
+                contentPadding:
+                    const EdgeInsets.symmetric(vertical: 4, horizontal: 4),
+                border: InputBorder.none,
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(3),
+                  borderSide: const BorderSide(color: ScColors.divider),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(3),
+                  borderSide: const BorderSide(color: ScColors.active),
+                ),
+              ),
+              keyboardType: keyboardType,
+              inputFormatters: inputFormatters,
+              onChanged: onChanged,
+              onSubmitted: (_) => onSave(),
             ),
           ),
         ],
