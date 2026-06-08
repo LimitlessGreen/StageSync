@@ -207,9 +207,10 @@ jobs:
           go build -buildmode=c-shared -ldflags="-s -w" \
             -o /tmp/libstagesync_core.dylib \
             ./cmd/corelib/
-          install_name_tool -id "@executable_path/libstagesync_core.dylib" \
+          install_name_tool -id "@rpath/libstagesync_core.dylib" \
             /tmp/libstagesync_core.dylib
-          cp /tmp/libstagesync_core.dylib "$APP/Contents/MacOS/libstagesync_core.dylib"
+          mkdir -p "$APP/Contents/Frameworks"
+          cp /tmp/libstagesync_core.dylib "$APP/Contents/Frameworks/libstagesync_core.dylib"
 
       - name: Get version
         id: version
@@ -228,8 +229,6 @@ jobs:
           APP="build/macos/Build/Products/Release/StageSync.app"
           find "$APP/Contents/Frameworks" \( -name "*.dylib" -o -name "*.framework" \) \
             -exec codesign --force --sign "$SIGNING_IDENTITY" --options runtime --timestamp {} \;
-          codesign --force --sign "$SIGNING_IDENTITY" --options runtime --timestamp \
-            "$APP/Contents/MacOS/libstagesync_core.dylib"
           codesign --force --deep --sign "$SIGNING_IDENTITY" --options runtime --timestamp \
             --entitlements macos/Runner/Release.entitlements "$APP"
           codesign --verify --deep --strict "$APP"

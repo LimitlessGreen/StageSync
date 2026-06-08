@@ -92,7 +92,13 @@ class EmbeddedServer {
 
   static String _libraryName() {
     if (Platform.isWindows) return 'stagesync_core.dll';
-    if (Platform.isMacOS) return 'libstagesync_core.dylib';
+    if (Platform.isMacOS) {
+      // The dylib lives in Contents/Frameworks/ next to the app executable.
+      // dlopen with a bare name only searches rpaths; use an absolute path
+      // so it works regardless of how the app was launched.
+      final execDir = File(Platform.resolvedExecutable).parent;
+      return '${execDir.path}/../Frameworks/libstagesync_core.dylib';
+    }
     return 'libstagesync_core.so';
   }
 }
