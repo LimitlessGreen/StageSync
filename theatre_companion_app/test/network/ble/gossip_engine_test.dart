@@ -63,6 +63,7 @@ void main() {
     // Standard-Stubs
     when(() => ble.sendPacket(any(), any())).thenAnswer((_) async {});
     when(() => ble.sendRawEncryptedPacket(any(), any())).thenAnswer((_) async {});
+    when(() => ble.broadcastToSubscribers(any())).thenAnswer((_) async {});
     when(() => crypto.encrypt(any()))
         .thenAnswer((_) async => Uint8List.fromList([0x01, 0x02, 0x03, 0x04]));
     when(() => queue.enqueue(
@@ -82,8 +83,8 @@ void main() {
       final packet = makeDataPacket();
       await engine.onDataPacketReceived(packet, 'sender-x');
       await engine.onDataPacketReceived(packet, 'sender-x'); // Duplikat
-      // sendPacket darf nur 1x aufgerufen werden
-      verify(() => ble.sendPacket(any(), any())).called(1);
+      // sendRawEncryptedPacket darf nur 1x aufgerufen werden
+      verify(() => ble.sendRawEncryptedPacket(any(), any())).called(1);
     });
     test('zwei verschiedene Pakete werden beide weitergeleitet', () async {
       peers.touchPeer(deviceId: 'peer-1', deviceShortId: 1, rssi: -60);
@@ -92,7 +93,7 @@ void main() {
       await engine.onDataPacketReceived(p1, 'sender-1');
       await engine.onDataPacketReceived(p2, 'sender-2');
       // Beide weitergeleitet → 2 Aufrufe insgesamt
-      verify(() => ble.sendPacket(any(), any())).called(2);
+      verify(() => ble.sendRawEncryptedPacket(any(), any())).called(2);
     });
     test('originateDataPacket markiert Paket als gesehen – Relay-Loop verhindert', () async {
       peers.touchPeer(deviceId: 'peer-1', deviceShortId: 1, rssi: -60);
@@ -105,7 +106,7 @@ void main() {
       await engine.originateDataPacket(packet);
       // Wenn dasselbe Paket zurückkommt → nicht nochmal weiterleiten
       await engine.onDataPacketReceived(packet, 'peer-1');
-      verify(() => ble.sendPacket(any(), any())).called(1);
+      verify(() => ble.sendRawEncryptedPacket(any(), any())).called(1);
     });
   });
   // ─── TTL-Durchsetzung ─────────────────────────────────────────────────────
@@ -114,13 +115,13 @@ void main() {
       peers.touchPeer(deviceId: 'peer-1', deviceShortId: 1, rssi: -60);
       final packet = makeDataPacket(ttl: 1);
       await engine.onDataPacketReceived(packet, 'sender');
-      verifyNever(() => ble.sendPacket(any(), any()));
+      verifyNever(() => ble.sendRawEncryptedPacket(any(), any()));
     });
     test('TTL=2 → canRelay=true → wird weitergeleitet (neuer TTL=1)', () async {
       peers.touchPeer(deviceId: 'peer-1', deviceShortId: 1, rssi: -60);
       final packet = makeDataPacket(ttl: 2);
       await engine.onDataPacketReceived(packet, 'peer-other');
-      verify(() => ble.sendPacket('peer-1', any())).called(1);
+      verify(() => ble.sendRawEncryptedPacket('peer-1', any())).called(1);
     });
     test('TTL=5 → weiterleiten und nicht an Absender zurück', () async {
       peers.touchPeer(deviceId: 'peer-1', deviceShortId: 1, rssi: -60);
@@ -128,9 +129,9 @@ void main() {
       final packet = makeDataPacket(ttl: 5);
       await engine.onDataPacketReceived(packet, 'peer-1'); // sender=peer-1
       // Soll NICHT an peer-1 zurück senden (excludeId)
-      verifyNever(() => ble.sendPacket('peer-1', any()));
+      verifyNever(() => ble.sendRawEncryptedPacket('peer-1', any()));
       // Soll an peer-2 senden
-      verify(() => ble.sendPacket('peer-2', any())).called(1);
+      verify(() => ble.sendRawEncryptedPacket('peer-2', any())).called(1);
     });
   });
   // ─── Store-Carry-Forward ──────────────────────────────────────────────────
@@ -150,7 +151,7 @@ void main() {
             packetTypeByte: BlePacketType.data.wireValue,
             nowMs: any(named: 'nowMs'),
           )).called(1);
-      verifyNever(() => ble.sendPacket(any(), any()));
+      verifyNever(() => ble.sendRawEncryptedPacket(any(), any()));
     });
     test('drainQueueForPeer verwendet sendRawEncryptedPacket – kein Re-Encrypt', () async {
       // BUG-FIX Verifikation: Doppel-Verschlüsselung muss verhindert werden.
@@ -233,7 +234,7 @@ void main() {
       );
       await engine.originateDataPacket(packet);
       // GossipFanout = 3, aber nur 2 Peers verfügbar → 2 Aufrufe
-      final callCount = verify(() => ble.sendPacket(any(), any())).callCount;
+      final callCount = verify(() => ble.sendRawEncryptedPacket(any(), any())).callCount;
       expect(callCount, inInclusiveRange(1, 2));
     });
   });

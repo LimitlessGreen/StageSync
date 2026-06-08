@@ -65,9 +65,14 @@ void main() {
       ),
     );
 
-    await tester.pumpAndSettle();
+    // Process initial async work (SharedPreferences, _tryAutoReconnect).
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
     await tester.tap(find.text('Server Audio'));
-    await tester.pumpAndSettle();
+    // Pump explicitly: pumpAndSettle times out due to ChoiceChip animations.
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
 
     expect(find.text('BACKEND'), findsOneWidget);
     expect(find.text('AUDIO-FORMAT'), findsOneWidget);

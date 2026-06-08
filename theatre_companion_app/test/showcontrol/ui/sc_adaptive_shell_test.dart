@@ -21,59 +21,35 @@ class _TestSessionNotifier extends SessionNotifier {
 void main() {
   group('ScShortcuts — shortcut map contents', () {
     test('Space → GoIntent', () {
-      expect(
-        ScShortcuts.all[const SingleActivator(LogicalKeyboardKey.space)],
-        isA<GoIntent>(),
-      );
+      expect(ScShortcuts.intentFor(LogicalKeyboardKey.space), isA<GoIntent>());
     });
 
     test('Escape → StopIntent', () {
-      expect(
-        ScShortcuts.all[const SingleActivator(LogicalKeyboardKey.escape)],
-        isA<StopIntent>(),
-      );
+      expect(ScShortcuts.intentFor(LogicalKeyboardKey.escape), isA<StopIntent>());
     });
 
     test('P → PauseIntent', () {
-      expect(
-        ScShortcuts.all[const SingleActivator(LogicalKeyboardKey.keyP)],
-        isA<PauseIntent>(),
-      );
+      expect(ScShortcuts.intentFor(LogicalKeyboardKey.keyP), isA<PauseIntent>());
     });
 
     test('ArrowUp → PrevCueIntent', () {
-      expect(
-        ScShortcuts.all[const SingleActivator(LogicalKeyboardKey.arrowUp)],
-        isA<PrevCueIntent>(),
-      );
+      expect(ScShortcuts.intentFor(LogicalKeyboardKey.arrowUp), isA<PrevCueIntent>());
     });
 
     test('ArrowDown → NextCueIntent', () {
-      expect(
-        ScShortcuts.all[const SingleActivator(LogicalKeyboardKey.arrowDown)],
-        isA<NextCueIntent>(),
-      );
+      expect(ScShortcuts.intentFor(LogicalKeyboardKey.arrowDown), isA<NextCueIntent>());
     });
 
     test('Enter → SelectCueIntent', () {
-      expect(
-        ScShortcuts.all[const SingleActivator(LogicalKeyboardKey.enter)],
-        isA<SelectCueIntent>(),
-      );
+      expect(ScShortcuts.intentFor(LogicalKeyboardKey.enter), isA<SelectCueIntent>());
     });
 
     test('Delete → DeleteCueIntent', () {
-      expect(
-        ScShortcuts.all[const SingleActivator(LogicalKeyboardKey.delete)],
-        isA<DeleteCueIntent>(),
-      );
+      expect(ScShortcuts.intentFor(LogicalKeyboardKey.delete), isA<DeleteCueIntent>());
     });
 
     test('Backspace → DeleteCueIntent', () {
-      expect(
-        ScShortcuts.all[const SingleActivator(LogicalKeyboardKey.backspace)],
-        isA<DeleteCueIntent>(),
-      );
+      expect(ScShortcuts.intentFor(LogicalKeyboardKey.backspace), isA<DeleteCueIntent>());
     });
 
     test('all 8 shortcuts are registered', () {
