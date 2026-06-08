@@ -384,6 +384,99 @@ jobs:
           retention-days: 30
           compression-level: 0
 
+  # ── Android APK ─────────────────────────────────────────────────────────────
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: theatre_companion_app
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v6
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Get version
+        id: version
+        run: |
+          TAG="${{ github.ref_name }}"
+          [ -z "$TAG" ] && TAG="${{ inputs.tag }}"
+          echo "VER=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build APK (release, unsigned)
+        run: flutter build apk --release
+
+      - name: Rename APK
+        run: |
+          mv build/app/outputs/flutter-apk/app-release.apk \
+             StageSync-${{ steps.version.outputs.VER }}-android.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-apk
+          path: theatre_companion_app/StageSync-${{ steps.version.outputs.VER }}-android.apk
+          retention-days: 30
+          compression-level: 0
+
+  # ── iOS IPA ──────────────────────────────────────────────────────────────────
+  ios:
+    name: iOS IPA
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: theatre_companion_app
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Flutter pub get
+        run: flutter pub get
+
+      - name: Get version
+        id: version
+        run: |
+          TAG="${{ github.ref_name }}"
+          [ -z "$TAG" ] && TAG="${{ inputs.tag }}"
+          echo "VER=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build iOS (no codesign)
+        run: flutter build ios --release --no-codesign
+
+      - name: Package IPA
+        run: |
+          mkdir -p Payload
+          cp -r build/ios/iphoneos/Runner.app Payload/
+          zip -r StageSync-${{ steps.version.outputs.VER }}-ios.ipa Payload/
+          rm -rf Payload
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-ipa
+          path: theatre_companion_app/StageSync-${{ steps.version.outputs.VER }}-ios.ipa
+          retention-days: 30
+          compression-level: 0
+
   # ── Standalone Server Binaries ───────────────────────────────────────────────
   server:
     name: Server ${{ matrix.goos }}/${{ matrix.goarch }}
@@ -473,7 +566,7 @@ jobs:
   # ── GitHub Release ────────────────────────────────────────────────────────────
   release:
     name: Publish Release
-    needs: [windows, macos, linux, server]
+    needs: [windows, macos, linux, android, ios, server]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -510,3 +603,5 @@ jobs:
             dist/stagesync-server-linux-arm64/stagesync-server-linux-arm64
             dist/stagesync-server-darwin-amd64/stagesync-server-darwin-amd64
             dist/stagesync-server-darwin-arm64/stagesync-server-darwin-arm64
+            dist/android-apk/StageSync-${{ steps.version.outputs.VER }}-android.apk
+            dist/ios-ipa/StageSync-${{ steps.version.outputs.VER }}-ios.ipa
