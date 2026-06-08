@@ -8,19 +8,39 @@ class MainFlutterWindow: NSWindow {
     self.contentViewController = flutterViewController
     self.setFrame(windowFrame, display: true)
 
-    // Match the Flutter app's dark background so the native window never
-    // shows grey — especially visible during fullscreen transitions and
-    // in areas not covered by a Flutter widget.
-    self.backgroundColor = NSColor(
-      calibratedRed: 10.0/255.0,
-      green: 10.0/255.0,
-      blue: 10.0/255.0,
-      alpha: 1.0
-    )
+    let appBg = NSColor(calibratedRed: 10/255, green: 10/255, blue: 10/255, alpha: 1)
+    self.backgroundColor = appBg
     self.isOpaque = true
 
-    RegisterGeneratedPlugins(registry: flutterViewController)
+    // Stretch Flutter's view to fill the window on every resize / fullscreen.
+    if let flutterView = flutterViewController.view {
+      flutterView.autoresizingMask = [.width, .height]
+      flutterView.wantsLayer = true
+      flutterView.layer?.backgroundColor = appBg.cgColor
+    }
 
+    RegisterGeneratedPlugins(registry: flutterViewController)
     super.awakeFromNib()
+
+    // Re-render after fullscreen transitions finish so the grey flash disappears.
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(onFullscreenTransitionEnd(_:)),
+      name: NSWindow.didEnterFullScreenNotification,
+      object: self
+    )
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(onFullscreenTransitionEnd(_:)),
+      name: NSWindow.didExitFullScreenNotification,
+      object: self
+    )
+  }
+
+  @objc private func onFullscreenTransitionEnd(_ note: Notification) {
+    guard let vc = contentViewController as? FlutterViewController else { return }
+    vc.view.frame = contentView?.bounds ?? vc.view.frame
+    vc.view.needsDisplay = true
+    vc.view.display()
   }
 }

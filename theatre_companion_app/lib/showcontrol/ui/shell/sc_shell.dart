@@ -743,7 +743,9 @@ class _RightPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return ColoredBox(
+      color: ScColors.bg,
+      child: Column(
       children: [
         Container(
           height: 36,
@@ -778,6 +780,7 @@ class _RightPanel extends StatelessWidget {
           ),
         ),
       ],
+      ),
     );
   }
 }
@@ -788,7 +791,9 @@ class _MonitoringPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return ColoredBox(
+      color: ScColors.bg,
+      child: Column(
       children: [
         Container(
           color: ScColors.surface,
@@ -813,6 +818,7 @@ class _MonitoringPanel extends StatelessWidget {
           ),
         ),
       ],
+      ),
     );
   }
 }
