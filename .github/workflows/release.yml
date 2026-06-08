@@ -286,11 +286,6 @@ jobs:
             flutter_arch: x64
             deb_arch: amd64
             rpm_arch: x86_64
-          - arch: aarch64
-            runner: ubuntu-24.04-arm
-            flutter_arch: arm64
-            deb_arch: arm64
-            rpm_arch: aarch64
     defaults:
       run:
         working-directory: theatre_companion_app
@@ -662,10 +657,6 @@ jobs:
             dist/linux-x86_64-packages/StageSync-${{ steps.version.outputs.VER }}-linux-amd64.deb
             dist/linux-x86_64-packages/StageSync-${{ steps.version.outputs.VER }}-linux-x86_64.rpm
             dist/linux-x86_64-packages/StageSync-${{ steps.version.outputs.VER }}-linux-x86_64.tar.gz
-            dist/linux-aarch64-packages/StageSync-${{ steps.version.outputs.VER }}-linux-aarch64.AppImage
-            dist/linux-aarch64-packages/StageSync-${{ steps.version.outputs.VER }}-linux-arm64.deb
-            dist/linux-aarch64-packages/StageSync-${{ steps.version.outputs.VER }}-linux-aarch64.rpm
-            dist/linux-aarch64-packages/StageSync-${{ steps.version.outputs.VER }}-linux-aarch64.tar.gz
             dist/stagesync-server-windows-amd64.exe/stagesync-server-windows-amd64.exe
             dist/stagesync-server-linux-amd64/stagesync-server-linux-amd64
             dist/stagesync-server-linux-arm64/stagesync-server-linux-arm64
