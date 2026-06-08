@@ -360,22 +360,12 @@ jobs:
 
           cp -r "$BUNDLE/." "$APPDIR/usr/bin/"
 
-          cat > "$APPDIR/AppRun" << 'APPRUN'
-#!/bin/bash
-HERE="$(dirname "$(readlink -f "$0")")"
-export LD_LIBRARY_PATH="$HERE/usr/bin/lib:${LD_LIBRARY_PATH}"
-exec "$HERE/usr/bin/theatre_companion_app" "$@"
-APPRUN
+          printf '#!/bin/bash\nHERE="$(dirname "$(readlink -f "$0")")"\nexport LD_LIBRARY_PATH="$HERE/usr/bin/lib:${LD_LIBRARY_PATH}"\nexec "$HERE/usr/bin/theatre_companion_app" "$@"\n' \
+            > "$APPDIR/AppRun"
           chmod +x "$APPDIR/AppRun"
 
-          cat > "$APPDIR/stagesync.desktop" << 'DESKTOP'
-[Desktop Entry]
-Name=StageSync
-Exec=theatre_companion_app
-Icon=stagesync
-Type=Application
-Categories=AudioVideo;Music;
-DESKTOP
+          printf '[Desktop Entry]\nName=StageSync\nExec=theatre_companion_app\nIcon=stagesync\nType=Application\nCategories=AudioVideo;Music;\n' \
+            > "$APPDIR/stagesync.desktop"
           cp "$APPDIR/stagesync.desktop" "$APPDIR/usr/share/applications/stagesync.desktop"
 
           ICON_SRC="linux/assets/stagesync.png"
@@ -398,10 +388,8 @@ DESKTOP
         run: |
           VER="${{ steps.version.outputs.VER }}"
           BUNDLE="build/linux/${{ matrix.flutter_arch }}/release/bundle"
-          cat > /tmp/postinstall.sh << 'EOF'
-#!/bin/bash
-ln -sf /opt/stagesync/theatre_companion_app /usr/local/bin/stagesync
-EOF
+          printf '#!/bin/bash\nln -sf /opt/stagesync/theatre_companion_app /usr/local/bin/stagesync\n' \
+            > /tmp/postinstall.sh
           chmod +x /tmp/postinstall.sh
           fpm -s dir -t deb \
             --name stagesync \
