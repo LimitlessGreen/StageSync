@@ -1,4 +1,4 @@
-package com.example.theatre_companion_app
+package de.stagesync.app
 
 import android.content.Intent
 import android.net.Uri
@@ -12,7 +12,7 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
 
     companion object {
-        private const val CHANNEL = "com.example.theatre_companion_app/foreground"
+        private const val CHANNEL = "de.stagesync.app/foreground"
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {

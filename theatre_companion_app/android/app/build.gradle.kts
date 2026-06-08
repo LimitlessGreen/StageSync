@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.theatre_companion_app"
+    namespace = "de.stagesync.app"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -20,7 +20,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.example.theatre_companion_app"
+        applicationId = "de.stagesync.app"
         // API 33 = Android 13 — alle Zielgeräte unterstützen mindestens Android 13.
         minSdk = 33
         targetSdk = flutter.targetSdkVersion

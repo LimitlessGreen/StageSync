@@ -1,4 +1,4 @@
-package com.example.theatre_companion_app
+package de.stagesync.app
 
 import android.app.Notification
 import android.app.NotificationChannel

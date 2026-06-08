@@ -7,7 +7,7 @@ class ForegroundService {
   ForegroundService._();
 
   static const _channel =
-      MethodChannel('com.example.theatre_companion_app/foreground');
+      MethodChannel('de.stagesync.app/foreground');
 
   /// Startet den Foreground Service mit sichtbarer Notification.
   /// [sessionName] und [role] erscheinen im Notification-Text.
