@@ -159,7 +159,36 @@ message NodeCommandRequest {
     AudioFadeCommand          audio_fade      = 13;
     AudioTalkbackChunkCommand audio_talkback  = 14; // Talkback PCM-Chunk (vom Server relayed)
     AudioTalkbackControlCommand audio_talkback_ctrl = 15; // Start/Stop/Duck Steuerung
+    MidiSendCommand           midi_send       = 16; // Raw-MIDI an Controller senden
+    LedFeedbackCommand        led_feedback    = 17; // Pad-LED auf Controller setzen
   }
+}
+
+// ── MIDI Commands (Server → MIDI-Node) ────────────────────────────────────────
+
+// Sendet rohe MIDI-Bytes an einen ausgehenden MIDI-Port des Nodes.
+message MidiSendCommand {
+  int32 channel = 1; // 0-15
+  int32 command = 2; // Status-Nibble z.B. 0x90 Note-On, 0xB0 CC
+  int32 data1   = 3;
+  int32 data2   = 4;
+}
+
+// Setzt die LED eines Controller-Pads. Der MIDI-Node übersetzt (track,scene)
+// bzw. note + color in das gerätespezifische Protokoll (z.B. APC Mini Velocity).
+message LedFeedbackCommand {
+  int32 track_index = 1;
+  int32 scene_index = 2;
+  enum Color {
+    LED_OFF         = 0;
+    LED_GREEN       = 1;
+    LED_GREEN_BLINK = 2;
+    LED_RED         = 3;
+    LED_RED_BLINK   = 4;
+    LED_YELLOW      = 5;
+    LED_YELLOW_BLINK = 6;
+  }
+  Color color = 3;
 }
 
 // Konfigurationsbefehl vom Master an einen Node.

@@ -34,6 +34,8 @@ enum NodeTask {
   NODE_TASK_EDITOR       = 3; // CueList bearbeiten
   NODE_TASK_VIEWER       = 4; // GO-Screen (nur lesen)
   NODE_TASK_MA_OSC       = 5; // GrandMA OSC-Bridge
+  NODE_TASK_MIDI_IN      = 6; // MIDI-Controller-Eingabe (z.B. APC Mini Pads)
+  NODE_TASK_MIDI_OUT     = 7; // MIDI-Ausgabe inkl. LED-Feedback an Controller
 }
 
 // ── Cue Types & State ─────────────────────────────────────────────────────────

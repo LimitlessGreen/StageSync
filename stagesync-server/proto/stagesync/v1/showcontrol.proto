@@ -37,6 +37,11 @@ service ShowControlService {
   // PatchConfig setzen (Master/Editor erforderlich)
   rpc UpdatePatchConfig(UpdatePatchConfigRequest) returns (PatchConfigResponse);
 
+  // Per-Cue Audio-Kontrolle (Server routet zu Nodes und updated Engine-State atomar)
+  rpc PauseCueAudio(PauseCueAudioRequest)   returns (google.protobuf.Empty);
+  rpc ResumeCueAudio(ResumeCueAudioRequest) returns (google.protobuf.Empty);
+  rpc StopCueAudio(StopCueAudioRequest)     returns (google.protobuf.Empty);
+
   // ── 4-Stream EventBus ────────────────────────────────────────────────────
   // Stream 1: Show-Definition (CueList, Patch, Assets)
   rpc WatchShowDefinition(WatchShowDefinitionRequest) returns (stream ShowDefinitionEvent);
@@ -49,6 +54,9 @@ service ShowControlService {
 
   // Stream 4: Media Sync (Asset-Änderungen)
   rpc WatchMediaSync(WatchMediaSyncRequest) returns (stream MediaSyncEvent);
+
+  // Erkannten Stille-Offset für ein Asset abfragen (nach Preload verfügbar)
+  rpc GetAssetSilenceInfo(GetAssetSilenceInfoRequest) returns (GetAssetSilenceInfoResponse);
 }
 
 // ── Cue Data Model ────────────────────────────────────────────────────────────
@@ -155,6 +163,7 @@ message GroupCueParams {
 message NoteCueParams {
   string text      = 1; // Anzeigetext (kann leer sein)
   string color_hex = 2; // Hex-Farbe z.B. "#FF8800" (leer = Standard-Grau)
+  bool   landable  = 3; // wenn true: GO landet auf dieser Cue statt sie zu überspringen
 }
 
 // ── Fade Cue ─────────────────────────────────────────────────────────────────
@@ -254,6 +263,27 @@ message ResumeRequest {
   string command_id = 3;
 }
 
+message PauseCueAudioRequest {
+  string session_id  = 1;
+  string token       = 2;
+  string cue_id      = 3;
+  double fade_out_ms = 4;
+}
+
+message ResumeCueAudioRequest {
+  string session_id = 1;
+  string token      = 2;
+  string cue_id     = 3;
+  double fade_in_ms = 4;
+}
+
+message StopCueAudioRequest {
+  string session_id  = 1;
+  string token       = 2;
+  string cue_id      = 3;
+  double fade_out_ms = 4;
+}
+
 message UpdatePatchConfigRequest {
   string      session_id   = 1;
   string      token        = 2;
@@ -320,6 +350,16 @@ message PatchDeviceAssign {
   string device_name       = 4;
 }
 
+// ── PlayheadPosition ──────────────────────────────────────────────────────────
+// Selbst-enthaltene Positionsinformation für Reconnect-Snapshots.
+// Clients berechnen: elapsed = paused ? position_ms : (now - server_time_ms) + position_ms
+message PlayheadPosition {
+  string cue_id         = 1;
+  int64  position_ms    = 2; // verstrichene ms zur Snapshot-Zeit
+  int64  server_time_ms = 3; // Serverzeit (Unix-ms) des Snapshots
+  bool   paused         = 4;
+}
+
 // ── Stream 2: Show-Execution ──────────────────────────────────────────────────
 
 message WatchShowExecutionRequest {
@@ -356,6 +396,8 @@ message ShowExecutionEvent {
   repeated string running_cue_ids   = 15;
   // IDs aller per-Cue-pausierten Cues (unabhängig von globaler CueList-Pause).
   repeated string per_cue_paused_ids = 16;
+  // Selbst-enthaltene Positionsinfo für Reconnect-Snapshots (gesetzt bei EXECUTION_SNAPSHOT).
+  PlayheadPosition playhead = 17;
 }
 
 // ── Stream 3: Node Health ─────────────────────────────────────────────────────
@@ -410,4 +452,19 @@ message MediaSyncEvent {
   string asset_name = 11;
   string sha256     = 12;
   int64  size_bytes = 13;
+}
+
+// ── GetAssetSilenceInfo ───────────────────────────────────────────────────────
+
+message GetAssetSilenceInfoRequest {
+  string session_id = 1;
+  string token      = 2;
+  string asset_id   = 3;
+}
+
+message GetAssetSilenceInfoResponse {
+  // Erkannter Stille-Offset in ms. 0 wenn keine Stille erkannt oder detected=false.
+  int64 silence_ms = 1;
+  // true wenn die Stille-Erkennung für dieses Asset abgeschlossen ist.
+  bool  detected   = 2;
 }
