@@ -40,5 +40,8 @@ Thumbs.db
 **/build/reports/
 android/build/
 
+# ── ASIO SDK (Steinberg license prohibits redistribution) ────────────
+theatre_companion_app/asio_sdk/
+
 # ── Claude Code ───────────────────────────────────────────────────────
 .claude/
