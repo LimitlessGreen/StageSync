@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"stagesync-server/internal/persistence"
 )
 
 // Persistence speichert die Identität persistenter Sessions auf Disk, damit sie
@@ -37,11 +39,8 @@ func (p *Persistence) Load() []*Session {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	data, err := os.ReadFile(p.path)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			log.Printf("[session-persist] read error: %v", err)
-		}
+	data, ok := persistence.ReadFile(p.path, "session-persist")
+	if !ok {
 		return nil
 	}
 	var recs []sessionRecord

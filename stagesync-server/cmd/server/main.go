@@ -22,9 +22,12 @@ import (
 	"stagesync-server/internal/audionode"
 	"stagesync-server/internal/busengine"
 	"stagesync-server/internal/discovery"
+	"stagesync-server/internal/grid"
 	grpchandlers "stagesync-server/internal/grpc"
 	"stagesync-server/internal/media"
+	"stagesync-server/internal/midinode"
 	"stagesync-server/internal/node"
+	"stagesync-server/internal/peaks"
 	"stagesync-server/internal/session"
 	"stagesync-server/internal/showcontrol"
 	"stagesync-server/internal/talkback"
@@ -47,6 +50,10 @@ var (
 		"Output channel count.")
 	ramCacheMB = flag.Int64("ram-cache-mb", 2048,
 		"RAM-Budget für den Audio-Cache in MiB (0 = 2 GiB Default).")
+	enableMidiNode = flag.Bool("midi-node", false,
+		"Start an internal MIDI controller node (e.g. Akai APC Mini) for the grid.")
+	midiPort = flag.String("midi-port", "APC",
+		"Substring to match the MIDI controller port name.")
 )
 
 func parseBackendPriorityFlag(raw string) []string {
@@ -112,14 +119,32 @@ func main() {
 	talkbackHandler := talkback.NewHandler(sessionMgr, talkbackRelay, busRouter)
 
 	pb.RegisterSessionServiceServer(grpcServer, grpchandlers.NewSessionHandler(sessionMgr))
-	pb.RegisterNodeServiceServer(grpcServer, grpchandlers.NewNodeHandler(sessionMgr, dispatcher))
+	nodeHandler := grpchandlers.NewNodeHandler(sessionMgr, dispatcher)
+	pb.RegisterNodeServiceServer(grpcServer, nodeHandler)
 	showControlHandler := grpchandlers.NewShowControlHandler(sessionMgr, dispatcher, persistence, mediaStore)
 	showControlHandler.SetWarmer(storeWarmer)
 	showControlHandler.SetBusRouter(busRouter)
 	showControlHandler.SetTalkbackRelay(talkbackRelay)
+	// Per-Cue-Stop: NodeHandler informiert ShowControlHandler wenn AudioStop mit cue_id empfangen wird.
+	nodeHandler.SetCueTrackStopper(showControlHandler)
 	pb.RegisterShowControlServiceServer(grpcServer, showControlHandler)
 	pb.RegisterMediaServiceServer(grpcServer, mediaGRPC)
 	pb.RegisterTalkbackServiceServer(grpcServer, talkbackHandler)
+
+	// ── Grid / Matrix Controller ─────────────────────────────────────────────
+	gridPersistence := grid.NewPersistence(dataDir)
+	peaksService := peaks.NewService(mediaStore, filepath.Join(dataDir, "media"))
+	gridHandler := grpchandlers.NewGridHandler(sessionMgr, dispatcher, gridPersistence, peaksService)
+	// cue_ref-Clips an die ShowControl-Engine delegieren.
+	gridHandler.SetCueLauncher(showControlHandler.LaunchCueRef)
+	pb.RegisterGridServiceServer(grpcServer, gridHandler)
+
+	// Optionaler interner MIDI-Controller-Node (APC Mini → Grid + LED-Feedback).
+	if *enableMidiNode {
+		log.Printf("--midi-node: starting internal MIDI node (port match %q)", *midiPort)
+		mn := midinode.New(sessionMgr, dispatcher, gridHandler, *midiPort)
+		mn.Start(ctx)
+	}
 
 	reflection.Register(grpcServer)
 
