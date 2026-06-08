@@ -14,6 +14,12 @@ import (
 	"github.com/mewkiz/flac"
 )
 
+// DecodePCM is the exported entry point for other packages (e.g. peaks) that
+// need decoded f32 interleaved PCM at a given rate/channel count.
+func DecodePCM(path string, targetRate, targetChannels uint32) ([]float32, uint32, uint32, error) {
+	return decodeFile(path, targetRate, targetChannels)
+}
+
 // decodeFile decodes an audio file to f32 interleaved PCM at the target
 // sample rate and channel count.
 //

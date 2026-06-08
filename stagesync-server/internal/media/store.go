@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -180,7 +181,7 @@ func (s *Store) List() ([]FileInfo, error) {
 		info.Audio = s.parseAudioCached(e.Name(), fi)
 		out = append(out, info)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	sort.Slice(out, func(i, j int) bool { return naturalLess(out[i].Name, out[j].Name) })
 	return out, nil
 }
 
@@ -368,6 +369,38 @@ func (s *Store) ReadAll(path string) ([]byte, error) {
 func (s *Store) touch(name string) error {
 	now := time.Now()
 	return os.Chtimes(s.path(name), now, now)
+}
+
+// naturalLess compares two filenames with embedded number handling so that
+// "2 Song" < "10 Song" (numeric order) rather than "10 Song" < "2 Song" (lexicographic).
+func naturalLess(a, b string) bool {
+	ar, br := []rune(strings.ToLower(a)), []rune(strings.ToLower(b))
+	i, j := 0, 0
+	for i < len(ar) && j < len(br) {
+		aDigit := ar[i] >= '0' && ar[i] <= '9'
+		bDigit := br[j] >= '0' && br[j] <= '9'
+		if aDigit && bDigit {
+			ai, bi := i, j
+			for i < len(ar) && ar[i] >= '0' && ar[i] <= '9' {
+				i++
+			}
+			for j < len(br) && br[j] >= '0' && br[j] <= '9' {
+				j++
+			}
+			an, _ := strconv.Atoi(string(ar[ai:i]))
+			bn, _ := strconv.Atoi(string(br[bi:j]))
+			if an != bn {
+				return an < bn
+			}
+		} else {
+			if ar[i] != br[j] {
+				return ar[i] < br[j]
+			}
+			i++
+			j++
+		}
+	}
+	return len(ar) < len(br)
 }
 
 // parseWAV liest den RIFF/WAV-Header und gibt AudioInfo zurück.

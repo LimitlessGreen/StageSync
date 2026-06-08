@@ -527,12 +527,21 @@ func (e *Engine) Stop(cueID string, fadeOutMs float64) error {
 
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if fadeOutMs > 0 {
-		h.stopFadeOutSamples = msToSamples(fadeOutMs, h.sampleRate)
-		h.stopFadePos = 0
-		h.state = StateStopping
-	} else {
+	switch h.state {
+	case StatePaused:
+		// Nothing is audible; remove immediately without restarting playback.
 		h.state = StateDone
+	case StatePausing:
+		// Already fading out; keep the ongoing fade but target stop instead of pause.
+		h.state = StateStopping
+	default:
+		if fadeOutMs > 0 {
+			h.stopFadeOutSamples = msToSamples(fadeOutMs, h.sampleRate)
+			h.stopFadePos = 0
+			h.state = StateStopping
+		} else {
+			h.state = StateDone
+		}
 	}
 	return nil
 }
@@ -554,6 +563,7 @@ func (e *Engine) Pause(cueID string, fadeOutMs float64) error {
 			h.stopFadePos = 0
 			h.state = StatePausing
 		} else {
+			h.pausedAt = h.pos
 			h.state = StatePaused
 		}
 	}
@@ -706,6 +716,11 @@ func (e *Engine) mix(outputSamples []byte, frameCount uint32) {
 		h.mu.Lock()
 
 		switch h.state {
+		case StateDone:
+			// Already finished before this mix call (e.g. Stop with no fade).
+			done = append(done, h.id)
+			h.mu.Unlock()
+			continue
 		case StateScheduled:
 			if nowMs >= h.scheduleAt {
 				h.state = StatePlaying
