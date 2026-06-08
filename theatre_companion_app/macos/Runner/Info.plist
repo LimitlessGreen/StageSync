@@ -28,5 +28,7 @@
 	<string>MainMenu</string>
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>StageSync benötigt das Mikrofon für die Talkback-Funktion.</string>
 </dict>
 </plist>
