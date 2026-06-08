@@ -30,5 +30,11 @@
 	<string>NSApplication</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>StageSync benötigt das Mikrofon für die Talkback-Funktion.</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>StageSync sucht andere StageSync-Geräte im lokalen Netzwerk.</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_stagesync._tcp</string>
+	</array>
 </dict>
 </plist>
