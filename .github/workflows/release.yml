@@ -470,10 +470,14 @@ jobs:
         if: matrix.goos == 'linux' && matrix.goarch == 'arm64'
         run: |
           sudo dpkg --add-architecture arm64
+          if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
+            sudo sed -i '/^Types: deb/a Architectures: amd64' /etc/apt/sources.list.d/ubuntu.sources
+          fi
           CODENAME="$(lsb_release -cs)"
-          printf 'deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports %s main restricted universe multiverse\n' \
-            "$CODENAME" "${CODENAME}-updates" \
-            | sudo tee /etc/apt/sources.list.d/arm64-ports.list
+          sudo tee /etc/apt/sources.list.d/arm64-ports.list << EOF
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${CODENAME} main restricted universe multiverse
+          deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${CODENAME}-updates main restricted universe multiverse
+          EOF
           sudo apt-get update -y
           sudo apt-get install -y gcc-aarch64-linux-gnu libasound2-dev:arm64
 
