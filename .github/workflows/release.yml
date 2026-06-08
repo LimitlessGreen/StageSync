@@ -31,7 +31,6 @@ jobs:
   windows:
     name: Windows Installer
     runs-on: windows-latest
-    needs: [server]
     defaults:
       run:
         working-directory: theatre_companion_app
@@ -50,18 +49,15 @@ jobs:
       - name: Build Flutter Windows
         run: flutter build windows --release
 
-      - name: Download server binary
-        uses: actions/download-artifact@v8
-        with:
-          name: stagesync-server-windows-amd64.exe
-          path: theatre_companion_app/build/windows/x64/runner/Release
-
-      - name: Rename server binary
+      - name: Build core library (Windows DLL)
+        working-directory: stagesync-server
         shell: pwsh
+        env:
+          CGO_ENABLED: '1'
         run: |
-          Rename-Item `
-            "build\windows\x64\runner\Release\stagesync-server-windows-amd64.exe" `
-            "stagesync-server.exe"
+          go build -buildmode=c-shared -ldflags="-s -w" `
+            -o "..\theatre_companion_app\build\windows\x64\runner\Release\stagesync_core.dll" `
+            .\cmd\corelib\
 
       - name: Get version
         id: version
@@ -192,14 +188,18 @@ jobs:
       - name: Build Flutter macOS
         run: flutter build macos --release
 
-      - name: Build standalone server (macOS)
+      - name: Build core library (macOS dylib)
         working-directory: stagesync-server
         env:
           CGO_ENABLED: '1'
         run: |
-          go build -ldflags="-s -w" \
-            -o ../theatre_companion_app/build/macos/Build/Products/Release/StageSync.app/Contents/MacOS/stagesync-server \
-            ./cmd/server/
+          APP="../theatre_companion_app/build/macos/Build/Products/Release/StageSync.app"
+          go build -buildmode=c-shared -ldflags="-s -w" \
+            -o /tmp/libstagesync_core.dylib \
+            ./cmd/corelib/
+          install_name_tool -id "@executable_path/libstagesync_core.dylib" \
+            /tmp/libstagesync_core.dylib
+          cp /tmp/libstagesync_core.dylib "$APP/Contents/MacOS/libstagesync_core.dylib"
 
       - name: Get version
         id: version
@@ -219,9 +219,7 @@ jobs:
           find "$APP/Contents/Frameworks" \( -name "*.dylib" -o -name "*.framework" \) \
             -exec codesign --force --sign "$SIGNING_IDENTITY" --options runtime --timestamp {} \;
           codesign --force --sign "$SIGNING_IDENTITY" --options runtime --timestamp \
-            "$APP/Contents/MacOS/stagesync-server"
-          find "$APP/Contents/MacOS" -name "libstagesync_core.dylib" \
-            -exec codesign --force --sign "$SIGNING_IDENTITY" --options runtime --timestamp {} \;
+            "$APP/Contents/MacOS/libstagesync_core.dylib"
           codesign --force --deep --sign "$SIGNING_IDENTITY" --options runtime --timestamp \
             --entitlements macos/Runner/Release.entitlements "$APP"
           codesign --verify --deep --strict "$APP"
@@ -318,14 +316,14 @@ jobs:
       - name: Build Flutter Linux
         run: flutter build linux --release
 
-      - name: Build standalone server
+      - name: Build core library (Linux .so)
         working-directory: stagesync-server
         env:
           CGO_ENABLED: '1'
         run: |
-          go build -ldflags="-s -w" \
-            -o ../theatre_companion_app/build/linux/${{ matrix.flutter_arch }}/release/bundle/stagesync-server \
-            ./cmd/server/
+          go build -buildmode=c-shared -ldflags="-s -w" \
+            -o ../theatre_companion_app/build/linux/${{ matrix.flutter_arch }}/release/bundle/lib/libstagesync_core.so \
+            ./cmd/corelib/
 
       - name: Get version
         id: version
