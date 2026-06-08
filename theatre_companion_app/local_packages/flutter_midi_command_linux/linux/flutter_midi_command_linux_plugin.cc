@@ -63,23 +63,23 @@ void flutter_midi_command_linux_plugin_register_with_registrar(FlPluginRegistrar
       g_object_new(flutter_midi_command_linux_plugin_get_type(), nullptr));
 
   g_autoptr(FlStandardMethodCodec) codec = fl_standard_method_codec_new();
-  g_autoptr(FlMethodChannel) channel =
+  g_autoptr(FlMethodChannel) methodChannel =
       fl_method_channel_new(fl_plugin_registrar_get_messenger(registrar),
                             "plugins.invisiblewrench.com/flutter_midi_command",
                             FL_METHOD_CODEC(codec));
-  fl_method_channel_set_method_call_handler(channel, method_call_cb,
+  fl_method_channel_set_method_call_handler(methodChannel, method_call_cb,
                                             g_object_ref(plugin),
                                             g_object_unref);
 
-                                            g_autoptr(FlMethodChannel) channel =
+  g_autoptr(FlEventChannel) rxChannel =
       fl_event_channel_new(fl_plugin_registrar_get_messenger(registrar),
-                            "plugins.invisiblewrench.com/flutter_midi_command/rx_channel",
-                            FL_METHOD_CODEC(codec));
+                           "plugins.invisiblewrench.com/flutter_midi_command/rx_channel",
+                           FL_METHOD_CODEC(codec));
 
-                            g_autoptr(FlMethodChannel) channel =
+  g_autoptr(FlEventChannel) setupChannel =
       fl_event_channel_new(fl_plugin_registrar_get_messenger(registrar),
-                            "plugins.invisiblewrench.com/flutter_midi_command/setup_channel",
-                            FL_METHOD_CODEC(codec));
+                           "plugins.invisiblewrench.com/flutter_midi_command/setup_channel",
+                           FL_METHOD_CODEC(codec));
 
   g_object_unref(plugin);
 }
