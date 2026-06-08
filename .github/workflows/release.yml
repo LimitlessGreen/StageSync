@@ -1,20 +1,12 @@
-name: Release — Installer
+name: Release
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Required GitHub Secrets
-# ─────────────────────────────────────────────────────────────────────────────
-# macOS Code Signing & Notarization (Settings → Secrets → Actions):
-#
+# Required secrets for macOS signing (optional — unsigned build if not set):
 #   APPLE_CERTIFICATE          Base64-encoded Developer ID Application .p12
-#                              export:  base64 -i cert.p12 | pbcopy
-#   APPLE_CERTIFICATE_PASSWORD Password used when exporting the .p12
-#   APPLE_SIGNING_IDENTITY     Full name from Keychain, e.g.
-#                              "Developer ID Application: Acme GmbH (ABCD1234EF)"
-#   APPLE_TEAM_ID              10-character Apple Team ID, e.g. "ABCD1234EF"
-#   APPLE_ID                   Apple ID e-mail used for notarization
+#   APPLE_CERTIFICATE_PASSWORD Password for the .p12 export
+#   APPLE_SIGNING_IDENTITY     "Developer ID Application: Name (TEAMID)"
+#   APPLE_TEAM_ID              10-char Apple Team ID
+#   APPLE_ID                   Apple ID email for notarization
 #   APPLE_APP_PASSWORD         App-specific password (appleid.apple.com)
-#                              format: xxxx-xxxx-xxxx-xxxx
-# ─────────────────────────────────────────────────────────────────────────────
 
 on:
   push:
@@ -33,16 +25,9 @@ concurrency:
 env:
   FLUTTER_VERSION: '3.41.9'
   GO_VERSION: '1.22'
-  APP_NAME: StageSync
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Helper: resolve tag + version string (used in every job)
-# ─────────────────────────────────────────────────────────────────────────────
-# Each job has its own "Get version" step because outputs can't be shared
-# across jobs without an explicit dependency chain + needs.<job>.outputs.
 
 jobs:
-  # ── Windows Installer (NSIS) ───────────────────────────────────────────────
+  # ── Windows Installer (NSIS) ─────────────────────────────────────────────────
   windows:
     name: Windows Installer
     runs-on: windows-latest
@@ -50,9 +35,9 @@ jobs:
       run:
         working-directory: theatre_companion_app
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: stagesync-server/go.sum
@@ -63,20 +48,16 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Get Flutter dependencies
+      - name: Flutter pub get
         run: flutter pub get
 
-      # Flutter Windows build triggers CMake which builds stagesync_core.dll
-      # automatically (STAGESYNC_BUILD_CORE=ON by default) — no separate Go step.
       - name: Build Flutter Windows
         run: flutter build windows --release
 
-      # Build the standalone server separately and drop it into the release folder
-      # so it ships alongside the GUI app in the installer.
       - name: Build standalone server (Windows)
         working-directory: stagesync-server
         env:
-          CGO_ENABLED: 1
+          CGO_ENABLED: '1'
         run: |
           go build -ldflags="-s -w" `
             -o ..\theatre_companion_app\build\windows\x64\runner\Release\stagesync-server.exe `
@@ -86,10 +67,10 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          $tag = if ("${{ github.ref_name }}") { "${{ github.ref_name }}" } else { "${{ inputs.tag }}" }
+          $tag = if ("${{ github.ref_name }}" -ne "") { "${{ github.ref_name }}" } else { "${{ inputs.tag }}" }
           $ver = $tag -replace '^v', ''
-          "TAG=$tag"  >> $env:GITHUB_OUTPUT
-          "VER=$ver"  >> $env:GITHUB_OUTPUT
+          echo "TAG=$tag" >> $env:GITHUB_OUTPUT
+          echo "VER=$ver" >> $env:GITHUB_OUTPUT
 
       - name: Install NSIS
         shell: pwsh
@@ -100,10 +81,9 @@ jobs:
         run: |
           $ver = "${{ steps.version.outputs.VER }}"
           $src = (Resolve-Path "build\windows\x64\runner\Release").Path
-          # Use forward-slash path so NSIS doesn't mis-parse backslashes
           $srcNsis = $src.Replace('\','/')
           $outFile = "StageSync-${ver}-windows-x64-setup.exe"
-          @"
+          $nsi = @"
           !define APP_NAME    "StageSync"
           !define APP_VERSION "${ver}"
           !define INSTALL_DIR "`$PROGRAMFILES64\StageSync"
@@ -124,49 +104,45 @@ jobs:
           !insertmacro MUI_PAGE_FINISH
           !insertmacro MUI_UNPAGE_CONFIRM
           !insertmacro MUI_UNPAGE_INSTFILES
-          !insertmacro MUI_LANGUAGE "German"
           !insertmacro MUI_LANGUAGE "English"
+          !insertmacro MUI_LANGUAGE "German"
 
           Section "StageSync" SecMain
             SetOutPath "`$INSTDIR"
             File /r "`${SRC_DIR}\*.*"
             WriteRegStr HKLM "Software\StageSync" "Install_Dir" "`$INSTDIR"
-            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\StageSync" \
-              "DisplayName"     "StageSync"
-            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\StageSync" \
-              "UninstallString" "`$INSTDIR\uninstall.exe"
-            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\StageSync" \
-              "DisplayVersion"  "`${APP_VERSION}"
-            WriteUninstaller   "`$INSTDIR\uninstall.exe"
-            CreateDirectory    "`$SMPROGRAMS\StageSync"
-            CreateShortcut     "`$SMPROGRAMS\StageSync\StageSync.lnk" \
-                               "`$INSTDIR\theatre_companion_app.exe"
-            CreateShortcut     "`$DESKTOP\StageSync.lnk" \
-                               "`$INSTDIR\theatre_companion_app.exe"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\StageSync" "DisplayName" "StageSync"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\StageSync" "UninstallString" "`$INSTDIR\uninstall.exe"
+            WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\StageSync" "DisplayVersion" "`${APP_VERSION}"
+            WriteUninstaller "`$INSTDIR\uninstall.exe"
+            CreateDirectory "`$SMPROGRAMS\StageSync"
+            CreateShortcut "`$SMPROGRAMS\StageSync\StageSync.lnk" "`$INSTDIR\theatre_companion_app.exe"
+            CreateShortcut "`$DESKTOP\StageSync.lnk" "`$INSTDIR\theatre_companion_app.exe"
           SectionEnd
 
           Section "Uninstall"
             RMDir /r "`$INSTDIR"
             Delete "`$SMPROGRAMS\StageSync\StageSync.lnk"
-            RMDir  "`$SMPROGRAMS\StageSync"
+            RMDir "`$SMPROGRAMS\StageSync"
             Delete "`$DESKTOP\StageSync.lnk"
             DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\StageSync"
             DeleteRegKey HKLM "Software\StageSync"
           SectionEnd
-          "@ | Out-File -FilePath installer.nsi -Encoding UTF8
+          "@
+          $nsi | Out-File -FilePath installer.nsi -Encoding UTF8
 
       - name: Run NSIS
         shell: pwsh
         run: makensis installer.nsi
 
       - name: Upload Windows installer
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: windows-installer
           path: theatre_companion_app/StageSync-${{ steps.version.outputs.VER }}-windows-x64-setup.exe
           retention-days: 30
 
-  # ── macOS DMG (signed + notarized) ────────────────────────────────────────
+  # ── macOS DMG ────────────────────────────────────────────────────────────────
   macos:
     name: macOS DMG
     runs-on: macos-latest
@@ -174,9 +150,9 @@ jobs:
       run:
         working-directory: theatre_companion_app
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: stagesync-server/go.sum
@@ -187,12 +163,9 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Get Flutter dependencies
+      - name: Flutter pub get
         run: flutter pub get
 
-      # Import the Developer ID certificate into a temporary keychain so that
-      # codesign can find it during the signing step below.
-      # Skipped when APPLE_CERTIFICATE secret is not set (unsigned build).
       - name: Import signing certificate
         if: ${{ secrets.APPLE_CERTIFICATE != '' }}
         env:
@@ -201,30 +174,24 @@ jobs:
         run: |
           KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
           KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
-
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
-
           echo "$CERTIFICATE_BASE64" | base64 --decode -o "$RUNNER_TEMP/certificate.p12"
           security import "$RUNNER_TEMP/certificate.p12" \
-            -k "$KEYCHAIN_PATH" \
-            -P "$CERTIFICATE_PASSWORD" \
-            -T /usr/bin/codesign \
-            -T /usr/bin/productbuild
+            -k "$KEYCHAIN_PATH" -P "$CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/productbuild
           security list-keychains -d user -s "$KEYCHAIN_PATH" login.keychain
           security set-key-partition-list \
-            -S apple-tool:,apple:,codesign: \
-            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+            -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-      # Flutter macOS build triggers CMake → stagesync_core.dylib built automatically.
       - name: Build Flutter macOS
         run: flutter build macos --release
 
       - name: Build standalone server (macOS)
         working-directory: stagesync-server
         env:
-          CGO_ENABLED: 1
+          CGO_ENABLED: '1'
         run: |
           go build -ldflags="-s -w" \
             -o ../theatre_companion_app/build/macos/Build/Products/Release/StageSync.app/Contents/MacOS/stagesync-server \
@@ -236,8 +203,8 @@ jobs:
           TAG="${{ github.ref_name }}"
           [ -z "$TAG" ] && TAG="${{ inputs.tag }}"
           VER="${TAG#v}"
-          echo "TAG=$TAG" >> $GITHUB_OUTPUT
-          echo "VER=$VER" >> $GITHUB_OUTPUT
+          echo "TAG=$TAG" >> "$GITHUB_OUTPUT"
+          echo "VER=$VER" >> "$GITHUB_OUTPUT"
 
       - name: Sign app bundle
         if: ${{ secrets.APPLE_CERTIFICATE != '' }}
@@ -245,29 +212,14 @@ jobs:
           SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
           APP="build/macos/Build/Products/Release/StageSync.app"
-
-          # Sign all nested binaries + frameworks first (deep sign)
-          find "$APP/Contents/Frameworks" -name "*.dylib" -o -name "*.framework" \
-            | while read f; do
-                codesign --force --sign "$SIGNING_IDENTITY" \
-                  --options runtime --timestamp "$f"
-              done
-
-          # Sign the Go binaries inside the bundle
-          codesign --force --sign "$SIGNING_IDENTITY" \
-            --options runtime --timestamp \
+          find "$APP/Contents/Frameworks" \( -name "*.dylib" -o -name "*.framework" \) \
+            -exec codesign --force --sign "$SIGNING_IDENTITY" --options runtime --timestamp {} \;
+          codesign --force --sign "$SIGNING_IDENTITY" --options runtime --timestamp \
             "$APP/Contents/MacOS/stagesync-server"
-
           find "$APP/Contents/MacOS" -name "libstagesync_core.dylib" \
-            -exec codesign --force --sign "$SIGNING_IDENTITY" \
-              --options runtime --timestamp {} \;
-
-          # Sign the app itself
-          codesign --force --deep --sign "$SIGNING_IDENTITY" \
-            --options runtime --timestamp \
-            --entitlements macos/Runner/Release.entitlements \
-            "$APP"
-
+            -exec codesign --force --sign "$SIGNING_IDENTITY" --options runtime --timestamp {} \;
+          codesign --force --deep --sign "$SIGNING_IDENTITY" --options runtime --timestamp \
+            --entitlements macos/Runner/Release.entitlements "$APP"
           codesign --verify --deep --strict "$APP"
 
       - name: Install create-dmg
@@ -280,14 +232,13 @@ jobs:
           DMG="StageSync-${VER}-macos.dmg"
           create-dmg \
             --volname "StageSync ${VER}" \
-            --window-pos 200 120 \
-            --window-size 600 400 \
+            --window-pos 200 120 --window-size 600 400 \
             --icon-size 100 \
             --icon "StageSync.app" 175 190 \
             --hide-extension "StageSync.app" \
             --app-drop-link 425 190 \
             "$DMG" "$APP"
-          echo "DMG_NAME=$DMG" >> $GITHUB_ENV
+          echo "DMG_NAME=$DMG" >> "$GITHUB_ENV"
 
       - name: Sign DMG
         if: ${{ secrets.APPLE_CERTIFICATE != '' }}
@@ -303,23 +254,21 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           xcrun notarytool submit "$DMG_NAME" \
-            --apple-id "$APPLE_ID" \
-            --password "$APPLE_APP_PASSWORD" \
-            --team-id "$APPLE_TEAM_ID" \
-            --wait
+            --apple-id "$APPLE_ID" --password "$APPLE_APP_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" --wait
 
-      - name: Staple notarization ticket
+      - name: Staple notarization
         if: ${{ secrets.APPLE_ID != '' }}
         run: xcrun stapler staple "$DMG_NAME"
 
       - name: Upload macOS DMG
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: macos-dmg
           path: theatre_companion_app/${{ env.DMG_NAME }}
           retention-days: 30
 
-  # ── Linux AppImage ─────────────────────────────────────────────────────────
+  # ── Linux AppImage ───────────────────────────────────────────────────────────
   linux:
     name: Linux AppImage
     runs-on: ubuntu-latest
@@ -327,9 +276,9 @@ jobs:
       run:
         working-directory: theatre_companion_app
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: stagesync-server/go.sum
@@ -348,17 +297,16 @@ jobs:
             libstdc++-12-dev cmake clang pkg-config libbluetooth-dev \
             libasound2-dev libfuse2 fuse imagemagick
 
-      - name: Get Flutter dependencies
+      - name: Flutter pub get
         run: flutter pub get
 
-      # Flutter Linux build triggers CMake → libstagesync_core.so built automatically.
       - name: Build Flutter Linux
         run: flutter build linux --release
 
       - name: Build standalone server (Linux)
         working-directory: stagesync-server
         env:
-          CGO_ENABLED: 1
+          CGO_ENABLED: '1'
         run: |
           go build -ldflags="-s -w" \
             -o ../theatre_companion_app/build/linux/x64/release/bundle/stagesync-server \
@@ -370,8 +318,8 @@ jobs:
           TAG="${{ github.ref_name }}"
           [ -z "$TAG" ] && TAG="${{ inputs.tag }}"
           VER="${TAG#v}"
-          echo "TAG=$TAG" >> $GITHUB_OUTPUT
-          echo "VER=$VER" >> $GITHUB_OUTPUT
+          echo "TAG=$TAG" >> "$GITHUB_OUTPUT"
+          echo "VER=$VER" >> "$GITHUB_OUTPUT"
 
       - name: Download appimagetool
         run: |
@@ -393,52 +341,44 @@ jobs:
 
           cp -r "$BUNDLE/." "$APPDIR/usr/bin/"
 
-          # AppRun — sets up library path and exec's the Flutter binary
-          cat > "$APPDIR/AppRun" << 'EOF'
+          cat > "$APPDIR/AppRun" << 'APPRUN'
           #!/bin/bash
           HERE="$(dirname "$(readlink -f "$0")")"
           export LD_LIBRARY_PATH="$HERE/usr/bin/lib:${LD_LIBRARY_PATH}"
           exec "$HERE/usr/bin/theatre_companion_app" "$@"
-          EOF
+          APPRUN
           chmod +x "$APPDIR/AppRun"
 
-          # .desktop file
-          cat > "$APPDIR/stagesync.desktop" << 'EOF'
+          cat > "$APPDIR/stagesync.desktop" << 'DESKTOP'
           [Desktop Entry]
           Name=StageSync
           Exec=theatre_companion_app
           Icon=stagesync
           Type=Application
           Categories=AudioVideo;Music;
-          EOF
-          cp "$APPDIR/stagesync.desktop" \
-             "$APPDIR/usr/share/applications/stagesync.desktop"
+          DESKTOP
+          cp "$APPDIR/stagesync.desktop" "$APPDIR/usr/share/applications/stagesync.desktop"
 
-          # Icon — use bundled asset if present, otherwise generate a placeholder
           ICON_SRC="linux/assets/stagesync.png"
           if [ -f "$ICON_SRC" ]; then
             cp "$ICON_SRC" "$APPDIR/stagesync.png"
           else
             convert -size 256x256 xc:'#1A1A2E' \
-              -fill white -gravity Center \
-              -font DejaVu-Sans-Bold -pointsize 72 \
-              -annotate 0 'SS' \
-              "$APPDIR/stagesync.png"
+              -fill white -gravity Center -font DejaVu-Sans-Bold -pointsize 72 \
+              -annotate 0 'SS' "$APPDIR/stagesync.png"
           fi
-          cp "$APPDIR/stagesync.png" \
-             "$APPDIR/usr/share/icons/hicolor/256x256/apps/stagesync.png"
+          cp "$APPDIR/stagesync.png" "$APPDIR/usr/share/icons/hicolor/256x256/apps/stagesync.png"
 
-          ARCH=x86_64 appimagetool "$APPDIR" \
-            "StageSync-${VER}-linux-x86_64.AppImage"
+          ARCH=x86_64 appimagetool "$APPDIR" "StageSync-${VER}-linux-x86_64.AppImage"
 
       - name: Upload Linux AppImage
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: linux-appimage
           path: theatre_companion_app/StageSync-${{ steps.version.outputs.VER }}-linux-x86_64.AppImage
           retention-days: 30
 
-  # ── Standalone Server Binaries ─────────────────────────────────────────────
+  # ── Standalone Server Binaries ───────────────────────────────────────────────
   server:
     name: Server ${{ matrix.goos }}/${{ matrix.goarch }}
     runs-on: ${{ matrix.runner }}
@@ -446,27 +386,52 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { goos: windows, goarch: amd64, runner: windows-latest, output: stagesync-server-windows-amd64.exe, cc: ''                      }
-          - { goos: linux,   goarch: amd64, runner: ubuntu-latest,  output: stagesync-server-linux-amd64,       cc: gcc                     }
-          - { goos: linux,   goarch: arm64, runner: ubuntu-latest,  output: stagesync-server-linux-arm64,       cc: aarch64-linux-gnu-gcc   }
-          - { goos: darwin,  goarch: amd64, runner: macos-latest,   output: stagesync-server-darwin-amd64,      cc: ''                      }
-          - { goos: darwin,  goarch: arm64, runner: macos-latest,   output: stagesync-server-darwin-arm64,      cc: ''                      }
+          - goos: windows
+            goarch: amd64
+            runner: windows-latest
+            output: stagesync-server-windows-amd64.exe
+            cc: ''
+            cxx: ''
+          - goos: linux
+            goarch: amd64
+            runner: ubuntu-latest
+            output: stagesync-server-linux-amd64
+            cc: gcc
+            cxx: g++
+          - goos: linux
+            goarch: arm64
+            runner: ubuntu-latest
+            output: stagesync-server-linux-arm64
+            cc: aarch64-linux-gnu-gcc
+            cxx: aarch64-linux-gnu-g++
+          - goos: darwin
+            goarch: amd64
+            runner: macos-latest
+            output: stagesync-server-darwin-amd64
+            cc: ''
+            cxx: ''
+          - goos: darwin
+            goarch: arm64
+            runner: macos-latest
+            output: stagesync-server-darwin-arm64
+            cc: ''
+            cxx: ''
     defaults:
       run:
         working-directory: stagesync-server
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: stagesync-server/go.sum
 
-      - name: Install Linux system dependencies (amd64)
+      - name: Install Linux deps (amd64)
         if: matrix.goos == 'linux' && matrix.goarch == 'amd64'
         run: sudo apt-get update -y && sudo apt-get install -y libasound2-dev
 
-      - name: Install Linux system dependencies (arm64 cross-compile)
+      - name: Install Linux deps (arm64 cross-compile)
         if: matrix.goos == 'linux' && matrix.goarch == 'arm64'
         run: |
           sudo dpkg --add-architecture arm64
@@ -485,28 +450,28 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: 1
+          CGO_ENABLED: '1'
           CC: ${{ matrix.cc }}
-          CXX: ${{ matrix.goarch == 'arm64' && matrix.goos == 'linux' && 'aarch64-linux-gnu-g++' || 'g++' }}
+          CXX: ${{ matrix.cxx }}
           PKG_CONFIG_PATH: ${{ matrix.goarch == 'arm64' && matrix.goos == 'linux' && '/usr/lib/aarch64-linux-gnu/pkgconfig' || '' }}
         run: go build -ldflags="-s -w" -o ${{ matrix.output }} ./cmd/server/
 
       - name: Upload binary
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.output }}
           path: stagesync-server/${{ matrix.output }}
           retention-days: 30
 
-  # ── GitHub Release (Draft) ─────────────────────────────────────────────────
+  # ── GitHub Release ────────────────────────────────────────────────────────────
   release:
-    name: Publish GitHub Release
+    name: Publish Release
     needs: [windows, macos, linux, server]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Get version
         id: version
@@ -514,16 +479,16 @@ jobs:
           TAG="${{ github.ref_name }}"
           [ -z "$TAG" ] && TAG="${{ inputs.tag }}"
           VER="${TAG#v}"
-          echo "TAG=$TAG" >> $GITHUB_OUTPUT
-          echo "VER=$VER" >> $GITHUB_OUTPUT
+          echo "TAG=$TAG" >> "$GITHUB_OUTPUT"
+          echo "VER=$VER" >> "$GITHUB_OUTPUT"
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           path: dist/
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.TAG }}
           name: StageSync ${{ steps.version.outputs.VER }}
