@@ -2,6 +2,7 @@ package showcontrol
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -11,15 +12,20 @@ import (
 // ── Test-Dispatcher ───────────────────────────────────────────────────────────
 
 type recordingDispatcher struct {
+	mu       sync.Mutex
 	commands []*pb.NodeCommandRequest
 }
 
 func (d *recordingDispatcher) Dispatch(_ context.Context, _ string, cmd *pb.NodeCommandRequest) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	d.commands = append(d.commands, cmd)
 	return nil
 }
 
 func (d *recordingDispatcher) DispatchToTask(_ context.Context, _ pb.NodeTask, cmd *pb.NodeCommandRequest) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	d.commands = append(d.commands, cmd)
 	return nil
 }
@@ -291,14 +297,42 @@ func TestEngine_LookAheadAssetIDs_RespectsLimit(t *testing.T) {
 // ── AssetWarmer Integration ───────────────────────────────────────────────────
 
 type recordingWarmer struct {
+	mu       sync.Mutex
 	locked   bool
 	unlocked bool
 	warmed   []string
 }
 
-func (w *recordingWarmer) WarmAssets(_ context.Context, ids []string) { w.warmed = append(w.warmed, ids...) }
-func (w *recordingWarmer) LockForShow()                               { w.locked = true }
-func (w *recordingWarmer) UnlockShow()                                { w.unlocked = true }
+func (w *recordingWarmer) WarmAssets(_ context.Context, ids []string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.warmed = append(w.warmed, ids...)
+}
+func (w *recordingWarmer) LockForShow() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.locked = true
+}
+func (w *recordingWarmer) UnlockShow() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.unlocked = true
+}
+func (w *recordingWarmer) isLocked() bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.locked
+}
+func (w *recordingWarmer) isUnlocked() bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.unlocked
+}
+func (w *recordingWarmer) warmedCount() int {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return len(w.warmed)
+}
 
 func TestEngine_Go_WarmerCalled(t *testing.T) {
 	store := makeStore(
@@ -319,10 +353,10 @@ func TestEngine_Go_WarmerCalled(t *testing.T) {
 	// Kurz warten, damit die WarmAssets-Goroutine starten kann.
 	time.Sleep(10 * time.Millisecond)
 
-	if !warmer.locked {
+	if !warmer.isLocked() {
 		t.Error("LockForShow sollte beim ersten GO aufgerufen werden")
 	}
-	if len(warmer.warmed) == 0 {
+	if warmer.warmedCount() == 0 {
 		t.Error("WarmAssets sollte mit mindestens einer asset_id aufgerufen werden")
 	}
 }
@@ -338,7 +372,7 @@ func TestEngine_Stop_UnlocksCalled(t *testing.T) {
 	_, _, _ = engine.Go(ctx, "c1")
 	_ = engine.Stop(ctx)
 
-	if !warmer.unlocked {
+	if !warmer.isUnlocked() {
 		t.Error("UnlockShow sollte bei Stop aufgerufen werden")
 	}
 }
