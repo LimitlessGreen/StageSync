@@ -41,7 +41,6 @@ import '../screens/media/media_manager_screen.dart';
 import '../screens/audio/local_audio_panel.dart';
 import '../screens/session/session_settings_panel.dart';
 import '../../providers/standalone_bootstrap_provider.dart';
-import '../../preferences/device_preferences.dart';
 import '../../providers/grid_provider.dart';
 import '../../domain/patch_config.dart';
 import '../../domain/show.dart';
@@ -476,10 +475,35 @@ class _HeaderBar extends ConsumerWidget {
   }
 
   void _showSwitchSessionDialog(BuildContext context, WidgetRef ref) {
-    showDialog<void>(
+    showDialog<bool>(
       context: context,
-      builder: (ctx) => _SwitchSessionDialog(onLeave: onLeave),
-    );
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.swap_horiz, size: 20),
+            SizedBox(width: 8),
+            Text('Andere Session verbinden'),
+          ],
+        ),
+        content: const Text(
+          'Verlässt die lokale Session und öffnet die Verbindungsansicht '
+          'mit mDNS-Suche und Gerätename-Einstellungen.',
+          style: TextStyle(color: Colors.white70, fontSize: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Weiter'),
+          ),
+        ],
+      ),
+    ).then((confirmed) {
+      if (confirmed == true) onLeave();
+    });
   }
 
   @override
@@ -604,114 +628,6 @@ class _HeaderBar extends ConsumerWidget {
           'GrandMA OSC Verbindungsfehler  ·  Klicken → Nodes-Panel',
         _ => 'GrandMA OSC nicht verbunden  ·  Klicken → Nodes-Panel',
       };
-}
-
-// ── Switch-Session-Dialog ─────────────────────────────────────────────────────
-
-class _SwitchSessionDialog extends ConsumerStatefulWidget {
-  final VoidCallback onLeave;
-  const _SwitchSessionDialog({required this.onLeave});
-
-  @override
-  ConsumerState<_SwitchSessionDialog> createState() =>
-      _SwitchSessionDialogState();
-}
-
-class _SwitchSessionDialogState extends ConsumerState<_SwitchSessionDialog> {
-  final _hostCtrl = TextEditingController(text: '');
-  final _portCtrl = TextEditingController(text: '50051');
-  String? _error;
-
-  @override
-  void dispose() {
-    _hostCtrl.dispose();
-    _portCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _connect() async {
-    final host = _hostCtrl.text.trim();
-    final port = int.tryParse(_portCtrl.text.trim()) ?? 50051;
-    if (host.isEmpty) {
-      setState(() => _error = 'IP-Adresse eingeben.');
-      return;
-    }
-    // Host/Port in Preferences speichern — SessionScreen liest sie beim Start.
-    // deviceName aus bestehenden Prefs übernehmen um ihn nicht zu löschen.
-    final existing = await DevicePreferences.loadConnectDefaults();
-    await DevicePreferences.saveConnectDefaults(
-        host: host, port: port, deviceName: existing.deviceName);
-    if (!mounted) return;
-    // Dialog schließen, dann Session verlassen.
-    // _StandaloneBootstrapScreen erkennt !isInSession und zeigt SessionScreen.
-    Navigator.pop(context);
-    widget.onLeave();
-  }
-
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.swap_horiz, size: 20),
-            SizedBox(width: 8),
-            Text('Andere Session verbinden'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'Verlässt die lokale Standalone-Session und öffnet die Verbindungsansicht '
-              'für einen Remote-Server.',
-              style: TextStyle(color: Colors.white70, fontSize: 13),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _hostCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'IP-Adresse (optional)',
-                      border: OutlineInputBorder(),
-                    ),
-                    autofocus: true,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                SizedBox(
-                  width: 80,
-                  child: TextField(
-                    controller: _portCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Port',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            if (_error != null) ...[
-              const SizedBox(height: 8),
-              Text(_error!,
-                  style: TextStyle(
-                      color: Theme.of(context).colorScheme.error,
-                      fontSize: 12)),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Abbrechen'),
-          ),
-          FilledButton(
-            onPressed: _connect,
-            child: const Text('Weiter'),
-          ),
-        ],
-      );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

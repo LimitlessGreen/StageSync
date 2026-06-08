@@ -18,7 +18,7 @@ final isStandaloneSupportedProvider = Provider<bool>(
 /// Führt den automatischen Standalone-Start durch:
 ///   1. Wartet auf den eingebetteten Go-Server.
 ///   2. Verbindet sich mit localhost:50051.
-///   3. Erstellt eine lokale Session mit Master + Audio-Tasks.
+///   3. Erstellt eine lokale Session mit Master + Audio-Tasks (Retry bei RPC-Fehler).
 ///   4. Startet den Audio-Node mit dem bevorzugten Ausgabegerät.
 ///
 /// Gibt [true] zurück wenn der Start vollständig erfolgreich war,
@@ -30,8 +30,9 @@ final standaloneBootstrapProvider = FutureProvider<bool>((ref) async {
 
   // 1. Embedded server hochfahren lassen.
   final serverOk = await ref.watch(embeddedServerProvider.future);
-  if (!serverOk)
+  if (!serverOk) {
     throw Exception('Embedded server konnte nicht gestartet werden.');
+  }
 
   // 2. Geräte-Identität laden.
   final prefs = await DevicePreferences.loadConnectDefaults();
@@ -45,25 +46,38 @@ final standaloneBootstrapProvider = FutureProvider<bool>((ref) async {
   await StageSyncClient.instance.connect('127.0.0.1', port);
 
   // 4. Lokale Session erstellen (Master + Audio).
-  await ref.read(sessionProvider.notifier).createSession(
-        host: '127.0.0.1',
-        port: port,
-        sessionName: 'Lokale Session',
-        showName: 'Meine Show',
-        deviceName: deviceName,
-        nodeType: NodeType.NODE_TYPE_MASTER,
-        tasks: [NodeTask.NODE_TASK_MASTER, NodeTask.NODE_TASK_AUDIO_OUTPUT],
-        password: '',
-        persistent: false,
-        deviceId: deviceId,
-      );
+  // Retry nötig: der gRPC-Port ist direkt nach dem Server-Start kurz noch nicht
+  // bereit für RPC-Calls, auch wenn embeddedServerProvider bereits true gemeldet hat.
+  Exception? lastError;
+  for (var attempt = 0; attempt < 5; attempt++) {
+    try {
+      await ref.read(sessionProvider.notifier).createSession(
+            host: '127.0.0.1',
+            port: port,
+            sessionName: 'Lokale Session',
+            showName: 'Meine Show',
+            deviceName: deviceName,
+            nodeType: NodeType.NODE_TYPE_MASTER,
+            tasks: [NodeTask.NODE_TASK_MASTER, NodeTask.NODE_TASK_AUDIO_OUTPUT],
+            password: '',
+            persistent: false,
+            deviceId: deviceId,
+          );
+      lastError = null;
+      break;
+    } catch (e) {
+      lastError = e is Exception ? e : Exception(e.toString());
+      if (attempt < 4) await Future.delayed(const Duration(milliseconds: 400));
+    }
+  }
+  if (lastError != null) throw lastError;
 
   final session = ref.read(sessionProvider);
   if (!session.isInSession) {
     throw Exception('Session konnte nicht erstellt werden.');
   }
 
-  // 5. Audio-Node mit Standard-Ausgabegerät starten.
+  // 5. Audio-Node starten.
   try {
     await ref.read(audioNodeProvider.notifier).startAudioNode();
   } catch (_) {

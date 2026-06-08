@@ -97,13 +97,11 @@ class _StandaloneBootstrapScreen extends ConsumerWidget {
     return bootstrap.when(
       loading: () => const _SplashScreen(),
       data: (_) {
-        // Session sollte jetzt aktiv sein — sessionProvider-Watch oben greift.
-        // Wenn nach dem Bootstrap keine Session aktiv ist, liegt ein Fehler vor.
+        // Session aktiv (sessionProvider-Watch oben greift normalerweise früher).
+        // Fallback auf SessionScreen wenn Session nicht aktiv — z.B. wenn der
+        // User gerade die Session manuell verlassen hat um sich neu zu verbinden.
         final s = ref.read(sessionProvider);
-        if (s.isInSession) return const ScAdaptiveShell();
-        return const _BootstrapErrorScreen(
-          error: 'Standalone-Session konnte nicht gestartet werden.',
-        );
+        return s.isInSession ? const ScAdaptiveShell() : const SessionScreen();
       },
       error: (e, _) => _BootstrapErrorScreen(error: e.toString()),
     );

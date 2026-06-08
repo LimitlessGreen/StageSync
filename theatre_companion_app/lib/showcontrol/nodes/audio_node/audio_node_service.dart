@@ -152,14 +152,15 @@ class AudioNodeService {
         devices = _sortDevices(await _engine.listDevices());
       }
       final interfaces = await MediaServer.listInterfaces();
+      // Fallback auf Loopback wenn noch kein Netzwerkinterface bereit ist
+      // (z.B. direkt nach Systemstart). Für Standalone-Betrieb ausreichend.
       final selectedIface = _status.selectedInterface ??
-          (interfaces.isNotEmpty ? interfaces.first : null);
+          (interfaces.isNotEmpty
+              ? interfaces.first
+              : const NetworkInterfaceInfo(
+                  name: 'loopback', address: '127.0.0.1'));
       final selectedDevice =
           _engine.selectedDevice ?? _pickPreferredDevice(devices);
-
-      if (selectedIface == null) {
-        throw Exception('Kein Netzwerk-Interface verfügbar');
-      }
 
       await _mediaServer.start(bindIp: selectedIface.address);
 
