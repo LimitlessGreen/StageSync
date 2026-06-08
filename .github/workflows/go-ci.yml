@@ -31,6 +31,9 @@ jobs:
           go-version-file: stagesync-server/go.mod
           cache-dependency-path: stagesync-server/go.sum
 
+      - name: Install system dependencies
+        run: sudo apt-get update -y && sudo apt-get install -y libasound2-dev
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
@@ -107,6 +110,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 1
           CC: ${{ matrix.goarch == 'arm64' && 'aarch64-linux-gnu-gcc' || 'gcc' }}
+          CXX: ${{ matrix.goarch == 'arm64' && 'aarch64-linux-gnu-g++' || 'g++' }}
           PKG_CONFIG_PATH: ${{ matrix.goarch == 'arm64' && '/usr/lib/aarch64-linux-gnu/pkgconfig' || '' }}
         run: go build -v -o stagesync-server-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/server/
 
