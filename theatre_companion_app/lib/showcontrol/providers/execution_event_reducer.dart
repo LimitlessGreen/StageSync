@@ -46,11 +46,21 @@ ShowControlState applyExecutionEvent(
           ? event.perCuePausedIds.toSet()
           : state.perCuePausedIds;
 
+      // PlayheadPosition from snapshot: compute back-calculated start anchor.
+      int? snapshotStartMs;
+      int? snapshotPausedAtMs;
+      if (event.hasPlayhead()) {
+        final ph = event.playhead;
+        snapshotStartMs = ph.serverTimeMs.toInt() - ph.positionMs.toInt();
+        if (ph.paused) snapshotPausedAtMs = ph.serverTimeMs.toInt();
+      }
+
       if (event.hasAffectedCue()) {
         return state.copyWith(
           isPaused: event.isPaused,
           activeCue: event.affectedCue,
-          activeCueStartedServerMs: startMs(),
+          activeCueStartedServerMs: snapshotStartMs ?? startMs(),
+          pausedAtServerMs: snapshotPausedAtMs,
           runningCueIds: running,
           runningCueStartedServerMs: starts,
           perCuePausedIds: perCuePaused,
@@ -58,6 +68,8 @@ ShowControlState applyExecutionEvent(
       }
       return state.copyWith(
         isPaused: event.isPaused,
+        activeCueStartedServerMs: snapshotStartMs,
+        pausedAtServerMs: snapshotPausedAtMs,
         runningCueIds: running,
         runningCueStartedServerMs: starts,
         perCuePausedIds: perCuePaused,
@@ -100,42 +112,33 @@ ShowControlState applyExecutionEvent(
 
     // ── Global STOP ──────────────────────────────────────────────────────────
     case ShowExecutionEvent_ExecutionEventType.CUE_STOPPED:
-      final stoppedId = event.hasAffectedCue() ? event.affectedCue.cueId : '';
-      final running = event.runningCueIds.isNotEmpty
-          ? event.runningCueIds.toSet()
-          : <String>{...state.runningCueIds}..remove(stoppedId);
-      final starts = Map<String, int>.from(state.runningCueStartedServerMs)
-        ..removeWhere((id, _) => !running.contains(id));
-      final perCuePaused = <String>{...state.perCuePausedIds}
-        ..removeWhere((id) => !running.contains(id));
-      final perCuePausedAt = Map<String, int>.from(state.perCuePausedAtMs)
-        ..removeWhere((id, _) => !running.contains(id));
-
-      Cue? nextActive;
-      if (running.isNotEmpty) {
-        if (stoppedId.isNotEmpty && state.activeCue?.cueId == stoppedId) {
-          final fallbackId = running.first;
-          for (final c in (state.cueList?.cues ?? const <Cue>[])) {
-            if (c.cueId == fallbackId) { nextActive = c; break; }
-          }
-        } else {
-          nextActive = state.activeCue;
-        }
+      final remaining = event.runningCueIds.toSet();
+      if (remaining.isEmpty) {
+        // Full stop — clear everything.
+        return state.copyWith(
+          activeCue: null,
+          isPaused: false,
+          activeCueStartedServerMs: null,
+          pausedAtServerMs: null,
+          cueDoneServerMs: null,
+          runningCueIds: const {},
+          runningCueStartedServerMs: const {},
+          perCuePausedIds: const {},
+          perCuePausedAtMs: const {},
+          perCueResumedAtMs: const {},
+        );
       }
-
-      final stoppedResumedAt = Map<String, int>.from(state.perCueResumedAtMs)
-        ..removeWhere((id, _) => !running.contains(id));
+      // Partial stop — one cue stopped while others still run (server-authoritative).
+      final stoppedId = event.hasAffectedCue() ? event.affectedCue.cueId : '';
+      final starts = Map<String, int>.from(state.runningCueStartedServerMs)
+        ..remove(stoppedId)
+        ..removeWhere((id, _) => !remaining.contains(id));
       return state.copyWith(
-        activeCue: nextActive,
-        isPaused: false,
-        activeCueStartedServerMs: running.isNotEmpty ? state.activeCueStartedServerMs : null,
-        pausedAtServerMs: null,
-        cueDoneServerMs: running.isEmpty ? eventMs() : null,
-        runningCueIds: running,
+        runningCueIds: remaining,
         runningCueStartedServerMs: starts,
-        perCuePausedIds: perCuePaused,
-        perCuePausedAtMs: perCuePausedAt,
-        perCueResumedAtMs: stoppedResumedAt,
+        perCuePausedIds: <String>{...state.perCuePausedIds}..remove(stoppedId),
+        perCuePausedAtMs: Map.from(state.perCuePausedAtMs)..remove(stoppedId),
+        perCueResumedAtMs: Map.from(state.perCueResumedAtMs)..remove(stoppedId),
       );
 
     // ── CUE_DONE / CUE_ERROR (natürliches Ende oder lokaler Stop) ────────────

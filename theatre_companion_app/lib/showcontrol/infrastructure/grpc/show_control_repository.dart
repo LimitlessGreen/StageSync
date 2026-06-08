@@ -100,6 +100,7 @@ class ShowControlRepository {
                   'FF${proto.note.colorHex.replaceAll("#", "")}',
                   radix: 16))
               : null,
+          landable: proto.note.landable,
         ),
       pb.Cue_Params.fade => FadeParams(
           targetCueId: proto.fade.targetCueId,
@@ -363,7 +364,8 @@ class ShowControlRepository {
           ..text = np.text
           ..colorHex = np.color != null
               ? '#${np.color!.toARGB32().toRadixString(16).substring(2).toUpperCase()}'
-              : '';
+              : ''
+          ..landable = np.landable;
       case FadeParams fp:
         proto.cueType = pb_common.CueType.CUE_TYPE_FADE;
         proto.fade = pb.FadeCueParams()

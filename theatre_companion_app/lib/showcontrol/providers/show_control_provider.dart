@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 import '../grpc/stage_sync_client.dart';
 import '../grpc/generated/stagesync/v1/showcontrol.pb.dart' hide PatchConfig;
 import '../grpc/generated/stagesync/v1/node.pb.dart' as node_pb;
+import '../grpc/generated/stagesync/v1/common.pbenum.dart' show NodeTask;
 import '../infrastructure/grpc/show_control_repository.dart' as repo;
 import '../domain/show.dart' as domain;
 import '../domain/cue_params.dart' as domain_params;
@@ -14,6 +15,8 @@ import '../nodes/audio_node/audio_device.dart';
 import '../domain/patch_config.dart';
 import '../session/clock_sync.dart';
 import 'session_provider.dart';
+import 'session_context.dart';
+import 'async_notifier_ext.dart';
 import 'media_provider.dart';
 import 'execution_event_reducer.dart';
 
@@ -140,7 +143,8 @@ final showControlProvider =
 
 // ── Notifier ──────────────────────────────────────────────────────────────────
 
-class ShowControlNotifier extends StateNotifier<ShowControlState> {
+class ShowControlNotifier extends StateNotifier<ShowControlState>
+    with AsyncOp<ShowControlState> {
   final Ref _ref;
 
   // Stream 1: Show-Definition (CueList-Änderungen)
@@ -159,35 +163,31 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
 
   ShowControlNotifier(this._ref) : super(const ShowControlState());
 
+  SessionContext get _ctx => _ref.sessionCtx;
   SessionState get _session => _ref.read(sessionProvider);
-  String get _sessionId => _session.session!.sessionId;
-  String get _token => _session.token!;
+  String get _sessionId => _ctx.sessionId;
+  String get _token => _ctx.token;
 
   /// CueList laden und beide Event-Streams starten.
   Future<void> initialize() async {
     if (!_session.isInSession) return;
-
-    state = state.copyWith(isLoading: true);
-    try {
-      final client = StageSyncClient.instance;
-      final req = GetCueListRequest()
-        ..sessionId = _sessionId
-        ..token = _token;
-
-      final resp = await client.showControl.getCueList(req);
-      state = state.copyWith(
-        cueList: resp.cueList,
-        isLoading: false,
-      );
-
-      _subscribeToDefinition();
-      _subscribeToExecution();
-      _subscribeToNodeHealth();
-      // WatchManifest-gRPC-Stream öffnen: liefert Snapshot + Live-Updates.
-      _ref.read(mediaProvider.notifier).startWatching();
-    } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
-    }
+    await runAsync(
+      () async {
+        final client = StageSyncClient.instance;
+        final req = GetCueListRequest()
+          ..sessionId = _sessionId
+          ..token = _token;
+        final resp = await client.showControl.getCueList(req);
+        state = state.copyWith(cueList: resp.cueList);
+        _subscribeToDefinition();
+        _subscribeToExecution();
+        _subscribeToNodeHealth();
+        // WatchManifest-gRPC-Stream öffnen: liefert Snapshot + Live-Updates.
+        _ref.read(mediaProvider.notifier).startWatching();
+      },
+      setLoading: (s, l) => s.copyWith(isLoading: l, error: null),
+      setError: (s, e) => s.copyWith(isLoading: false, error: e),
+    );
   }
 
   // ── Transport Commands ──────────────────────────────────────────────────────
@@ -256,6 +256,38 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
      state = state.copyWith(isPaused: false);
    }
 
+  /// Ermittelt die Ziel-Node-IDs für [cueId] über PatchConfig.
+  /// Priorität: logicalOutputId → targetNodeId → alle online Audio-Nodes → eigene Node.
+  List<String> _resolveTargetNodes(String cueId) {
+    if (state.cueList == null) return const [];
+    Cue? protoCue;
+    for (final c in state.cueList!.cues) {
+      if (c.cueId == cueId) { protoCue = c; break; }
+    }
+    if (protoCue == null) return const [];
+
+    List<String> ids = [];
+    if (protoCue.logicalOutputId.isNotEmpty) {
+      ids = state.patchConfig.nodesForOutput(protoCue.logicalOutputId);
+    }
+    if (ids.isEmpty && protoCue.targetNodeId.isNotEmpty) {
+      ids = [protoCue.targetNodeId];
+    }
+    if (ids.isEmpty) {
+      ids = state.nodeStatuses
+          .where((n) => n.isOnline && n.isAudio)
+          .map((n) => n.nodeId)
+          .toList();
+    }
+    if (ids.isEmpty) {
+      final myNode = _session.myNode;
+      if (myNode != null && myNode.tasks.contains(NodeTask.NODE_TASK_AUDIO_OUTPUT)) {
+        ids = [myNode.nodeId];
+      }
+    }
+    return ids;
+  }
+
    /// Sendet einen AudioFadeCommand über NodeService.sendNodeCommand an alle
    /// Nodes, die über [cueId] (via logicalOutputId + PatchConfig) zugeordnet sind.
    ///
@@ -269,33 +301,7 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
      bool stopWhenDone = false,
    }) async {
      if (!_session.isInSession) return;
-     if (state.cueList == null) return;
-
-     // Domain-Cue ermitteln (für logicalOutputId und AudioParams.volumeDb)
-     Cue? protoCue;
-     for (final c in state.cueList!.cues) {
-       if (c.cueId == cueId) {
-         protoCue = c;
-         break;
-       }
-     }
-     if (protoCue == null) return;
-
-     // Ziel-Nodes über PatchConfig ermitteln.
-     // Priorität: logicalOutputId → targetNodeId direkt → alle online Audio-Nodes.
-     List<String> targetNodeIds = [];
-     if (protoCue.logicalOutputId.isNotEmpty) {
-       targetNodeIds = state.patchConfig.nodesForOutput(protoCue.logicalOutputId);
-     }
-     if (targetNodeIds.isEmpty && protoCue.targetNodeId.isNotEmpty) {
-       targetNodeIds = [protoCue.targetNodeId];
-     }
-     if (targetNodeIds.isEmpty) {
-       targetNodeIds = state.nodeStatuses
-           .where((n) => n.isOnline && n.isAudio)
-           .map((n) => n.nodeId)
-           .toList();
-     }
+     final targetNodeIds = _resolveTargetNodes(cueId);
      if (targetNodeIds.isEmpty) return;
 
      final fadeCmd = node_pb.AudioFadeCommand(
@@ -356,142 +362,53 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
    }
 
    /// Stoppt eine laufende Audio-Cue sofort (mit kurzem Fade gegen Knackser).
-   /// Sendet AudioStop an den Ziel-Node; der Server-seitige Tracker wird dabei
-   /// automatisch beendet und CUE_DONE gebroadcastet.
+   /// Der Server serialisiert den Stop, setzt Engine-State und broadcastet CUE_DONE.
    Future<void> stopCueAudio(String cueId, {double fadeOutMs = 200.0}) async {
      if (!_session.isInSession) return;
-     if (state.cueList == null) return;
-
-     Cue? protoCue;
-     for (final c in state.cueList!.cues) {
-       if (c.cueId == cueId) { protoCue = c; break; }
-     }
-     if (protoCue == null) return;
-
-     List<String> targetNodeIds = [];
-     if (protoCue.logicalOutputId.isNotEmpty) {
-       targetNodeIds = state.patchConfig.nodesForOutput(protoCue.logicalOutputId);
-     }
-     if (targetNodeIds.isEmpty && protoCue.targetNodeId.isNotEmpty) {
-       targetNodeIds = [protoCue.targetNodeId];
-     }
-     if (targetNodeIds.isEmpty) {
-       targetNodeIds = state.nodeStatuses
-           .where((n) => n.isOnline && n.isAudio)
-           .map((n) => n.nodeId)
-           .toList();
-     }
-     if (targetNodeIds.isEmpty) return;
-
-     final stopCmd = node_pb.AudioStopCommand(cueId: cueId, fadeOutMs: fadeOutMs);
-     for (final nodeId in targetNodeIds) {
-       final req = node_pb.SendNodeCommandRequest(
-         sessionId: _sessionId,
-         token: _token,
-         targetNodeId: nodeId,
-         command: node_pb.NodeCommandRequest(
-           sessionId: _sessionId,
-           commandId: _uuid.v4(),
-           audioStop: stopCmd,
-         ),
+     try {
+       await StageSyncClient.instance.showControl.stopCueAudio(
+         StopCueAudioRequest()
+           ..sessionId = _sessionId
+           ..token = _token
+           ..cueId = cueId
+           ..fadeOutMs = fadeOutMs,
        );
-       try {
-         await StageSyncClient.instance.node.sendNodeCommand(req);
-       } catch (e) {
-         state = state.copyWith(error: 'Stop-Fehler ($nodeId): $e');
-       }
+     } catch (e) {
+       state = state.copyWith(error: 'StopCueAudio-Fehler: $e');
      }
    }
 
    /// Pausiert eine laufende Audio-Cue mit kurzem Fade.
+   /// Der Server serialisiert die Pause, setzt Engine-State und broadcastet CUE_CUE_PAUSED.
    Future<void> pauseCueAudio(String cueId, {double fadeOutMs = 120.0}) async {
      if (!_session.isInSession) return;
-     if (state.cueList == null) return;
-
-     Cue? protoCue;
-     for (final c in state.cueList!.cues) {
-       if (c.cueId == cueId) { protoCue = c; break; }
-     }
-     if (protoCue == null) return;
-
-     List<String> targetNodeIds = [];
-     if (protoCue.logicalOutputId.isNotEmpty) {
-       targetNodeIds = state.patchConfig.nodesForOutput(protoCue.logicalOutputId);
-     }
-     if (targetNodeIds.isEmpty && protoCue.targetNodeId.isNotEmpty) {
-       targetNodeIds = [protoCue.targetNodeId];
-     }
-     if (targetNodeIds.isEmpty) {
-       targetNodeIds = state.nodeStatuses
-           .where((n) => n.isOnline && n.isAudio)
-           .map((n) => n.nodeId)
-           .toList();
-     }
-     if (targetNodeIds.isEmpty) return;
-
-     final pauseCmd = node_pb.AudioPauseCommand(cueId: cueId, fadeOutMs: fadeOutMs);
-     for (final nodeId in targetNodeIds) {
-       final req = node_pb.SendNodeCommandRequest(
-         sessionId: _sessionId,
-         token: _token,
-         targetNodeId: nodeId,
-         command: node_pb.NodeCommandRequest(
-           sessionId: _sessionId,
-           commandId: _uuid.v4(),
-           audioPause: pauseCmd,
-         ),
+     try {
+       await StageSyncClient.instance.showControl.pauseCueAudio(
+         PauseCueAudioRequest()
+           ..sessionId = _sessionId
+           ..token = _token
+           ..cueId = cueId
+           ..fadeOutMs = fadeOutMs,
        );
-       try {
-         await StageSyncClient.instance.node.sendNodeCommand(req);
-       } catch (e) {
-         state = state.copyWith(error: 'Pause-Fehler ($nodeId): $e');
-       }
+     } catch (e) {
+       state = state.copyWith(error: 'PauseCueAudio-Fehler: $e');
      }
    }
 
    /// Setzt eine pausierte Audio-Cue fort (mit kurzem Fade-In gegen Knackser).
+   /// Der Server serialisiert den Resume, setzt Engine-State und broadcastet CUE_CUE_RESUMED.
    Future<void> resumeCueAudio(String cueId, {double fadeInMs = 120.0}) async {
      if (!_session.isInSession) return;
-     if (state.cueList == null) return;
-
-     Cue? protoCue;
-     for (final c in state.cueList!.cues) {
-       if (c.cueId == cueId) { protoCue = c; break; }
-     }
-     if (protoCue == null) return;
-
-     List<String> targetNodeIds = [];
-     if (protoCue.logicalOutputId.isNotEmpty) {
-       targetNodeIds = state.patchConfig.nodesForOutput(protoCue.logicalOutputId);
-     }
-     if (targetNodeIds.isEmpty && protoCue.targetNodeId.isNotEmpty) {
-       targetNodeIds = [protoCue.targetNodeId];
-     }
-     if (targetNodeIds.isEmpty) {
-       targetNodeIds = state.nodeStatuses
-           .where((n) => n.isOnline && n.isAudio)
-           .map((n) => n.nodeId)
-           .toList();
-     }
-     if (targetNodeIds.isEmpty) return;
-
-     final resumeCmd = node_pb.AudioResumeCommand(cueId: cueId, fadeInMs: fadeInMs);
-     for (final nodeId in targetNodeIds) {
-       final req = node_pb.SendNodeCommandRequest(
-         sessionId: _sessionId,
-         token: _token,
-         targetNodeId: nodeId,
-         command: node_pb.NodeCommandRequest(
-           sessionId: _sessionId,
-           commandId: _uuid.v4(),
-           audioResume: resumeCmd,
-         ),
+     try {
+       await StageSyncClient.instance.showControl.resumeCueAudio(
+         ResumeCueAudioRequest()
+           ..sessionId = _sessionId
+           ..token = _token
+           ..cueId = cueId
+           ..fadeInMs = fadeInMs,
        );
-       try {
-         await StageSyncClient.instance.node.sendNodeCommand(req);
-       } catch (e) {
-         state = state.copyWith(error: 'Resume-Fehler ($nodeId): $e');
-       }
+     } catch (e) {
+       state = state.copyWith(error: 'ResumeCueAudio-Fehler: $e');
      }
    }
 
@@ -521,10 +438,10 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
     await updateCueList(updated);
   }
 
-  Future<void> addCue(
+  Future<domain.Cue?> addCue(
       {domain_params.CueParams params =
           const domain_params.AudioParams(assetId: '')}) async {
-    if (!_session.isInSession) return;
+    if (!_session.isInSession) return null;
     final domainCue = domain.Cue(
       id: _uuid.v4(),
       number: _nextCueNumber(),
@@ -532,6 +449,7 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
       params: params,
     );
     await upsertDomainCue(domainCue);
+    return domainCue;
   }
 
   String _nextCueNumber() {
@@ -544,13 +462,15 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
   }
 
   /// Insert a new cue directly after [afterId] (or at end if null).
-  Future<void> insertDomainCue(
+  /// Returns the new cue's ID.
+  Future<String?> insertDomainCue(
     domain_params.CueParams params, {
     String? afterId,
+    String label = 'Neue Cue',
   }) async {
-    if (!_session.isInSession) return;
+    if (!_session.isInSession) return null;
     final list = state.cueList;
-    if (list == null) return;
+    if (list == null) return null;
 
     final cues = list.cues.toList();
     final insertIdx = afterId != null
@@ -567,7 +487,7 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
     final newCue = domain.Cue(
       id: _uuid.v4(),
       number: newNum,
-      label: 'Neue Cue',
+      label: label,
       params: params,
     );
     await upsertDomainCue(newCue);
@@ -577,13 +497,14 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
       (c) => c.cueId == newCue.id,
       orElse: () => throw StateError('inserted cue not found'),
     );
-    if (proto == null) return;
+    if (proto == null) return newCue.id;
     final newIds = List<String>.from(
       state.cueList!.cues.map((c) => c.cueId),
     );
     newIds.remove(newCue.id);
     newIds.insert(insertIdx, newCue.id);
     await reorderCue(orderedIds: newIds);
+    return newCue.id;
   }
 
   /// Duplicate [cueId] and insert the copy directly after it.
@@ -655,6 +576,32 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
 
   Future<void> deleteCue(String cueId) async {
     if (!_session.isInSession) return;
+
+    // Läuft die Cue gerade → Audio vorher stoppen, damit kein Phantom-Audio bleibt.
+    if (state.runningCueIds.contains(cueId)) {
+      await stopCueAudio(cueId, fadeOutMs: 150);
+    }
+
+    // Lokalen State bereinigen bevor der Server antwortet.
+    final isActive = state.activeCue?.cueId == cueId;
+    if (isActive) {
+      state = state.copyWith(
+        activeCue: null,
+        activeCueStartedServerMs: null,
+        runningCueIds: {...state.runningCueIds}..remove(cueId),
+        runningCueStartedServerMs: Map.of(state.runningCueStartedServerMs)..remove(cueId),
+        perCuePausedIds: {...state.perCuePausedIds}..remove(cueId),
+        perCuePausedAtMs: Map.of(state.perCuePausedAtMs)..remove(cueId),
+      );
+    } else if (state.runningCueIds.contains(cueId)) {
+      state = state.copyWith(
+        runningCueIds: {...state.runningCueIds}..remove(cueId),
+        runningCueStartedServerMs: Map.of(state.runningCueStartedServerMs)..remove(cueId),
+        perCuePausedIds: {...state.perCuePausedIds}..remove(cueId),
+        perCuePausedAtMs: Map.of(state.perCuePausedAtMs)..remove(cueId),
+      );
+    }
+
     final currentListId = state.cueList?.cueListId ?? 'main';
     final req = DeleteCueRequest()
       ..sessionId = _sessionId
@@ -698,7 +645,7 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
   // ── Stream 1: Show-Definition ───────────────────────────────────────────────
 
   void _subscribeToDefinition() {
-    _defSub?.cancel();
+    _cancelGracefully(_defSub);
     _lastDefSeq = 0;
     final req = WatchShowDefinitionRequest()
       ..sessionId = _sessionId
@@ -733,7 +680,7 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
   // ── Stream 2: Show-Execution ────────────────────────────────────────────────
 
   void _subscribeToExecution() {
-    _execSub?.cancel();
+    _cancelGracefully(_execSub);
     _lastExecSeq = 0;
     final req = WatchShowExecutionRequest()
       ..sessionId = _sessionId
@@ -750,6 +697,11 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
   void _handleExecutionEvent(ShowExecutionEvent event) {
     final seq = event.seq.toInt();
     if (seq != 0 && seq < _lastExecSeq) return;
+    // Gap detected: missed events → resync immediately instead of silently diverging.
+    if (_lastExecSeq > 0 && seq > _lastExecSeq + 1) {
+      _subscribeToExecution();
+      return;
+    }
     if (seq > _lastExecSeq) _lastExecSeq = seq;
     state = applyExecutionEvent(state, event);
   }
@@ -758,7 +710,7 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
   // ── Stream 3: Node-Health ───────────────────────────────────────────────────
 
   void _subscribeToNodeHealth() {
-    _healthSub?.cancel();
+    _cancelGracefully(_healthSub);
     _lastHealthSeq = 0;
     _nodeMap.clear();
     final req = WatchNodeHealthRequest()
@@ -866,9 +818,14 @@ class ShowControlNotifier extends StateNotifier<ShowControlState> {
 
   @override
   void dispose() {
-    _defSub?.cancel();
-    _execSub?.cancel();
-    _healthSub?.cancel();
+    _cancelGracefully(_defSub);
+    _cancelGracefully(_execSub);
+    _cancelGracefully(_healthSub);
     super.dispose();
+  }
+
+  static void _cancelGracefully(StreamSubscription? sub) {
+    if (sub == null) return;
+    Future.microtask(() => sub.cancel().catchError((_) {}));
   }
 }

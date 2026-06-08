@@ -386,7 +386,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
     state = const SessionState();
     _heartbeatTimer?.cancel();
     _heartbeatTimer = null;
-    _eventSub?.cancel();
+    _cancelGracefully(_eventSub);
     _eventSub = null;
     _heartbeatFailCount = 0;
     ClockSync.instance.reset();
@@ -459,7 +459,7 @@ class SessionNotifier extends StateNotifier<SessionState> {
   // ── Event-Stream ──────────────────────────────────────────────────────────────
 
   Future<void> _watchEvents() async {
-    await _eventSub?.cancel();
+    _cancelGracefully(_eventSub);
     _eventSub = null;
 
     final s = state;
@@ -519,7 +519,12 @@ class SessionNotifier extends StateNotifier<SessionState> {
   @override
   void dispose() {
     _heartbeatTimer?.cancel();
-    _eventSub?.cancel();
+    _cancelGracefully(_eventSub);
     super.dispose();
+  }
+
+  static void _cancelGracefully(StreamSubscription? sub) {
+    if (sub == null) return;
+    Future.microtask(() => sub.cancel().catchError((_) {}));
   }
 }

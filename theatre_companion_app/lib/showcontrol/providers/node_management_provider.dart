@@ -6,6 +6,7 @@ import '../grpc/generated/stagesync/v1/node.pb.dart';
 import '../grpc/generated/stagesync/v1/common.pb.dart' show NodeTask;
 import '../nodes/audio_node/audio_device.dart';
 import 'session_provider.dart';
+import 'session_context.dart';
 
 const _uuid = Uuid();
 
@@ -49,6 +50,7 @@ class NodeManagementNotifier extends StateNotifier<NodeManagementState> {
 
   NodeManagementNotifier(this._ref) : super(const NodeManagementState());
 
+  SessionContext get _ctx => _ref.sessionCtx;
   SessionState get _session => _ref.read(sessionProvider);
 
   /// Setzt das Audio-Ausgabegerät auf einem remote Node.
@@ -150,7 +152,7 @@ class NodeManagementNotifier extends StateNotifier<NodeManagementState> {
     await _sendNodeCommand(
       targetNodeId: targetNodeId,
       command: NodeCommandRequest()
-        ..sessionId = _session.session!.sessionId
+        ..sessionId = _ctx.sessionId
         ..commandId = _uuid.v4()
         ..targetNodeId = targetNodeId
         ..audioTest = (AudioTestSignalCommand()
@@ -171,7 +173,7 @@ class NodeManagementNotifier extends StateNotifier<NodeManagementState> {
     await _sendNodeCommand(
       targetNodeId: targetNodeId,
       command: NodeCommandRequest()
-        ..sessionId = _session.session!.sessionId
+        ..sessionId = _ctx.sessionId
         ..commandId = _uuid.v4()
         ..targetNodeId = targetNodeId
         ..audioTest = (AudioTestSignalCommand()
@@ -195,7 +197,7 @@ class NodeManagementNotifier extends StateNotifier<NodeManagementState> {
     await _sendNodeCommand(
       targetNodeId: targetNodeId,
       command: NodeCommandRequest()
-        ..sessionId = _session.session!.sessionId
+        ..sessionId = _ctx.sessionId
         ..commandId = _uuid.v4()
         ..targetNodeId = targetNodeId
         ..nodeConfig = config,
@@ -212,8 +214,8 @@ class NodeManagementNotifier extends StateNotifier<NodeManagementState> {
     state = state.copyWith(isSending: true, clearError: true);
     try {
       final req = SendNodeCommandRequest()
-        ..sessionId = _session.session!.sessionId
-        ..token = _session.token!
+        ..sessionId = _ctx.sessionId
+        ..token = _ctx.token
         ..targetNodeId = targetNodeId
         ..command = command;
       await StageSyncClient.instance.node.sendNodeCommand(req);

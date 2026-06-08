@@ -5,6 +5,7 @@ import 'generated/stagesync/v1/showcontrol.pbgrpc.dart';
 import 'generated/stagesync/v1/node.pbgrpc.dart';
 import 'generated/stagesync/v1/media.pbgrpc.dart';
 import 'generated/stagesync/v1/talkback.pbgrpc.dart';
+import 'generated/stagesync/v1/grid.pbgrpc.dart';
 
 /// Verbindungszustand des Clients.
 enum StageSyncConnectionState { disconnected, connecting, connected, error }
@@ -24,6 +25,7 @@ class StageSyncClient {
   late NodeServiceClient node;
   late MediaServiceClient media;
   late TalkbackServiceClient talkback;
+  late GridServiceClient grid;
 
   // Session-Kontext für MediaService-Aufrufe (werden nach dem Join gesetzt).
   String? sessionId;
@@ -68,6 +70,7 @@ class StageSyncClient {
     node = NodeServiceClient(_channel!);
     media = MediaServiceClient(_channel!);
     talkback = TalkbackServiceClient(_channel!);
+    grid = GridServiceClient(_channel!);
 
     _state = StageSyncConnectionState.connected;
   }

@@ -416,6 +416,10 @@ class AudioNodeService {
         break;
       case NodeCommandRequest_Command.audioTalkbackCtrl:
         break;
+      case NodeCommandRequest_Command.midiSend:
+      case NodeCommandRequest_Command.ledFeedback:
+        // MIDI-/LED-Commands gelten dem MIDI-Node, nicht dem Audio-Node.
+        break;
       case NodeCommandRequest_Command.notSet:
         break;
     }

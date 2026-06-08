@@ -1,50 +1,36 @@
 import 'dart:async';
 import 'dart:typed_data'; // ignore: unused_import (Uint8List used via record type)
 
+import 'package:freezed_annotation/freezed_annotation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/asset.dart';
 import '../media/media_grpc_client.dart';
 import '../media/server_media_client.dart' show MediaFile;
+import 'session_provider.dart';
 import 'show_control_domain_provider.dart';
+
+part 'media_provider.freezed.dart';
 
 // ── Upload Queue ──────────────────────────────────────────────────────────────
 
 enum UploadStatus { pending, uploading, analyzing, done, error }
 
-class UploadItem {
-  final String id;
-  final String filename;
-  final int totalBytes;
-  final int sentBytes;
-  final UploadStatus status;
-  final String? error;
+@freezed
+class UploadItem with _$UploadItem {
+  const UploadItem._();
 
-  const UploadItem({
-    required this.id,
-    required this.filename,
-    required this.totalBytes,
-    this.sentBytes = 0,
-    this.status = UploadStatus.pending,
-    this.error,
-  });
+  const factory UploadItem({
+    required String id,
+    required String filename,
+    required int totalBytes,
+    @Default(0) int sentBytes,
+    @Default(UploadStatus.pending) UploadStatus status,
+    String? error,
+  }) = _UploadItem;
 
   double get progress =>
       totalBytes > 0 ? (sentBytes / totalBytes).clamp(0.0, 1.0) : 0.0;
-
-  UploadItem copyWith({
-    int? sentBytes,
-    UploadStatus? status,
-    String? error,
-  }) =>
-      UploadItem(
-        id: id,
-        filename: filename,
-        totalBytes: totalBytes,
-        sentBytes: sentBytes ?? this.sentBytes,
-        status: status ?? this.status,
-        error: error ?? this.error,
-      );
 }
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -150,7 +136,18 @@ final enrichedAssetsProvider = Provider<List<Asset>>((ref) {
 // ── Notifier ──────────────────────────────────────────────────────────────────
 
 class MediaNotifier extends StateNotifier<MediaState> {
-  MediaNotifier(Ref ref) : super(const MediaState());
+  MediaNotifier(Ref ref) : super(const MediaState()) {
+    // Auto-start when a session becomes active, so assets are available
+    // without manually opening the media browser first.
+    if (ref.read(sessionProvider).isInSession) {
+      startWatching();
+    }
+    ref.listen(sessionProvider, (prev, next) {
+      if (next.isInSession && prev?.isInSession != true) {
+        startWatching();
+      }
+    });
+  }
 
   final _grpc = MediaGrpcClient();
   StreamSubscription<ManifestSnapshot>? _manifestSub;
@@ -158,7 +155,7 @@ class MediaNotifier extends StateNotifier<MediaState> {
   /// Startet den WatchManifest-Stream und hält die Asset-Liste aktuell.
   /// Wird automatisch neu verbunden bei Verbindungsabbruch.
   void startWatching() {
-    _manifestSub?.cancel();
+    _cancelGracefully(_manifestSub);
     _manifestSub = _grpc.watchManifest().listen(
       _onManifestEvent,
       onError: (e) {
@@ -174,7 +171,7 @@ class MediaNotifier extends StateNotifier<MediaState> {
   void _onManifestEvent(ManifestSnapshot event) {
     if (event.type == ManifestEventType.snapshot) {
       final assets = event.assets.map(_toAsset).toList()
-        ..sort((a, b) => a.name.compareTo(b.name));
+        ..sort((a, b) => naturalCompare(a.name, b.name));
       state = state.copyWith(assets: assets, isLoading: false, clearError: true);
     } else if (event.type == ManifestEventType.added ||
                event.type == ManifestEventType.updated) {
@@ -186,7 +183,7 @@ class MediaNotifier extends StateNotifier<MediaState> {
           next[existing] = updated;
         } else {
           next.add(updated);
-          next.sort((a, b) => a.name.compareTo(b.name));
+          next.sort((a, b) => naturalCompare(a.name, b.name));
         }
         state = state.copyWith(assets: next);
       }
@@ -282,8 +279,16 @@ class MediaNotifier extends StateNotifier<MediaState> {
 
   @override
   void dispose() {
-    _manifestSub?.cancel();
+    _cancelGracefully(_manifestSub);
     super.dispose();
+  }
+
+  // Delays stream cancel by one microtask so the http2 connection queue can
+  // finish processing any buffered messages before RST_STREAM is sent.
+  // Prevents the 'connection_queues.dart: _stream2messageQueue.isEmpty' assertion.
+  static void _cancelGracefully(StreamSubscription? sub) {
+    if (sub == null) return;
+    Future.microtask(() => sub.cancel().catchError((_) {}));
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -332,4 +337,18 @@ class MediaNotifier extends StateNotifier<MediaState> {
   static String _codecFor(String name) {
     return name.toLowerCase().split('.').last;
   }
+}
+
+/// Natural (human) sort comparison: "2 Song" < "10 Song", case-insensitive.
+int naturalCompare(String a, String b) {
+  final re = RegExp(r'(\d+)|([^\d]+)');
+  final aTokens = re.allMatches(a.toLowerCase()).map((m) => m.group(0)!).toList();
+  final bTokens = re.allMatches(b.toLowerCase()).map((m) => m.group(0)!).toList();
+  for (var i = 0; i < aTokens.length && i < bTokens.length; i++) {
+    final at = aTokens[i], bt = bTokens[i];
+    final an = int.tryParse(at), bn = int.tryParse(bt);
+    final cmp = (an != null && bn != null) ? an.compareTo(bn) : at.compareTo(bt);
+    if (cmp != 0) return cmp;
+  }
+  return aTokens.length.compareTo(bTokens.length);
 }
