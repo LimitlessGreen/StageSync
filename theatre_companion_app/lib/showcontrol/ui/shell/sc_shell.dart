@@ -216,6 +216,8 @@ class _ScShellState extends ConsumerState<ScShell>
           TransportBar(
             playhead: domainState.playhead,
             cueList: domainState.cueList,
+            goLockedUntil: ref.watch(
+                showControlProvider.select((s) => s.goLockedUntil)),
             onGo: () => notifier.go(),
             onStop: () => notifier.stop(),
             onPause: () => notifier.pause(),
@@ -332,6 +334,8 @@ class _ScShellState extends ConsumerState<ScShell>
     );
     final transport = _TransportControls(
       playhead: domainState.playhead,
+      goLockedUntil: ref.watch(
+          showControlProvider.select((s) => s.goLockedUntil)),
       onGo: () => notifier.go(),
       onStop: () => notifier.stop(),
       onPause: () => notifier.pause(),
@@ -1398,6 +1402,7 @@ class _TransportControls extends ConsumerStatefulWidget {
   final VoidCallback onStop;
   final VoidCallback onPause;
   final VoidCallback onResume;
+  final DateTime? goLockedUntil;
 
   const _TransportControls({
     required this.playhead,
@@ -1405,6 +1410,7 @@ class _TransportControls extends ConsumerStatefulWidget {
     required this.onStop,
     required this.onPause,
     required this.onResume,
+    this.goLockedUntil,
   });
 
   @override
@@ -1489,6 +1495,7 @@ class _TransportControlsState extends ConsumerState<_TransportControls> {
               variant: ScButtonVariant.primary,
               size: ScButtonSize.large,
               onPressed: widget.onGo,
+              lockEndTime: widget.goLockedUntil,
             ),
           ),
           const SizedBox(height: 12),

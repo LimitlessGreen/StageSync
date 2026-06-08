@@ -22,6 +22,10 @@ import 'execution_event_reducer.dart';
 
 const _uuid = Uuid();
 
+/// Wie lange der GO-Button nach einem CUE_STARTED-Event gesperrt bleibt (ms).
+/// Später über Einstellungen konfigurierbar.
+const kGoCooldownMs = 1000;
+
 // ── State ─────────────────────────────────────────────────────────────────────
 
 /// Sentinel, um in [ShowControlState.copyWith] „nicht übergeben" von „auf null
@@ -69,6 +73,9 @@ class ShowControlState {
   /// Aktuelle Patch-Konfiguration (aus WatchShowDefinition-Stream).
   final PatchConfig patchConfig;
 
+  /// Bis wann der GO-Button nach CUE_STARTED gesperrt ist (null = nicht gesperrt).
+  final DateTime? goLockedUntil;
+
   const ShowControlState({
     this.cueList,
     this.activeCue,
@@ -86,6 +93,7 @@ class ShowControlState {
     this.perCueResumedAtMs = const {},
     this.nodeStatuses = const [],
     this.patchConfig = PatchConfig.empty,
+    this.goLockedUntil,
   });
 
   ShowControlState copyWith({
@@ -105,6 +113,7 @@ class ShowControlState {
     Object? activeCueStartedServerMs = _unset,
     Object? pausedAtServerMs = _unset,
     Object? cueDoneServerMs = _unset,
+    Object? goLockedUntil = _unset,
   }) =>
       ShowControlState(
         cueList: cueList ?? this.cueList,
@@ -131,6 +140,9 @@ class ShowControlState {
         cueDoneServerMs: identical(cueDoneServerMs, _unset)
             ? this.cueDoneServerMs
             : cueDoneServerMs as int?,
+        goLockedUntil: identical(goLockedUntil, _unset)
+            ? this.goLockedUntil
+            : goLockedUntil as DateTime?,
       );
 }
 
@@ -160,6 +172,9 @@ class ShowControlNotifier extends StateNotifier<ShowControlState>
   int _lastHealthSeq = 0;
   // Lokale Kopie für Merge-Operationen (nodeId → NodeStatus).
   final Map<String, NodeStatus> _nodeMap = {};
+
+  // GO-Sperre: nach CUE_STARTED für kGoCooldownMs gesperrt.
+  Timer? _goLockTimer;
 
   ShowControlNotifier(this._ref) : super(const ShowControlState());
 
@@ -715,6 +730,19 @@ class ShowControlNotifier extends StateNotifier<ShowControlState>
     }
     if (seq > _lastExecSeq) _lastExecSeq = seq;
     state = applyExecutionEvent(state, event);
+
+    if (event.type == ShowExecutionEvent_ExecutionEventType.CUE_STARTED) {
+      _startGoLock();
+    }
+  }
+
+  void _startGoLock() {
+    final until = DateTime.now().add(const Duration(milliseconds: kGoCooldownMs));
+    state = state.copyWith(goLockedUntil: until);
+    _goLockTimer?.cancel();
+    _goLockTimer = Timer(const Duration(milliseconds: kGoCooldownMs), () {
+      if (mounted) state = state.copyWith(goLockedUntil: null);
+    });
   }
 
   // ignore: unused_element — kept for reference during migration
@@ -829,6 +857,7 @@ class ShowControlNotifier extends StateNotifier<ShowControlState>
 
   @override
   void dispose() {
+    _goLockTimer?.cancel();
     _cancelGracefully(_defSub);
     _cancelGracefully(_execSub);
     _cancelGracefully(_healthSub);

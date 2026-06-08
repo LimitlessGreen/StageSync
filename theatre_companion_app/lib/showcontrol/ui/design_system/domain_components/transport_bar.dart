@@ -24,6 +24,7 @@ class TransportBar extends StatelessWidget {
   final VoidCallback? onPause;
   final VoidCallback? onResume;
   final bool compact;
+  final DateTime? goLockedUntil;
 
   const TransportBar({
     super.key,
@@ -34,6 +35,7 @@ class TransportBar extends StatelessWidget {
     this.onPause,
     this.onResume,
     this.compact = false,
+    this.goLockedUntil,
   });
 
   String _elapsedStr() {
@@ -204,6 +206,7 @@ class TransportBar extends StatelessWidget {
                 variant: ScButtonVariant.primary,
                 size: ScButtonSize.transport,
                 onPressed: onGo,
+                lockEndTime: goLockedUntil,
               ),
             ),
           ),
