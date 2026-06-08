@@ -12,7 +12,7 @@ func parseAIFF(path string) *AudioInfo {
 	if err != nil {
 		return nil
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	dec := aiff.NewDecoder(f)
 	if !dec.IsValidFile() {

@@ -12,7 +12,7 @@ func parseFLAC(path string) *AudioInfo {
 	if err != nil {
 		return nil
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	stream, err := flac.New(f)
 	if err != nil {
 		return nil

@@ -200,7 +200,7 @@ func readWAVPCMFloat(path string) (samples []float64, sampleRate, channels int, 
 	if err != nil {
 		return nil, 0, 0, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	// RIFF header
 	var riff [12]byte
