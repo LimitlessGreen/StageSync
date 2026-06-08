@@ -35,9 +35,9 @@ jobs:
       run:
         working-directory: theatre_companion_app
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: stagesync-server/go.sum
@@ -136,7 +136,7 @@ jobs:
         run: makensis installer.nsi
 
       - name: Upload Windows installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-installer
           path: theatre_companion_app/StageSync-${{ steps.version.outputs.VER }}-windows-x64-setup.exe
@@ -153,9 +153,9 @@ jobs:
       run:
         working-directory: theatre_companion_app
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: stagesync-server/go.sum
@@ -265,7 +265,7 @@ jobs:
         run: xcrun stapler staple "$DMG_NAME"
 
       - name: Upload macOS DMG
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: macos-dmg
           path: theatre_companion_app/${{ env.DMG_NAME }}
@@ -279,9 +279,9 @@ jobs:
       run:
         working-directory: theatre_companion_app
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: stagesync-server/go.sum
@@ -375,7 +375,7 @@ jobs:
           ARCH=x86_64 appimagetool "$APPDIR" "StageSync-${VER}-linux-x86_64.AppImage"
 
       - name: Upload Linux AppImage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: linux-appimage
           path: theatre_companion_app/StageSync-${{ steps.version.outputs.VER }}-linux-x86_64.AppImage
@@ -423,9 +423,9 @@ jobs:
       run:
         working-directory: stagesync-server
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache-dependency-path: stagesync-server/go.sum
@@ -460,7 +460,7 @@ jobs:
         run: go build -ldflags="-s -w" -o ${{ matrix.output }} ./cmd/server/
 
       - name: Upload binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.output }}
           path: stagesync-server/${{ matrix.output }}
@@ -474,7 +474,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Get version
         id: version
@@ -486,12 +486,12 @@ jobs:
           echo "VER=$VER" >> "$GITHUB_OUTPUT"
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist/
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.version.outputs.TAG }}
           name: StageSync ${{ steps.version.outputs.VER }}
