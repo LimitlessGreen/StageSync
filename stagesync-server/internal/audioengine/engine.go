@@ -946,21 +946,6 @@ func msToSamples(ms float64, sampleRate uint32) int64 {
 	return int64(ms * float64(sampleRate) / 1000)
 }
 
-// bytesToF32 interprets the malgo output buffer as f32 samples (read/write view).
-// The returned slice shares the backing array with b.
-func bytesToF32(b []byte) []float32 {
-	n := len(b) / 4
-	if n == 0 {
-		return nil
-	}
-	out := make([]float32, n)
-	for i := range out {
-		bits := uint32(b[i*4]) | uint32(b[i*4+1])<<8 | uint32(b[i*4+2])<<16 | uint32(b[i*4+3])<<24
-		out[i] = math.Float32frombits(bits)
-	}
-	return out
-}
-
 // f32ToBytes writes f32 samples back into the malgo output buffer.
 func f32ToBytes(f []float32, b []byte) {
 	for i, v := range f {

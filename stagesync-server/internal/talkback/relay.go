@@ -46,10 +46,6 @@ type Relay struct {
 	sessions map[string]*ActiveSession // clientID → session
 	router   *busengine.Router
 	disp     NodeDispatcher
-
-	// duckLevel: aktueller Ducking-Pegel (0.0 = kein Ducking).
-	// Wird beim GO-Trigger gesetzt.
-	duckLevel float32
 }
 
 // NewRelay erstellt einen neuen Relay.

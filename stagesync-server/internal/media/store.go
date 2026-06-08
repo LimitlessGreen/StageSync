@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 )
 
 // AudioInfo enthält technische Metadaten einer Audiodatei.
@@ -289,10 +288,10 @@ func (s *Store) Save(name string, r io.Reader) (FileInfo, error) {
 		return FileInfo{}, err
 	}
 	tmpName := tmp.Name()
-	defer os.Remove(tmpName) // no-op falls Rename erfolgreich
+	defer func() { _ = os.Remove(tmpName) }() // no-op falls Rename erfolgreich
 
 	if _, err := io.Copy(tmp, r); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
 		return FileInfo{}, err
 	}
 	if err := tmp.Close(); err != nil {
@@ -363,12 +362,6 @@ func (s *Store) Delete(name string) error {
 // path muss ein absoluter Pfad sein (z.B. aus FilePath oder FilePathBySHA256).
 func (s *Store) ReadAll(path string) ([]byte, error) {
 	return os.ReadFile(path)
-}
-
-// touch (Test-Hilfe / Reserve): aktualisiert mtime.
-func (s *Store) touch(name string) error {
-	now := time.Now()
-	return os.Chtimes(s.path(name), now, now)
 }
 
 // naturalLess compares two filenames with embedded number handling so that
@@ -456,7 +449,7 @@ func parseWAV(path string) *AudioInfo {
 		case "data":
 			dataSize = size
 			if _, err := f.Seek(size, io.SeekCurrent); err != nil {
-				break
+				return nil
 			}
 		default:
 			// Unbekannter Chunk überspringen (WORD-aligned)
@@ -465,7 +458,7 @@ func parseWAV(path string) *AudioInfo {
 				skip++
 			}
 			if _, err := f.Seek(skip, io.SeekCurrent); err != nil {
-				break
+				return nil
 			}
 		}
 	}

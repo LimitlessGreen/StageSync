@@ -77,10 +77,6 @@ func (r *Router) Resolve(sends []*pb.BusSend) []NodeTarget {
 	var targets []NodeTarget
 
 	for _, send := range sends {
-		if !send.Enabled && send.Enabled != false {
-			// proto3 default bool is false which means enabled by default
-			// We treat omitted (false) as enabled; only skip if explicitly disabled.
-		}
 		bus, ok := r.buses[send.BusId]
 		if !ok || bus.Muted {
 			continue

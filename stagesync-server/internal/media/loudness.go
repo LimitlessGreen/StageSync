@@ -256,7 +256,6 @@ func readWAVPCMFloat(path string) (samples []float64, sampleRate, channels int, 
 			}
 			if _, err = f.Seek(skip, io.SeekCurrent); err != nil {
 				err = nil
-				break
 			}
 		}
 	}

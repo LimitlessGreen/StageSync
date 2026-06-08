@@ -44,7 +44,7 @@ func decodeWAV(path string, targetRate, targetChannels uint32) ([]float32, uint3
 	if err != nil {
 		return nil, 0, 0, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	dec := goaudiowav.NewDecoder(f)
 	if !dec.IsValidFile() {
@@ -107,7 +107,7 @@ func decodeMP3(path string, targetRate, targetChannels uint32) ([]float32, uint3
 	if err != nil {
 		return nil, 0, 0, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	dec, err := mp3dec.NewDecoder(f)
 	if err != nil {
@@ -141,7 +141,7 @@ func decodeFLAC(path string, targetRate, targetChannels uint32) ([]float32, uint
 	if err != nil {
 		return nil, 0, 0, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	stream, err := flac.New(f)
 	if err != nil {
@@ -177,7 +177,7 @@ func decodeOGG(path string, targetRate, targetChannels uint32) ([]float32, uint3
 	if err != nil {
 		return nil, 0, 0, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	r, err := oggvorbis.NewReader(f)
 	if err != nil {
@@ -208,7 +208,7 @@ func decodeAIFF(path string, targetRate, targetChannels uint32) ([]float32, uint
 	if err != nil {
 		return nil, 0, 0, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	dec := goaudioaiff.NewDecoder(f)
 	if !dec.IsValidFile() {

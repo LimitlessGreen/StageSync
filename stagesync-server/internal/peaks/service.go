@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math"
 	"os"
-	"sync"
 
 	"stagesync-server/internal/decode"
 )
@@ -36,9 +35,6 @@ type Waveform struct {
 type Service struct {
 	resolver AssetResolver
 	cacheDir string
-
-	mu       sync.Mutex
-	inflight map[string]chan struct{} // assetID|buckets → fertig-Signal
 }
 
 func NewService(resolver AssetResolver, cacheDir string) *Service {
@@ -46,7 +42,6 @@ func NewService(resolver AssetResolver, cacheDir string) *Service {
 	return &Service{
 		resolver: resolver,
 		cacheDir: cacheDir,
-		inflight: make(map[string]chan struct{}),
 	}
 }
 

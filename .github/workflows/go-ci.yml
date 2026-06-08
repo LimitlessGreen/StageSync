@@ -102,7 +102,7 @@ jobs:
           deb [arch=arm64] http://ports.ubuntu.com/ubuntu-ports ${CODENAME}-updates main restricted universe multiverse
           EOF
           sudo apt-get update -y
-          sudo apt-get install -y gcc-aarch64-linux-gnu libasound2-dev:arm64
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu libasound2-dev:arm64
 
       - name: Build
         env:
