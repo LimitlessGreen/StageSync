@@ -17,48 +17,6 @@ import (
 	"stagesync-server/internal/showcontrol"
 )
 
-// commandDedup verhindert dass dasselbe Command (identische commandId) doppelt
-// ausgeführt wird. TTL = 60 s — nach Ablauf ist eine Re-Execution erlaubt.
-type commandDedup struct {
-	mu   sync.Mutex
-	seen map[string]time.Time // commandId → Zeit des ersten Empfangs
-}
-
-func newCommandDedup() *commandDedup {
-	d := &commandDedup{seen: make(map[string]time.Time)}
-	go d.cleanupLoop()
-	return d
-}
-
-// checkAndMark gibt true zurück wenn das commandId BEREITS gesehen wurde (Duplikat).
-func (d *commandDedup) checkAndMark(commandID string) bool {
-	if commandID == "" {
-		return false
-	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if _, exists := d.seen[commandID]; exists {
-		return true
-	}
-	d.seen[commandID] = time.Now()
-	return false
-}
-
-func (d *commandDedup) cleanupLoop() {
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-	for range ticker.C {
-		d.mu.Lock()
-		cutoff := time.Now().Add(-60 * time.Second)
-		for id, t := range d.seen {
-			if t.Before(cutoff) {
-				delete(d.seen, id)
-			}
-		}
-		d.mu.Unlock()
-	}
-}
-
 // TalkbackDucker ist ein Interface für den Talkback-Relay — verhindert
 // einen zyklischen Import zwischen showcontrol_handler und talkback.
 type TalkbackDucker interface {
@@ -215,36 +173,23 @@ func (h *ShowControlHandler) ResumeCueTracker(sessionID, cueId string, fadeInMs 
 	}
 }
 
-func (h *ShowControlHandler) auth(sessionID, token string) error {
-	_, _, err := h.sessionMgr.ValidateToken(sessionID, token)
-	if err != nil {
-		return status.Error(codes.Unauthenticated, err.Error())
-	}
-	return nil
-}
-
-// authWrite prüft Authentifizierung UND dass die Node MASTER- oder EDITOR-Rechte hat.
-func (h *ShowControlHandler) authWrite(sessionID, token string) error {
-	sess, nodeID, err := h.sessionMgr.ValidateToken(sessionID, token)
-	if err != nil {
-		return status.Error(codes.Unauthenticated, err.Error())
-	}
-	node, ok := sess.GetNode(nodeID)
+// LaunchCueRef startet eine bestehende Cue per ID — für cue_ref-Clips des
+// Grid-Controllers. Nutzt dieselbe Engine wie der lineare Transport, sodass
+// der Transport-State im normalen ShowExecution-Stream sichtbar bleibt.
+func (h *ShowControlHandler) LaunchCueRef(ctx context.Context, sessionID, _ /*cueListID*/, cueID string) error {
+	h.getOrCreateStore(sessionID)
+	engine, ok := h.getEngine(sessionID)
 	if !ok {
-		return status.Error(codes.Unauthenticated, "node not found in session")
+		return status.Error(codes.Internal, "show engine not initialized")
 	}
-	for _, t := range node.Info.Tasks {
-		if t == pb.NodeTask_NODE_TASK_MASTER || t == pb.NodeTask_NODE_TASK_EDITOR {
-			return nil
-		}
-	}
-	return status.Error(codes.PermissionDenied, "only MASTER or EDITOR nodes may send transport commands")
+	_, _, err := engine.Go(ctx, cueID)
+	return err
 }
 
 // ── CueList RPCs ──────────────────────────────────────────────────────────────
 
 func (h *ShowControlHandler) GetCueList(ctx context.Context, req *pb.GetCueListRequest) (*pb.CueListResponse, error) {
-	if err := h.auth(req.SessionId, req.Token); err != nil {
+	if err := authBasic(h.sessionMgr, req.SessionId, req.Token); err != nil {
 		return nil, err
 	}
 	store := h.getOrCreateStore(req.SessionId)
@@ -256,7 +201,7 @@ func (h *ShowControlHandler) GetCueList(ctx context.Context, req *pb.GetCueListR
 }
 
 func (h *ShowControlHandler) UpdateCueList(ctx context.Context, req *pb.UpdateCueListRequest) (*pb.CueListResponse, error) {
-	if err := h.authWrite(req.SessionId, req.Token); err != nil {
+	if err := authWrite(h.sessionMgr, req.SessionId, req.Token); err != nil {
 		return nil, err
 	}
 	store := h.getOrCreateStore(req.SessionId)
@@ -266,7 +211,7 @@ func (h *ShowControlHandler) UpdateCueList(ctx context.Context, req *pb.UpdateCu
 }
 
 func (h *ShowControlHandler) UpsertCue(ctx context.Context, req *pb.UpsertCueRequest) (*pb.CueResponse, error) {
-	if err := h.authWrite(req.SessionId, req.Token); err != nil {
+	if err := authWrite(h.sessionMgr, req.SessionId, req.Token); err != nil {
 		return nil, err
 	}
 	store := h.getOrCreateStore(req.SessionId)
@@ -287,7 +232,7 @@ func (h *ShowControlHandler) UpsertCue(ctx context.Context, req *pb.UpsertCueReq
 }
 
 func (h *ShowControlHandler) DeleteCue(ctx context.Context, req *pb.DeleteCueRequest) (*emptypb.Empty, error) {
-	if err := h.authWrite(req.SessionId, req.Token); err != nil {
+	if err := authWrite(h.sessionMgr, req.SessionId, req.Token); err != nil {
 		return nil, err
 	}
 	store := h.getOrCreateStore(req.SessionId)
@@ -301,7 +246,7 @@ func (h *ShowControlHandler) DeleteCue(ctx context.Context, req *pb.DeleteCueReq
 // ── Transport RPCs ────────────────────────────────────────────────────────────
 
 func (h *ShowControlHandler) Go(ctx context.Context, req *pb.GoRequest) (*pb.GoResponse, error) {
-	if err := h.authWrite(req.SessionId, req.Token); err != nil {
+	if err := authWrite(h.sessionMgr, req.SessionId, req.Token); err != nil {
 		return nil, err
 	}
 	if h.dedup.checkAndMark(req.CommandId) {
@@ -346,7 +291,7 @@ func (h *ShowControlHandler) Go(ctx context.Context, req *pb.GoRequest) (*pb.GoR
 }
 
 func (h *ShowControlHandler) Stop(ctx context.Context, req *pb.StopRequest) (*emptypb.Empty, error) {
-	if err := h.authWrite(req.SessionId, req.Token); err != nil {
+	if err := authWrite(h.sessionMgr, req.SessionId, req.Token); err != nil {
 		return nil, err
 	}
 	if h.dedup.checkAndMark(req.CommandId) {
@@ -360,7 +305,7 @@ func (h *ShowControlHandler) Stop(ctx context.Context, req *pb.StopRequest) (*em
 }
 
 func (h *ShowControlHandler) Pause(ctx context.Context, req *pb.PauseRequest) (*emptypb.Empty, error) {
-	if err := h.authWrite(req.SessionId, req.Token); err != nil {
+	if err := authWrite(h.sessionMgr, req.SessionId, req.Token); err != nil {
 		return nil, err
 	}
 	if h.dedup.checkAndMark(req.CommandId) {
@@ -374,7 +319,7 @@ func (h *ShowControlHandler) Pause(ctx context.Context, req *pb.PauseRequest) (*
 }
 
 func (h *ShowControlHandler) Resume(ctx context.Context, req *pb.ResumeRequest) (*emptypb.Empty, error) {
-	if err := h.authWrite(req.SessionId, req.Token); err != nil {
+	if err := authWrite(h.sessionMgr, req.SessionId, req.Token); err != nil {
 		return nil, err
 	}
 	if h.dedup.checkAndMark(req.CommandId) {
@@ -387,10 +332,70 @@ func (h *ShowControlHandler) Resume(ctx context.Context, req *pb.ResumeRequest) 
 	return &emptypb.Empty{}, nil
 }
 
+// ── Per-Cue Audio RPCs ────────────────────────────────────────────────────────
+
+func (h *ShowControlHandler) PauseCueAudio(ctx context.Context, req *pb.PauseCueAudioRequest) (*emptypb.Empty, error) {
+	if err := authBasic(h.sessionMgr, req.SessionId, req.Token); err != nil {
+		return nil, err
+	}
+	engine, ok := h.getEngine(req.SessionId)
+	if !ok {
+		return &emptypb.Empty{}, nil
+	}
+	log.Printf("[showcontrol] PauseCueAudio session=%s cue=%s fade=%.0fms", req.SessionId, req.CueId, req.FadeOutMs)
+	_ = engine.DispatchPauseCueAudio(ctx, req.CueId, req.FadeOutMs)
+	return &emptypb.Empty{}, nil
+}
+
+func (h *ShowControlHandler) ResumeCueAudio(ctx context.Context, req *pb.ResumeCueAudioRequest) (*emptypb.Empty, error) {
+	if err := authBasic(h.sessionMgr, req.SessionId, req.Token); err != nil {
+		return nil, err
+	}
+	engine, ok := h.getEngine(req.SessionId)
+	if !ok {
+		return &emptypb.Empty{}, nil
+	}
+	log.Printf("[showcontrol] ResumeCueAudio session=%s cue=%s fade=%.0fms", req.SessionId, req.CueId, req.FadeInMs)
+	_ = engine.DispatchResumeCueAudio(ctx, req.CueId, req.FadeInMs)
+	return &emptypb.Empty{}, nil
+}
+
+func (h *ShowControlHandler) StopCueAudio(ctx context.Context, req *pb.StopCueAudioRequest) (*emptypb.Empty, error) {
+	if err := authBasic(h.sessionMgr, req.SessionId, req.Token); err != nil {
+		return nil, err
+	}
+	engine, ok := h.getEngine(req.SessionId)
+	if !ok {
+		return &emptypb.Empty{}, nil
+	}
+	log.Printf("[showcontrol] StopCueAudio session=%s cue=%s fade=%.0fms", req.SessionId, req.CueId, req.FadeOutMs)
+	_ = engine.DispatchStopCueAudio(ctx, req.CueId, req.FadeOutMs)
+	return &emptypb.Empty{}, nil
+}
+
+// ── AssetSilenceInfo RPC ──────────────────────────────────────────────────────
+
+func (h *ShowControlHandler) GetAssetSilenceInfo(ctx context.Context, req *pb.GetAssetSilenceInfoRequest) (*pb.GetAssetSilenceInfoResponse, error) {
+	if err := authBasic(h.sessionMgr, req.SessionId, req.Token); err != nil {
+		return nil, err
+	}
+	h.mu.RLock()
+	sd := h.silenceDetector
+	h.mu.RUnlock()
+	if sd == nil {
+		return &pb.GetAssetSilenceInfoResponse{Detected: false}, nil
+	}
+	silenceMs, ok := sd.AssetSilenceStartMs(req.AssetId)
+	return &pb.GetAssetSilenceInfoResponse{
+		SilenceMs: silenceMs,
+		Detected:  ok,
+	}, nil
+}
+
 // ── PatchConfig RPC ───────────────────────────────────────────────────────────
 
 func (h *ShowControlHandler) UpdatePatchConfig(ctx context.Context, req *pb.UpdatePatchConfigRequest) (*pb.PatchConfigResponse, error) {
-	if err := h.authWrite(req.SessionId, req.Token); err != nil {
+	if err := authWrite(h.sessionMgr, req.SessionId, req.Token); err != nil {
 		return nil, err
 	}
 	store := h.getOrCreateStore(req.SessionId)
@@ -411,7 +416,7 @@ func (h *ShowControlHandler) UpdatePatchConfig(ctx context.Context, req *pb.Upda
 // ── Stream 1: WatchShowDefinition ─────────────────────────────────────────────
 
 func (h *ShowControlHandler) WatchShowDefinition(req *pb.WatchShowDefinitionRequest, stream pb.ShowControlService_WatchShowDefinitionServer) error {
-	if err := h.auth(req.SessionId, req.Token); err != nil {
+	if err := authBasic(h.sessionMgr, req.SessionId, req.Token); err != nil {
 		return err
 	}
 	store := h.getOrCreateStore(req.SessionId)
@@ -452,7 +457,7 @@ func (h *ShowControlHandler) WatchShowDefinition(req *pb.WatchShowDefinitionRequ
 // ── Stream 2: WatchShowExecution ──────────────────────────────────────────────
 
 func (h *ShowControlHandler) WatchShowExecution(req *pb.WatchShowExecutionRequest, stream pb.ShowControlService_WatchShowExecutionServer) error {
-	if err := h.auth(req.SessionId, req.Token); err != nil {
+	if err := authBasic(h.sessionMgr, req.SessionId, req.Token); err != nil {
 		return err
 	}
 	store := h.getOrCreateStore(req.SessionId)
@@ -485,6 +490,7 @@ func (h *ShowControlHandler) WatchShowExecution(req *pb.WatchShowExecutionReques
 }
 
 // executionSnapshot erstellt den Transport-Snapshot für neu verbundene Watcher.
+// Setzt PlayheadPosition für präzises Reconnect-Timing ohne Arithmetic-Fehler.
 func (h *ShowControlHandler) executionSnapshot(store *showcontrol.Store, engine *showcontrol.Engine, nodeID string) []*pb.ShowExecutionEvent {
 	seq := store.CurrentExecSeq()
 	out := make([]*pb.ShowExecutionEvent, 0, 2)
@@ -500,16 +506,41 @@ func (h *ShowControlHandler) executionSnapshot(store *showcontrol.Store, engine 
 	}
 
 	ts := engine.TransportSnapshot()
+	now := time.Now()
+
 	if ts.Running && ts.ActiveCue != nil {
-		out = append(out, &pb.ShowExecutionEvent{
-			Type:           pb.ShowExecutionEvent_EXECUTION_SNAPSHOT,
-			AffectedCue:    ts.ActiveCue,
-			NodeId:         nodeID,
-			OccurredAt:     &pb.Timestamp{UnixMillis: ts.CueStartedAtMs},
-			CueStartedAtMs: ts.CueStartedAtMs,
-			IsPaused:       ts.Paused,
-			Seq:            seq,
-		})
+		var playhead *pb.PlayheadPosition
+		if ts.Paused {
+			// Eingefrorene Position: position_ms = PausedAtMs - CueStartedAtMs
+			playhead = &pb.PlayheadPosition{
+				CueId:        ts.ActiveCue.CueId,
+				PositionMs:   ts.PausedAtMs - ts.CueStartedAtMs,
+				ServerTimeMs: now.UnixMilli(),
+				Paused:       true,
+			}
+		} else if ts.CueStartedAtMs > 0 {
+			// Laufende Position: position_ms = now - CueStartedAtMs
+			playhead = &pb.PlayheadPosition{
+				CueId:        ts.ActiveCue.CueId,
+				PositionMs:   now.UnixMilli() - ts.CueStartedAtMs,
+				ServerTimeMs: now.UnixMilli(),
+				Paused:       false,
+			}
+		}
+
+		ev := &pb.ShowExecutionEvent{
+			Type:            pb.ShowExecutionEvent_EXECUTION_SNAPSHOT,
+			AffectedCue:     ts.ActiveCue,
+			NodeId:          nodeID,
+			OccurredAt:      &pb.Timestamp{UnixMillis: ts.CueStartedAtMs},
+			CueStartedAtMs:  ts.CueStartedAtMs,
+			IsPaused:        ts.Paused,
+			PerCuePausedIds: ts.PerCuePausedIDs,
+			Playhead:        playhead,
+			Seq:             seq,
+		}
+		out = append(out, ev)
+
 		if ts.Paused {
 			out = append(out, &pb.ShowExecutionEvent{
 				Type:        pb.ShowExecutionEvent_CUE_PAUSED,
@@ -534,7 +565,7 @@ func (h *ShowControlHandler) executionSnapshot(store *showcontrol.Store, engine 
 // ── Stream 3: WatchNodeHealth ─────────────────────────────────────────────────
 
 func (h *ShowControlHandler) WatchNodeHealth(req *pb.WatchNodeHealthRequest, stream pb.ShowControlService_WatchNodeHealthServer) error {
-	if err := h.auth(req.SessionId, req.Token); err != nil {
+	if err := authBasic(h.sessionMgr, req.SessionId, req.Token); err != nil {
 		return err
 	}
 
@@ -598,7 +629,7 @@ func (h *ShowControlHandler) WatchNodeHealth(req *pb.WatchNodeHealthRequest, str
 // ── Stream 4: WatchMediaSync ──────────────────────────────────────────────────
 
 func (h *ShowControlHandler) WatchMediaSync(req *pb.WatchMediaSyncRequest, stream pb.ShowControlService_WatchMediaSyncServer) error {
-	if err := h.auth(req.SessionId, req.Token); err != nil {
+	if err := authBasic(h.sessionMgr, req.SessionId, req.Token); err != nil {
 		return err
 	}
 

@@ -200,27 +200,9 @@ func (h *NodeHandler) StreamNodeCommands(req *pb.StreamNodeCommandsRequest, stre
 	}
 }
 
-// authMaster prüft, dass der Token zu einem Node mit MASTER-Task gehört.
-func (h *NodeHandler) authMaster(sessionID, token string) error {
-	sess, nodeID, err := h.sessionMgr.ValidateToken(sessionID, token)
-	if err != nil {
-		return status.Error(codes.Unauthenticated, err.Error())
-	}
-	n, ok := sess.GetNode(nodeID)
-	if !ok {
-		return status.Error(codes.Unauthenticated, "node not found")
-	}
-	for _, t := range n.Info.Tasks {
-		if t == pb.NodeTask_NODE_TASK_MASTER {
-			return nil
-		}
-	}
-	return status.Error(codes.PermissionDenied, "only MASTER nodes may send node commands")
-}
-
 // SendNodeCommand — Master schickt Command an einen Node über den Dispatcher.
 func (h *NodeHandler) SendNodeCommand(ctx context.Context, req *pb.SendNodeCommandRequest) (*pb.NodeCommandResponse, error) {
-	if err := h.authMaster(req.SessionId, req.Token); err != nil {
+	if err := authMaster(h.sessionMgr, req.SessionId, req.Token); err != nil {
 		return nil, err
 	}
 

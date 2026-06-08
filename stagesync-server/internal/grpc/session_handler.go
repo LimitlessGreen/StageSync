@@ -39,14 +39,7 @@ func (h *SessionHandler) CreateSession(ctx context.Context, req *pb.CreateSessio
 func (h *SessionHandler) JoinSession(ctx context.Context, req *pb.JoinSessionRequest) (*pb.SessionResponse, error) {
 	sess, token, err := h.mgr.JoinSession(req)
 	if err != nil {
-		switch err {
-		case session.ErrSessionNotFound:
-			return nil, status.Error(codes.NotFound, err.Error())
-		case session.ErrInvalidPassword:
-			return nil, status.Error(codes.Unauthenticated, err.Error())
-		default:
-			return nil, status.Errorf(codes.Internal, "%v", err)
-		}
+		return nil, mapErr(err)
 	}
 	node, _ := sess.GetNode(req.MyNode.NodeId)
 	return &pb.SessionResponse{
