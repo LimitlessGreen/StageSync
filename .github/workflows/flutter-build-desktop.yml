@@ -51,7 +51,7 @@ jobs:
             artifact_path: theatre_companion_app/build/linux/x64/release/bundle/
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: subosito/flutter-action@v2
         with:
@@ -75,7 +75,7 @@ jobs:
         run: ${{ matrix.build_cmd }}
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.target }}-release
           path: ${{ matrix.artifact_path }}

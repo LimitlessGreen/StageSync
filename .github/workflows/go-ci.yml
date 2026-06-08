@@ -24,15 +24,15 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: stagesync-server/go.mod
           cache-dependency-path: stagesync-server/go.sum
 
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
         with:
           version: latest
           working-directory: stagesync-server
@@ -41,9 +41,9 @@ jobs:
     name: Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: stagesync-server/go.mod
           cache-dependency-path: stagesync-server/go.sum
@@ -55,7 +55,7 @@ jobs:
         run: go test ./... -race -coverprofile=coverage.out
 
       - name: Upload coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: go-coverage
@@ -73,9 +73,9 @@ jobs:
           - goos: linux
             goarch: arm64
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: stagesync-server/go.mod
           cache-dependency-path: stagesync-server/go.sum
@@ -93,7 +93,7 @@ jobs:
         run: go build -v -o stagesync-server-${{ matrix.goos }}-${{ matrix.goarch }} ./cmd/server/
 
       - name: Upload binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: stagesync-server-${{ matrix.goos }}-${{ matrix.goarch }}
           path: stagesync-server/stagesync-server-${{ matrix.goos }}-${{ matrix.goarch }}
