@@ -1,4 +1,4 @@
-name: Flutter Desktop & iOS Builds
+name: Flutter Desktop Builds
 
 on:
   push:
@@ -7,7 +7,6 @@ on:
       - 'theatre_companion_app/**'
       - '.github/workflows/flutter-**.yml'
   pull_request:
-    branches: [main]
     paths:
       - 'theatre_companion_app/**'
       - '.github/workflows/flutter-**.yml'
@@ -34,11 +33,6 @@ jobs:
             runner: macos-latest
             build_cmd: flutter build macos --release
             artifact_path: theatre_companion_app/build/macos/Build/Products/Release/
-
-          - target: iOS
-            runner: macos-latest
-            build_cmd: flutter build ios --release --no-codesign
-            artifact_path: theatre_companion_app/build/ios/iphoneos/
 
           - target: Windows
             runner: windows-latest
