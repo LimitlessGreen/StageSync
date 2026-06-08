@@ -146,6 +146,9 @@ jobs:
   macos:
     name: macOS DMG
     runs-on: macos-latest
+    env:
+      APPLE_SIGN: ${{ secrets.APPLE_CERTIFICATE != '' && 'true' || 'false' }}
+      APPLE_NOTARIZE: ${{ secrets.APPLE_ID != '' && 'true' || 'false' }}
     defaults:
       run:
         working-directory: theatre_companion_app
@@ -167,7 +170,7 @@ jobs:
         run: flutter pub get
 
       - name: Import signing certificate
-        if: ${{ secrets.APPLE_CERTIFICATE != '' }}
+        if: env.APPLE_SIGN == 'true'
         env:
           CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE }}
           CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -207,7 +210,7 @@ jobs:
           echo "VER=$VER" >> "$GITHUB_OUTPUT"
 
       - name: Sign app bundle
-        if: ${{ secrets.APPLE_CERTIFICATE != '' }}
+        if: env.APPLE_SIGN == 'true'
         env:
           SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: |
@@ -241,13 +244,13 @@ jobs:
           echo "DMG_NAME=$DMG" >> "$GITHUB_ENV"
 
       - name: Sign DMG
-        if: ${{ secrets.APPLE_CERTIFICATE != '' }}
+        if: env.APPLE_SIGN == 'true'
         env:
           SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
         run: codesign --sign "$SIGNING_IDENTITY" --timestamp "$DMG_NAME"
 
       - name: Notarize DMG
-        if: ${{ secrets.APPLE_ID != '' }}
+        if: env.APPLE_NOTARIZE == 'true'
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
@@ -258,7 +261,7 @@ jobs:
             --team-id "$APPLE_TEAM_ID" --wait
 
       - name: Staple notarization
-        if: ${{ secrets.APPLE_ID != '' }}
+        if: env.APPLE_NOTARIZE == 'true'
         run: xcrun stapler staple "$DMG_NAME"
 
       - name: Upload macOS DMG
