@@ -95,7 +95,7 @@ jobs:
           InstallDir        "`${INSTALL_DIR}"
           InstallDirRegKey  HKLM "Software\StageSync" "Install_Dir"
           RequestExecutionLevel admin
-          SetCompressor     /SOLID lzma
+          SetCompressor     zlib
 
           !include "MUI2.nsh"
           !insertmacro MUI_PAGE_WELCOME
@@ -141,6 +141,7 @@ jobs:
           name: windows-installer
           path: theatre_companion_app/StageSync-${{ steps.version.outputs.VER }}-windows-x64-setup.exe
           retention-days: 30
+          compression-level: 0
 
   # ── macOS DMG ────────────────────────────────────────────────────────────────
   macos:
@@ -270,6 +271,7 @@ jobs:
           name: macos-dmg
           path: theatre_companion_app/${{ env.DMG_NAME }}
           retention-days: 30
+          compression-level: 0
 
   # ── Linux AppImage ───────────────────────────────────────────────────────────
   linux:
@@ -380,6 +382,7 @@ jobs:
           name: linux-appimage
           path: theatre_companion_app/StageSync-${{ steps.version.outputs.VER }}-linux-x86_64.AppImage
           retention-days: 30
+          compression-level: 0
 
   # ── Standalone Server Binaries ───────────────────────────────────────────────
   server:
@@ -465,6 +468,7 @@ jobs:
           name: ${{ matrix.output }}
           path: stagesync-server/${{ matrix.output }}
           retention-days: 30
+          compression-level: 0
 
   # ── GitHub Release ────────────────────────────────────────────────────────────
   release:
