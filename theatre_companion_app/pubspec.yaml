@@ -28,14 +28,14 @@ dependencies:
   flutter_riverpod: ^2.6.1
 
   # ── MIDI (Grid-Controller: lokaler Pfad für APC Mini auf Desktop) ─────────
-  flutter_midi_command: ^0.5.1
+  flutter_midi_command: ^0.6.0
 
   # ── Cryptography (AES-256-GCM) ────────────────────────────────────────────
   cryptography: ^2.7.0
 
   # ── Device Context (Battery, Network, Motion) ─────────────────────────────
   battery_plus: ^7.0.0
-  connectivity_plus: ^7.1.1
+  connectivity_plus: ^6.0.5
   sensors_plus: ^7.0.0
 
   # ── Server Gateway (WebSocket + Socket.IO Cloud Connect) ─────────────────────

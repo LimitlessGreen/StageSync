@@ -16,7 +16,7 @@ import '../../media/media_sync.dart';
 import '../../media/server_media_client.dart' show mediaCacheDir;
 import '../../providers/session_provider.dart';
 import 'abstract_audio_engine.dart';
-import 'miniaudio_engine.dart';
+import 'miniaudio_engine_platform.dart';
 import 'media_server.dart';
 import 'sweep_generator.dart';
 
