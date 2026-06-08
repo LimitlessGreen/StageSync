@@ -62,6 +62,8 @@ const NodeTask$json = {
     {'1': 'NODE_TASK_EDITOR', '2': 3},
     {'1': 'NODE_TASK_VIEWER', '2': 4},
     {'1': 'NODE_TASK_MA_OSC', '2': 5},
+    {'1': 'NODE_TASK_MIDI_IN', '2': 6},
+    {'1': 'NODE_TASK_MIDI_OUT', '2': 7},
   ],
 };
 
@@ -69,7 +71,8 @@ const NodeTask$json = {
 final $typed_data.Uint8List nodeTaskDescriptor = $convert.base64Decode(
     'CghOb2RlVGFzaxIZChVOT0RFX1RBU0tfVU5TUEVDSUZJRUQQABIUChBOT0RFX1RBU0tfTUFTVE'
     'VSEAESGgoWTk9ERV9UQVNLX0FVRElPX09VVFBVVBACEhQKEE5PREVfVEFTS19FRElUT1IQAxIU'
-    'ChBOT0RFX1RBU0tfVklFV0VSEAQSFAoQTk9ERV9UQVNLX01BX09TQxAF');
+    'ChBOT0RFX1RBU0tfVklFV0VSEAQSFAoQTk9ERV9UQVNLX01BX09TQxAFEhUKEU5PREVfVEFTS1'
+    '9NSURJX0lOEAYSFgoSTk9ERV9UQVNLX01JRElfT1VUEAc=');
 
 @$core.Deprecated('Use cueTypeDescriptor instead')
 const CueType$json = {

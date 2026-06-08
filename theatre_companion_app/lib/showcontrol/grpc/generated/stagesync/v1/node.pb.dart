@@ -1251,6 +1251,8 @@ enum NodeCommandRequest_Command {
   audioFade,
   audioTalkback,
   audioTalkbackCtrl,
+  midiSend,
+  ledFeedback,
   notSet
 }
 
@@ -1272,6 +1274,8 @@ class NodeCommandRequest extends $pb.GeneratedMessage {
     AudioFadeCommand? audioFade,
     AudioTalkbackChunkCommand? audioTalkback,
     AudioTalkbackControlCommand? audioTalkbackCtrl,
+    MidiSendCommand? midiSend,
+    LedFeedbackCommand? ledFeedback,
   }) {
     final result = create();
     if (sessionId != null) result.sessionId = sessionId;
@@ -1289,6 +1293,8 @@ class NodeCommandRequest extends $pb.GeneratedMessage {
     if (audioFade != null) result.audioFade = audioFade;
     if (audioTalkback != null) result.audioTalkback = audioTalkback;
     if (audioTalkbackCtrl != null) result.audioTalkbackCtrl = audioTalkbackCtrl;
+    if (midiSend != null) result.midiSend = midiSend;
+    if (ledFeedback != null) result.ledFeedback = ledFeedback;
     return result;
   }
 
@@ -1314,13 +1320,15 @@ class NodeCommandRequest extends $pb.GeneratedMessage {
     13: NodeCommandRequest_Command.audioFade,
     14: NodeCommandRequest_Command.audioTalkback,
     15: NodeCommandRequest_Command.audioTalkbackCtrl,
+    16: NodeCommandRequest_Command.midiSend,
+    17: NodeCommandRequest_Command.ledFeedback,
     0: NodeCommandRequest_Command.notSet
   };
   static final $pb.BuilderInfo _i = $pb.BuilderInfo(
       _omitMessageNames ? '' : 'NodeCommandRequest',
       package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
       createEmptyInstance: create)
-    ..oo(0, [4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15])
+    ..oo(0, [4, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16, 17])
     ..aOS(1, _omitFieldNames ? '' : 'sessionId')
     ..aOS(2, _omitFieldNames ? '' : 'commandId')
     ..aOS(3, _omitFieldNames ? '' : 'targetNodeId')
@@ -1349,6 +1357,10 @@ class NodeCommandRequest extends $pb.GeneratedMessage {
     ..aOM<AudioTalkbackControlCommand>(
         15, _omitFieldNames ? '' : 'audioTalkbackCtrl',
         subBuilder: AudioTalkbackControlCommand.create)
+    ..aOM<MidiSendCommand>(16, _omitFieldNames ? '' : 'midiSend',
+        subBuilder: MidiSendCommand.create)
+    ..aOM<LedFeedbackCommand>(17, _omitFieldNames ? '' : 'ledFeedback',
+        subBuilder: LedFeedbackCommand.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1381,6 +1393,8 @@ class NodeCommandRequest extends $pb.GeneratedMessage {
   @$pb.TagNumber(13)
   @$pb.TagNumber(14)
   @$pb.TagNumber(15)
+  @$pb.TagNumber(16)
+  @$pb.TagNumber(17)
   NodeCommandRequest_Command whichCommand() =>
       _NodeCommandRequest_CommandByTag[$_whichOneof(0)]!;
   @$pb.TagNumber(4)
@@ -1394,6 +1408,8 @@ class NodeCommandRequest extends $pb.GeneratedMessage {
   @$pb.TagNumber(13)
   @$pb.TagNumber(14)
   @$pb.TagNumber(15)
+  @$pb.TagNumber(16)
+  @$pb.TagNumber(17)
   void clearCommand() => $_clearField($_whichOneof(0));
 
   @$pb.TagNumber(1)
@@ -1553,6 +1569,200 @@ class NodeCommandRequest extends $pb.GeneratedMessage {
   void clearAudioTalkbackCtrl() => $_clearField(15);
   @$pb.TagNumber(15)
   AudioTalkbackControlCommand ensureAudioTalkbackCtrl() => $_ensure(14);
+
+  @$pb.TagNumber(16)
+  MidiSendCommand get midiSend => $_getN(15);
+  @$pb.TagNumber(16)
+  set midiSend(MidiSendCommand value) => $_setField(16, value);
+  @$pb.TagNumber(16)
+  $core.bool hasMidiSend() => $_has(15);
+  @$pb.TagNumber(16)
+  void clearMidiSend() => $_clearField(16);
+  @$pb.TagNumber(16)
+  MidiSendCommand ensureMidiSend() => $_ensure(15);
+
+  @$pb.TagNumber(17)
+  LedFeedbackCommand get ledFeedback => $_getN(16);
+  @$pb.TagNumber(17)
+  set ledFeedback(LedFeedbackCommand value) => $_setField(17, value);
+  @$pb.TagNumber(17)
+  $core.bool hasLedFeedback() => $_has(16);
+  @$pb.TagNumber(17)
+  void clearLedFeedback() => $_clearField(17);
+  @$pb.TagNumber(17)
+  LedFeedbackCommand ensureLedFeedback() => $_ensure(16);
+}
+
+/// Sendet rohe MIDI-Bytes an einen ausgehenden MIDI-Port des Nodes.
+class MidiSendCommand extends $pb.GeneratedMessage {
+  factory MidiSendCommand({
+    $core.int? channel,
+    $core.int? command,
+    $core.int? data1,
+    $core.int? data2,
+  }) {
+    final result = create();
+    if (channel != null) result.channel = channel;
+    if (command != null) result.command = command;
+    if (data1 != null) result.data1 = data1;
+    if (data2 != null) result.data2 = data2;
+    return result;
+  }
+
+  MidiSendCommand._();
+
+  factory MidiSendCommand.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MidiSendCommand.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MidiSendCommand',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'channel')
+    ..aI(2, _omitFieldNames ? '' : 'command')
+    ..aI(3, _omitFieldNames ? '' : 'data1')
+    ..aI(4, _omitFieldNames ? '' : 'data2')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MidiSendCommand clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MidiSendCommand copyWith(void Function(MidiSendCommand) updates) =>
+      super.copyWith((message) => updates(message as MidiSendCommand))
+          as MidiSendCommand;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MidiSendCommand create() => MidiSendCommand._();
+  @$core.override
+  MidiSendCommand createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MidiSendCommand getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MidiSendCommand>(create);
+  static MidiSendCommand? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get channel => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set channel($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasChannel() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearChannel() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.int get command => $_getIZ(1);
+  @$pb.TagNumber(2)
+  set command($core.int value) => $_setSignedInt32(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasCommand() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearCommand() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.int get data1 => $_getIZ(2);
+  @$pb.TagNumber(3)
+  set data1($core.int value) => $_setSignedInt32(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasData1() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearData1() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.int get data2 => $_getIZ(3);
+  @$pb.TagNumber(4)
+  set data2($core.int value) => $_setSignedInt32(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasData2() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearData2() => $_clearField(4);
+}
+
+/// Setzt die LED eines Controller-Pads. Der MIDI-Node übersetzt (track,scene)
+/// bzw. note + color in das gerätespezifische Protokoll (z.B. APC Mini Velocity).
+class LedFeedbackCommand extends $pb.GeneratedMessage {
+  factory LedFeedbackCommand({
+    $core.int? trackIndex,
+    $core.int? sceneIndex,
+    LedFeedbackCommand_Color? color,
+  }) {
+    final result = create();
+    if (trackIndex != null) result.trackIndex = trackIndex;
+    if (sceneIndex != null) result.sceneIndex = sceneIndex;
+    if (color != null) result.color = color;
+    return result;
+  }
+
+  LedFeedbackCommand._();
+
+  factory LedFeedbackCommand.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory LedFeedbackCommand.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'LedFeedbackCommand',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'trackIndex')
+    ..aI(2, _omitFieldNames ? '' : 'sceneIndex')
+    ..aE<LedFeedbackCommand_Color>(3, _omitFieldNames ? '' : 'color',
+        enumValues: LedFeedbackCommand_Color.values)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  LedFeedbackCommand clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  LedFeedbackCommand copyWith(void Function(LedFeedbackCommand) updates) =>
+      super.copyWith((message) => updates(message as LedFeedbackCommand))
+          as LedFeedbackCommand;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static LedFeedbackCommand create() => LedFeedbackCommand._();
+  @$core.override
+  LedFeedbackCommand createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static LedFeedbackCommand getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<LedFeedbackCommand>(create);
+  static LedFeedbackCommand? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get trackIndex => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set trackIndex($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasTrackIndex() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearTrackIndex() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.int get sceneIndex => $_getIZ(1);
+  @$pb.TagNumber(2)
+  set sceneIndex($core.int value) => $_setSignedInt32(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasSceneIndex() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearSceneIndex() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  LedFeedbackCommand_Color get color => $_getN(2);
+  @$pb.TagNumber(3)
+  set color(LedFeedbackCommand_Color value) => $_setField(3, value);
+  @$pb.TagNumber(3)
+  $core.bool hasColor() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearColor() => $_clearField(3);
 }
 
 /// Konfigurationsbefehl vom Master an einen Node.

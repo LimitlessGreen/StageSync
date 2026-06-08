@@ -329,13 +329,14 @@ const NoteCueParams$json = {
   '2': [
     {'1': 'text', '3': 1, '4': 1, '5': 9, '10': 'text'},
     {'1': 'color_hex', '3': 2, '4': 1, '5': 9, '10': 'colorHex'},
+    {'1': 'landable', '3': 3, '4': 1, '5': 8, '10': 'landable'},
   ],
 };
 
 /// Descriptor for `NoteCueParams`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List noteCueParamsDescriptor = $convert.base64Decode(
     'Cg1Ob3RlQ3VlUGFyYW1zEhIKBHRleHQYASABKAlSBHRleHQSGwoJY29sb3JfaGV4GAIgASgJUg'
-    'hjb2xvckhleA==');
+    'hjb2xvckhleBIaCghsYW5kYWJsZRgDIAEoCFIIbGFuZGFibGU=');
 
 @$core.Deprecated('Use fadeCueParamsDescriptor instead')
 const FadeCueParams$json = {
@@ -624,6 +625,57 @@ final $typed_data.Uint8List resumeRequestDescriptor = $convert.base64Decode(
     'Cg1SZXN1bWVSZXF1ZXN0Eh0KCnNlc3Npb25faWQYASABKAlSCXNlc3Npb25JZBIUCgV0b2tlbh'
     'gCIAEoCVIFdG9rZW4SHQoKY29tbWFuZF9pZBgDIAEoCVIJY29tbWFuZElk');
 
+@$core.Deprecated('Use pauseCueAudioRequestDescriptor instead')
+const PauseCueAudioRequest$json = {
+  '1': 'PauseCueAudioRequest',
+  '2': [
+    {'1': 'session_id', '3': 1, '4': 1, '5': 9, '10': 'sessionId'},
+    {'1': 'token', '3': 2, '4': 1, '5': 9, '10': 'token'},
+    {'1': 'cue_id', '3': 3, '4': 1, '5': 9, '10': 'cueId'},
+    {'1': 'fade_out_ms', '3': 4, '4': 1, '5': 1, '10': 'fadeOutMs'},
+  ],
+};
+
+/// Descriptor for `PauseCueAudioRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List pauseCueAudioRequestDescriptor = $convert.base64Decode(
+    'ChRQYXVzZUN1ZUF1ZGlvUmVxdWVzdBIdCgpzZXNzaW9uX2lkGAEgASgJUglzZXNzaW9uSWQSFA'
+    'oFdG9rZW4YAiABKAlSBXRva2VuEhUKBmN1ZV9pZBgDIAEoCVIFY3VlSWQSHgoLZmFkZV9vdXRf'
+    'bXMYBCABKAFSCWZhZGVPdXRNcw==');
+
+@$core.Deprecated('Use resumeCueAudioRequestDescriptor instead')
+const ResumeCueAudioRequest$json = {
+  '1': 'ResumeCueAudioRequest',
+  '2': [
+    {'1': 'session_id', '3': 1, '4': 1, '5': 9, '10': 'sessionId'},
+    {'1': 'token', '3': 2, '4': 1, '5': 9, '10': 'token'},
+    {'1': 'cue_id', '3': 3, '4': 1, '5': 9, '10': 'cueId'},
+    {'1': 'fade_in_ms', '3': 4, '4': 1, '5': 1, '10': 'fadeInMs'},
+  ],
+};
+
+/// Descriptor for `ResumeCueAudioRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List resumeCueAudioRequestDescriptor = $convert.base64Decode(
+    'ChVSZXN1bWVDdWVBdWRpb1JlcXVlc3QSHQoKc2Vzc2lvbl9pZBgBIAEoCVIJc2Vzc2lvbklkEh'
+    'QKBXRva2VuGAIgASgJUgV0b2tlbhIVCgZjdWVfaWQYAyABKAlSBWN1ZUlkEhwKCmZhZGVfaW5f'
+    'bXMYBCABKAFSCGZhZGVJbk1z');
+
+@$core.Deprecated('Use stopCueAudioRequestDescriptor instead')
+const StopCueAudioRequest$json = {
+  '1': 'StopCueAudioRequest',
+  '2': [
+    {'1': 'session_id', '3': 1, '4': 1, '5': 9, '10': 'sessionId'},
+    {'1': 'token', '3': 2, '4': 1, '5': 9, '10': 'token'},
+    {'1': 'cue_id', '3': 3, '4': 1, '5': 9, '10': 'cueId'},
+    {'1': 'fade_out_ms', '3': 4, '4': 1, '5': 1, '10': 'fadeOutMs'},
+  ],
+};
+
+/// Descriptor for `StopCueAudioRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List stopCueAudioRequestDescriptor = $convert.base64Decode(
+    'ChNTdG9wQ3VlQXVkaW9SZXF1ZXN0Eh0KCnNlc3Npb25faWQYASABKAlSCXNlc3Npb25JZBIUCg'
+    'V0b2tlbhgCIAEoCVIFdG9rZW4SFQoGY3VlX2lkGAMgASgJUgVjdWVJZBIeCgtmYWRlX291dF9t'
+    'cxgEIAEoAVIJZmFkZU91dE1z');
+
 @$core.Deprecated('Use updatePatchConfigRequestDescriptor instead')
 const UpdatePatchConfigRequest$json = {
   '1': 'UpdatePatchConfigRequest',
@@ -836,6 +888,23 @@ final $typed_data.Uint8List patchDeviceAssignDescriptor = $convert.base64Decode(
     '91dHB1dElkEhcKB25vZGVfaWQYAiABKAlSBm5vZGVJZBIhCgxkZXZpY2VfaW5kZXgYAyABKAVS'
     'C2RldmljZUluZGV4Eh8KC2RldmljZV9uYW1lGAQgASgJUgpkZXZpY2VOYW1l');
 
+@$core.Deprecated('Use playheadPositionDescriptor instead')
+const PlayheadPosition$json = {
+  '1': 'PlayheadPosition',
+  '2': [
+    {'1': 'cue_id', '3': 1, '4': 1, '5': 9, '10': 'cueId'},
+    {'1': 'position_ms', '3': 2, '4': 1, '5': 3, '10': 'positionMs'},
+    {'1': 'server_time_ms', '3': 3, '4': 1, '5': 3, '10': 'serverTimeMs'},
+    {'1': 'paused', '3': 4, '4': 1, '5': 8, '10': 'paused'},
+  ],
+};
+
+/// Descriptor for `PlayheadPosition`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List playheadPositionDescriptor = $convert.base64Decode(
+    'ChBQbGF5aGVhZFBvc2l0aW9uEhUKBmN1ZV9pZBgBIAEoCVIFY3VlSWQSHwoLcG9zaXRpb25fbX'
+    'MYAiABKANSCnBvc2l0aW9uTXMSJAoOc2VydmVyX3RpbWVfbXMYAyABKANSDHNlcnZlclRpbWVN'
+    'cxIWCgZwYXVzZWQYBCABKAhSBnBhdXNlZA==');
+
 @$core.Deprecated('Use watchShowExecutionRequestDescriptor instead')
 const WatchShowExecutionRequest$json = {
   '1': 'WatchShowExecutionRequest',
@@ -893,6 +962,14 @@ const ShowExecutionEvent$json = {
       '5': 9,
       '10': 'perCuePausedIds'
     },
+    {
+      '1': 'playhead',
+      '3': 17,
+      '4': 1,
+      '5': 11,
+      '6': '.stagesync.v1.PlayheadPosition',
+      '10': 'playhead'
+    },
   ],
   '4': [ShowExecutionEvent_ExecutionEventType$json],
 };
@@ -922,11 +999,12 @@ final $typed_data.Uint8List showExecutionEventDescriptor = $convert.base64Decode
     'ZRIXCgdub2RlX2lkGAsgASgJUgZub2RlSWQSGwoJZXJyb3JfbXNnGAwgASgJUghlcnJvck1zZx'
     'IpChFjdWVfc3RhcnRlZF9hdF9tcxgNIAEoA1IOY3VlU3RhcnRlZEF0TXMSGwoJaXNfcGF1c2Vk'
     'GA4gASgIUghpc1BhdXNlZBImCg9ydW5uaW5nX2N1ZV9pZHMYDyADKAlSDXJ1bm5pbmdDdWVJZH'
-    'MSKwoScGVyX2N1ZV9wYXVzZWRfaWRzGBAgAygJUg9wZXJDdWVQYXVzZWRJZHMitQEKEkV4ZWN1'
-    'dGlvbkV2ZW50VHlwZRIWChJFWEVDVVRJT05fU05BUFNIT1QQABIPCgtDVUVfU1RBUlRFRBABEg'
-    '4KCkNVRV9QQVVTRUQQAhIPCgtDVUVfUkVTVU1FRBADEg8KC0NVRV9TVE9QUEVEEAQSDAoIQ1VF'
-    'X0RPTkUQBRINCglDVUVfRVJST1IQBhISCg5DVUVfQ1VFX1BBVVNFRBAHEhMKD0NVRV9DVUVfUk'
-    'VTVU1FRBAI');
+    'MSKwoScGVyX2N1ZV9wYXVzZWRfaWRzGBAgAygJUg9wZXJDdWVQYXVzZWRJZHMSOgoIcGxheWhl'
+    'YWQYESABKAsyHi5zdGFnZXN5bmMudjEuUGxheWhlYWRQb3NpdGlvblIIcGxheWhlYWQitQEKEk'
+    'V4ZWN1dGlvbkV2ZW50VHlwZRIWChJFWEVDVVRJT05fU05BUFNIT1QQABIPCgtDVUVfU1RBUlRF'
+    'RBABEg4KCkNVRV9QQVVTRUQQAhIPCgtDVUVfUkVTVU1FRBADEg8KC0NVRV9TVE9QUEVEEAQSDA'
+    'oIQ1VFX0RPTkUQBRINCglDVUVfRVJST1IQBhISCg5DVUVfQ1VFX1BBVVNFRBAHEhMKD0NVRV9D'
+    'VUVfUkVTVU1FRBAI');
 
 @$core.Deprecated('Use watchNodeHealthRequestDescriptor instead')
 const WatchNodeHealthRequest$json = {
@@ -1075,3 +1153,34 @@ final $typed_data.Uint8List mediaSyncEventDescriptor = $convert.base64Decode(
     'MjU2GAwgASgJUgZzaGEyNTYSHQoKc2l6ZV9ieXRlcxgNIAEoA1IJc2l6ZUJ5dGVzIlsKDk1lZG'
     'lhRXZlbnRUeXBlEhIKDk1FRElBX1NOQVBTSE9UEAASDwoLQVNTRVRfQURERUQQARIRCg1BU1NF'
     'VF9SRU1PVkVEEAISEQoNQVNTRVRfVVBEQVRFRBAD');
+
+@$core.Deprecated('Use getAssetSilenceInfoRequestDescriptor instead')
+const GetAssetSilenceInfoRequest$json = {
+  '1': 'GetAssetSilenceInfoRequest',
+  '2': [
+    {'1': 'session_id', '3': 1, '4': 1, '5': 9, '10': 'sessionId'},
+    {'1': 'token', '3': 2, '4': 1, '5': 9, '10': 'token'},
+    {'1': 'asset_id', '3': 3, '4': 1, '5': 9, '10': 'assetId'},
+  ],
+};
+
+/// Descriptor for `GetAssetSilenceInfoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List getAssetSilenceInfoRequestDescriptor =
+    $convert.base64Decode(
+        'ChpHZXRBc3NldFNpbGVuY2VJbmZvUmVxdWVzdBIdCgpzZXNzaW9uX2lkGAEgASgJUglzZXNzaW'
+        '9uSWQSFAoFdG9rZW4YAiABKAlSBXRva2VuEhkKCGFzc2V0X2lkGAMgASgJUgdhc3NldElk');
+
+@$core.Deprecated('Use getAssetSilenceInfoResponseDescriptor instead')
+const GetAssetSilenceInfoResponse$json = {
+  '1': 'GetAssetSilenceInfoResponse',
+  '2': [
+    {'1': 'silence_ms', '3': 1, '4': 1, '5': 3, '10': 'silenceMs'},
+    {'1': 'detected', '3': 2, '4': 1, '5': 8, '10': 'detected'},
+  ],
+};
+
+/// Descriptor for `GetAssetSilenceInfoResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List getAssetSilenceInfoResponseDescriptor =
+    $convert.base64Decode(
+        'ChtHZXRBc3NldFNpbGVuY2VJbmZvUmVzcG9uc2USHQoKc2lsZW5jZV9tcxgBIAEoA1IJc2lsZW'
+        '5jZU1zEhoKCGRldGVjdGVkGAIgASgIUghkZXRlY3RlZA==');

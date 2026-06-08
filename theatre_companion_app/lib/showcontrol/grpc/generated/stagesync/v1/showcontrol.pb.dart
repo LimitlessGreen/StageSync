@@ -896,10 +896,12 @@ class NoteCueParams extends $pb.GeneratedMessage {
   factory NoteCueParams({
     $core.String? text,
     $core.String? colorHex,
+    $core.bool? landable,
   }) {
     final result = create();
     if (text != null) result.text = text;
     if (colorHex != null) result.colorHex = colorHex;
+    if (landable != null) result.landable = landable;
     return result;
   }
 
@@ -918,6 +920,7 @@ class NoteCueParams extends $pb.GeneratedMessage {
       createEmptyInstance: create)
     ..aOS(1, _omitFieldNames ? '' : 'text')
     ..aOS(2, _omitFieldNames ? '' : 'colorHex')
+    ..aOB(3, _omitFieldNames ? '' : 'landable')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -956,6 +959,15 @@ class NoteCueParams extends $pb.GeneratedMessage {
   $core.bool hasColorHex() => $_has(1);
   @$pb.TagNumber(2)
   void clearColorHex() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.bool get landable => $_getBF(2);
+  @$pb.TagNumber(3)
+  set landable($core.bool value) => $_setBool(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasLandable() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearLandable() => $_clearField(3);
 }
 
 /// ── Fade Cue ─────────────────────────────────────────────────────────────────
@@ -2044,6 +2056,277 @@ class ResumeRequest extends $pb.GeneratedMessage {
   void clearCommandId() => $_clearField(3);
 }
 
+class PauseCueAudioRequest extends $pb.GeneratedMessage {
+  factory PauseCueAudioRequest({
+    $core.String? sessionId,
+    $core.String? token,
+    $core.String? cueId,
+    $core.double? fadeOutMs,
+  }) {
+    final result = create();
+    if (sessionId != null) result.sessionId = sessionId;
+    if (token != null) result.token = token;
+    if (cueId != null) result.cueId = cueId;
+    if (fadeOutMs != null) result.fadeOutMs = fadeOutMs;
+    return result;
+  }
+
+  PauseCueAudioRequest._();
+
+  factory PauseCueAudioRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory PauseCueAudioRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'PauseCueAudioRequest',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'sessionId')
+    ..aOS(2, _omitFieldNames ? '' : 'token')
+    ..aOS(3, _omitFieldNames ? '' : 'cueId')
+    ..aD(4, _omitFieldNames ? '' : 'fadeOutMs')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  PauseCueAudioRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  PauseCueAudioRequest copyWith(void Function(PauseCueAudioRequest) updates) =>
+      super.copyWith((message) => updates(message as PauseCueAudioRequest))
+          as PauseCueAudioRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static PauseCueAudioRequest create() => PauseCueAudioRequest._();
+  @$core.override
+  PauseCueAudioRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static PauseCueAudioRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<PauseCueAudioRequest>(create);
+  static PauseCueAudioRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get sessionId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set sessionId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasSessionId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearSessionId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get token => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set token($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasToken() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearToken() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get cueId => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set cueId($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasCueId() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearCueId() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.double get fadeOutMs => $_getN(3);
+  @$pb.TagNumber(4)
+  set fadeOutMs($core.double value) => $_setDouble(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasFadeOutMs() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearFadeOutMs() => $_clearField(4);
+}
+
+class ResumeCueAudioRequest extends $pb.GeneratedMessage {
+  factory ResumeCueAudioRequest({
+    $core.String? sessionId,
+    $core.String? token,
+    $core.String? cueId,
+    $core.double? fadeInMs,
+  }) {
+    final result = create();
+    if (sessionId != null) result.sessionId = sessionId;
+    if (token != null) result.token = token;
+    if (cueId != null) result.cueId = cueId;
+    if (fadeInMs != null) result.fadeInMs = fadeInMs;
+    return result;
+  }
+
+  ResumeCueAudioRequest._();
+
+  factory ResumeCueAudioRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ResumeCueAudioRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ResumeCueAudioRequest',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'sessionId')
+    ..aOS(2, _omitFieldNames ? '' : 'token')
+    ..aOS(3, _omitFieldNames ? '' : 'cueId')
+    ..aD(4, _omitFieldNames ? '' : 'fadeInMs')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ResumeCueAudioRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ResumeCueAudioRequest copyWith(
+          void Function(ResumeCueAudioRequest) updates) =>
+      super.copyWith((message) => updates(message as ResumeCueAudioRequest))
+          as ResumeCueAudioRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ResumeCueAudioRequest create() => ResumeCueAudioRequest._();
+  @$core.override
+  ResumeCueAudioRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ResumeCueAudioRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ResumeCueAudioRequest>(create);
+  static ResumeCueAudioRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get sessionId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set sessionId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasSessionId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearSessionId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get token => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set token($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasToken() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearToken() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get cueId => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set cueId($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasCueId() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearCueId() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.double get fadeInMs => $_getN(3);
+  @$pb.TagNumber(4)
+  set fadeInMs($core.double value) => $_setDouble(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasFadeInMs() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearFadeInMs() => $_clearField(4);
+}
+
+class StopCueAudioRequest extends $pb.GeneratedMessage {
+  factory StopCueAudioRequest({
+    $core.String? sessionId,
+    $core.String? token,
+    $core.String? cueId,
+    $core.double? fadeOutMs,
+  }) {
+    final result = create();
+    if (sessionId != null) result.sessionId = sessionId;
+    if (token != null) result.token = token;
+    if (cueId != null) result.cueId = cueId;
+    if (fadeOutMs != null) result.fadeOutMs = fadeOutMs;
+    return result;
+  }
+
+  StopCueAudioRequest._();
+
+  factory StopCueAudioRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory StopCueAudioRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'StopCueAudioRequest',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'sessionId')
+    ..aOS(2, _omitFieldNames ? '' : 'token')
+    ..aOS(3, _omitFieldNames ? '' : 'cueId')
+    ..aD(4, _omitFieldNames ? '' : 'fadeOutMs')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  StopCueAudioRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  StopCueAudioRequest copyWith(void Function(StopCueAudioRequest) updates) =>
+      super.copyWith((message) => updates(message as StopCueAudioRequest))
+          as StopCueAudioRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static StopCueAudioRequest create() => StopCueAudioRequest._();
+  @$core.override
+  StopCueAudioRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static StopCueAudioRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<StopCueAudioRequest>(create);
+  static StopCueAudioRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get sessionId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set sessionId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasSessionId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearSessionId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get token => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set token($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasToken() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearToken() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get cueId => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set cueId($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasCueId() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearCueId() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.double get fadeOutMs => $_getN(3);
+  @$pb.TagNumber(4)
+  set fadeOutMs($core.double value) => $_setDouble(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasFadeOutMs() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearFadeOutMs() => $_clearField(4);
+}
+
 class UpdatePatchConfigRequest extends $pb.GeneratedMessage {
   factory UpdatePatchConfigRequest({
     $core.String? sessionId,
@@ -2669,6 +2952,99 @@ class PatchDeviceAssign extends $pb.GeneratedMessage {
   void clearDeviceName() => $_clearField(4);
 }
 
+/// ── PlayheadPosition ──────────────────────────────────────────────────────────
+/// Selbst-enthaltene Positionsinformation für Reconnect-Snapshots.
+/// Clients berechnen: elapsed = paused ? position_ms : (now - server_time_ms) + position_ms
+class PlayheadPosition extends $pb.GeneratedMessage {
+  factory PlayheadPosition({
+    $core.String? cueId,
+    $fixnum.Int64? positionMs,
+    $fixnum.Int64? serverTimeMs,
+    $core.bool? paused,
+  }) {
+    final result = create();
+    if (cueId != null) result.cueId = cueId;
+    if (positionMs != null) result.positionMs = positionMs;
+    if (serverTimeMs != null) result.serverTimeMs = serverTimeMs;
+    if (paused != null) result.paused = paused;
+    return result;
+  }
+
+  PlayheadPosition._();
+
+  factory PlayheadPosition.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory PlayheadPosition.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'PlayheadPosition',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'cueId')
+    ..aInt64(2, _omitFieldNames ? '' : 'positionMs')
+    ..aInt64(3, _omitFieldNames ? '' : 'serverTimeMs')
+    ..aOB(4, _omitFieldNames ? '' : 'paused')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  PlayheadPosition clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  PlayheadPosition copyWith(void Function(PlayheadPosition) updates) =>
+      super.copyWith((message) => updates(message as PlayheadPosition))
+          as PlayheadPosition;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static PlayheadPosition create() => PlayheadPosition._();
+  @$core.override
+  PlayheadPosition createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static PlayheadPosition getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<PlayheadPosition>(create);
+  static PlayheadPosition? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get cueId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set cueId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasCueId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearCueId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $fixnum.Int64 get positionMs => $_getI64(1);
+  @$pb.TagNumber(2)
+  set positionMs($fixnum.Int64 value) => $_setInt64(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasPositionMs() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearPositionMs() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $fixnum.Int64 get serverTimeMs => $_getI64(2);
+  @$pb.TagNumber(3)
+  set serverTimeMs($fixnum.Int64 value) => $_setInt64(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasServerTimeMs() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearServerTimeMs() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.bool get paused => $_getBF(3);
+  @$pb.TagNumber(4)
+  set paused($core.bool value) => $_setBool(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasPaused() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearPaused() => $_clearField(4);
+}
+
 class WatchShowExecutionRequest extends $pb.GeneratedMessage {
   factory WatchShowExecutionRequest({
     $core.String? sessionId,
@@ -2760,6 +3136,7 @@ class ShowExecutionEvent extends $pb.GeneratedMessage {
     $core.bool? isPaused,
     $core.Iterable<$core.String>? runningCueIds,
     $core.Iterable<$core.String>? perCuePausedIds,
+    PlayheadPosition? playhead,
   }) {
     final result = create();
     if (seq != null) result.seq = seq;
@@ -2772,6 +3149,7 @@ class ShowExecutionEvent extends $pb.GeneratedMessage {
     if (isPaused != null) result.isPaused = isPaused;
     if (runningCueIds != null) result.runningCueIds.addAll(runningCueIds);
     if (perCuePausedIds != null) result.perCuePausedIds.addAll(perCuePausedIds);
+    if (playhead != null) result.playhead = playhead;
     return result;
   }
 
@@ -2801,6 +3179,8 @@ class ShowExecutionEvent extends $pb.GeneratedMessage {
     ..aOB(14, _omitFieldNames ? '' : 'isPaused')
     ..pPS(15, _omitFieldNames ? '' : 'runningCueIds')
     ..pPS(16, _omitFieldNames ? '' : 'perCuePausedIds')
+    ..aOM<PlayheadPosition>(17, _omitFieldNames ? '' : 'playhead',
+        subBuilder: PlayheadPosition.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -2907,6 +3287,18 @@ class ShowExecutionEvent extends $pb.GeneratedMessage {
   /// IDs aller per-Cue-pausierten Cues (unabhängig von globaler CueList-Pause).
   @$pb.TagNumber(16)
   $pb.PbList<$core.String> get perCuePausedIds => $_getList(9);
+
+  /// Selbst-enthaltene Positionsinfo für Reconnect-Snapshots (gesetzt bei EXECUTION_SNAPSHOT).
+  @$pb.TagNumber(17)
+  PlayheadPosition get playhead => $_getN(10);
+  @$pb.TagNumber(17)
+  set playhead(PlayheadPosition value) => $_setField(17, value);
+  @$pb.TagNumber(17)
+  $core.bool hasPlayhead() => $_has(10);
+  @$pb.TagNumber(17)
+  void clearPlayhead() => $_clearField(17);
+  @$pb.TagNumber(17)
+  PlayheadPosition ensurePlayhead() => $_ensure(10);
 }
 
 class WatchNodeHealthRequest extends $pb.GeneratedMessage {
@@ -3332,6 +3724,157 @@ class MediaSyncEvent extends $pb.GeneratedMessage {
   $core.bool hasSizeBytes() => $_has(6);
   @$pb.TagNumber(13)
   void clearSizeBytes() => $_clearField(13);
+}
+
+class GetAssetSilenceInfoRequest extends $pb.GeneratedMessage {
+  factory GetAssetSilenceInfoRequest({
+    $core.String? sessionId,
+    $core.String? token,
+    $core.String? assetId,
+  }) {
+    final result = create();
+    if (sessionId != null) result.sessionId = sessionId;
+    if (token != null) result.token = token;
+    if (assetId != null) result.assetId = assetId;
+    return result;
+  }
+
+  GetAssetSilenceInfoRequest._();
+
+  factory GetAssetSilenceInfoRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory GetAssetSilenceInfoRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'GetAssetSilenceInfoRequest',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'sessionId')
+    ..aOS(2, _omitFieldNames ? '' : 'token')
+    ..aOS(3, _omitFieldNames ? '' : 'assetId')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetAssetSilenceInfoRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetAssetSilenceInfoRequest copyWith(
+          void Function(GetAssetSilenceInfoRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as GetAssetSilenceInfoRequest))
+          as GetAssetSilenceInfoRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static GetAssetSilenceInfoRequest create() => GetAssetSilenceInfoRequest._();
+  @$core.override
+  GetAssetSilenceInfoRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static GetAssetSilenceInfoRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<GetAssetSilenceInfoRequest>(create);
+  static GetAssetSilenceInfoRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get sessionId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set sessionId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasSessionId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearSessionId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get token => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set token($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasToken() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearToken() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get assetId => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set assetId($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasAssetId() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearAssetId() => $_clearField(3);
+}
+
+class GetAssetSilenceInfoResponse extends $pb.GeneratedMessage {
+  factory GetAssetSilenceInfoResponse({
+    $fixnum.Int64? silenceMs,
+    $core.bool? detected,
+  }) {
+    final result = create();
+    if (silenceMs != null) result.silenceMs = silenceMs;
+    if (detected != null) result.detected = detected;
+    return result;
+  }
+
+  GetAssetSilenceInfoResponse._();
+
+  factory GetAssetSilenceInfoResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory GetAssetSilenceInfoResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'GetAssetSilenceInfoResponse',
+      package: const $pb.PackageName(_omitMessageNames ? '' : 'stagesync.v1'),
+      createEmptyInstance: create)
+    ..aInt64(1, _omitFieldNames ? '' : 'silenceMs')
+    ..aOB(2, _omitFieldNames ? '' : 'detected')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetAssetSilenceInfoResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetAssetSilenceInfoResponse copyWith(
+          void Function(GetAssetSilenceInfoResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as GetAssetSilenceInfoResponse))
+          as GetAssetSilenceInfoResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static GetAssetSilenceInfoResponse create() =>
+      GetAssetSilenceInfoResponse._();
+  @$core.override
+  GetAssetSilenceInfoResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static GetAssetSilenceInfoResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<GetAssetSilenceInfoResponse>(create);
+  static GetAssetSilenceInfoResponse? _defaultInstance;
+
+  /// Erkannter Stille-Offset in ms. 0 wenn keine Stille erkannt oder detected=false.
+  @$pb.TagNumber(1)
+  $fixnum.Int64 get silenceMs => $_getI64(0);
+  @$pb.TagNumber(1)
+  set silenceMs($fixnum.Int64 value) => $_setInt64(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasSilenceMs() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearSilenceMs() => $_clearField(1);
+
+  /// true wenn die Stille-Erkennung für dieses Asset abgeschlossen ist.
+  @$pb.TagNumber(2)
+  $core.bool get detected => $_getBF(1);
+  @$pb.TagNumber(2)
+  set detected($core.bool value) => $_setBool(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasDetected() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearDetected() => $_clearField(2);
 }
 
 const $core.bool _omitFieldNames =

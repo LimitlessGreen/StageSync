@@ -45,6 +45,41 @@ class NodeEvent_Type extends $pb.ProtobufEnum {
   const NodeEvent_Type._(super.value, super.name);
 }
 
+class LedFeedbackCommand_Color extends $pb.ProtobufEnum {
+  static const LedFeedbackCommand_Color LED_OFF =
+      LedFeedbackCommand_Color._(0, _omitEnumNames ? '' : 'LED_OFF');
+  static const LedFeedbackCommand_Color LED_GREEN =
+      LedFeedbackCommand_Color._(1, _omitEnumNames ? '' : 'LED_GREEN');
+  static const LedFeedbackCommand_Color LED_GREEN_BLINK =
+      LedFeedbackCommand_Color._(2, _omitEnumNames ? '' : 'LED_GREEN_BLINK');
+  static const LedFeedbackCommand_Color LED_RED =
+      LedFeedbackCommand_Color._(3, _omitEnumNames ? '' : 'LED_RED');
+  static const LedFeedbackCommand_Color LED_RED_BLINK =
+      LedFeedbackCommand_Color._(4, _omitEnumNames ? '' : 'LED_RED_BLINK');
+  static const LedFeedbackCommand_Color LED_YELLOW =
+      LedFeedbackCommand_Color._(5, _omitEnumNames ? '' : 'LED_YELLOW');
+  static const LedFeedbackCommand_Color LED_YELLOW_BLINK =
+      LedFeedbackCommand_Color._(6, _omitEnumNames ? '' : 'LED_YELLOW_BLINK');
+
+  static const $core.List<LedFeedbackCommand_Color> values =
+      <LedFeedbackCommand_Color>[
+    LED_OFF,
+    LED_GREEN,
+    LED_GREEN_BLINK,
+    LED_RED,
+    LED_RED_BLINK,
+    LED_YELLOW,
+    LED_YELLOW_BLINK,
+  ];
+
+  static final $core.List<LedFeedbackCommand_Color?> _byValue =
+      $pb.ProtobufEnum.$_initByValueList(values, 6);
+  static LedFeedbackCommand_Color? valueOf($core.int value) =>
+      value < 0 || value >= _byValue.length ? null : _byValue[value];
+
+  const LedFeedbackCommand_Color._(super.value, super.name);
+}
+
 class AudioTestSignalCommand_Kind extends $pb.ProtobufEnum {
   static const AudioTestSignalCommand_Kind KIND_TONE =
       AudioTestSignalCommand_Kind._(0, _omitEnumNames ? '' : 'KIND_TONE');

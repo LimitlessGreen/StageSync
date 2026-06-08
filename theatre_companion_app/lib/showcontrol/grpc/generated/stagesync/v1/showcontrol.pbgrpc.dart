@@ -104,6 +104,28 @@ class ShowControlServiceClient extends $grpc.Client {
     return $createUnaryCall(_$updatePatchConfig, request, options: options);
   }
 
+  /// Per-Cue Audio-Kontrolle (Server routet zu Nodes und updated Engine-State atomar)
+  $grpc.ResponseFuture<$1.Empty> pauseCueAudio(
+    $0.PauseCueAudioRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$pauseCueAudio, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$1.Empty> resumeCueAudio(
+    $0.ResumeCueAudioRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$resumeCueAudio, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$1.Empty> stopCueAudio(
+    $0.StopCueAudioRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$stopCueAudio, request, options: options);
+  }
+
   /// ── 4-Stream EventBus ────────────────────────────────────────────────────
   /// Stream 1: Show-Definition (CueList, Patch, Assets)
   $grpc.ResponseStream<$0.ShowDefinitionEvent> watchShowDefinition(
@@ -143,6 +165,14 @@ class ShowControlServiceClient extends $grpc.Client {
     return $createStreamingCall(
         _$watchMediaSync, $async.Stream.fromIterable([request]),
         options: options);
+  }
+
+  /// Erkannten Stille-Offset für ein Asset abfragen (nach Preload verfügbar)
+  $grpc.ResponseFuture<$0.GetAssetSilenceInfoResponse> getAssetSilenceInfo(
+    $0.GetAssetSilenceInfoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$getAssetSilenceInfo, request, options: options);
   }
 
   // method descriptors
@@ -187,6 +217,21 @@ class ShowControlServiceClient extends $grpc.Client {
           '/stagesync.v1.ShowControlService/UpdatePatchConfig',
           ($0.UpdatePatchConfigRequest value) => value.writeToBuffer(),
           $0.PatchConfigResponse.fromBuffer);
+  static final _$pauseCueAudio =
+      $grpc.ClientMethod<$0.PauseCueAudioRequest, $1.Empty>(
+          '/stagesync.v1.ShowControlService/PauseCueAudio',
+          ($0.PauseCueAudioRequest value) => value.writeToBuffer(),
+          $1.Empty.fromBuffer);
+  static final _$resumeCueAudio =
+      $grpc.ClientMethod<$0.ResumeCueAudioRequest, $1.Empty>(
+          '/stagesync.v1.ShowControlService/ResumeCueAudio',
+          ($0.ResumeCueAudioRequest value) => value.writeToBuffer(),
+          $1.Empty.fromBuffer);
+  static final _$stopCueAudio =
+      $grpc.ClientMethod<$0.StopCueAudioRequest, $1.Empty>(
+          '/stagesync.v1.ShowControlService/StopCueAudio',
+          ($0.StopCueAudioRequest value) => value.writeToBuffer(),
+          $1.Empty.fromBuffer);
   static final _$watchShowDefinition =
       $grpc.ClientMethod<$0.WatchShowDefinitionRequest, $0.ShowDefinitionEvent>(
           '/stagesync.v1.ShowControlService/WatchShowDefinition',
@@ -207,6 +252,11 @@ class ShowControlServiceClient extends $grpc.Client {
           '/stagesync.v1.ShowControlService/WatchMediaSync',
           ($0.WatchMediaSyncRequest value) => value.writeToBuffer(),
           $0.MediaSyncEvent.fromBuffer);
+  static final _$getAssetSilenceInfo = $grpc.ClientMethod<
+          $0.GetAssetSilenceInfoRequest, $0.GetAssetSilenceInfoResponse>(
+      '/stagesync.v1.ShowControlService/GetAssetSilenceInfo',
+      ($0.GetAssetSilenceInfoRequest value) => value.writeToBuffer(),
+      $0.GetAssetSilenceInfoResponse.fromBuffer);
 }
 
 @$pb.GrpcServiceName('stagesync.v1.ShowControlService')
@@ -280,6 +330,30 @@ abstract class ShowControlServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.UpdatePatchConfigRequest.fromBuffer(value),
         ($0.PatchConfigResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.PauseCueAudioRequest, $1.Empty>(
+        'PauseCueAudio',
+        pauseCueAudio_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.PauseCueAudioRequest.fromBuffer(value),
+        ($1.Empty value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ResumeCueAudioRequest, $1.Empty>(
+        'ResumeCueAudio',
+        resumeCueAudio_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ResumeCueAudioRequest.fromBuffer(value),
+        ($1.Empty value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.StopCueAudioRequest, $1.Empty>(
+        'StopCueAudio',
+        stopCueAudio_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.StopCueAudioRequest.fromBuffer(value),
+        ($1.Empty value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.WatchShowDefinitionRequest,
             $0.ShowDefinitionEvent>(
         'WatchShowDefinition',
@@ -315,6 +389,15 @@ abstract class ShowControlServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.WatchMediaSyncRequest.fromBuffer(value),
         ($0.MediaSyncEvent value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.GetAssetSilenceInfoRequest,
+            $0.GetAssetSilenceInfoResponse>(
+        'GetAssetSilenceInfo',
+        getAssetSilenceInfo_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.GetAssetSilenceInfoRequest.fromBuffer(value),
+        ($0.GetAssetSilenceInfoResponse value) => value.writeToBuffer()));
   }
 
   $async.Future<$0.CueListResponse> getCueList_Pre($grpc.ServiceCall $call,
@@ -388,6 +471,30 @@ abstract class ShowControlServiceBase extends $grpc.Service {
   $async.Future<$0.PatchConfigResponse> updatePatchConfig(
       $grpc.ServiceCall call, $0.UpdatePatchConfigRequest request);
 
+  $async.Future<$1.Empty> pauseCueAudio_Pre($grpc.ServiceCall $call,
+      $async.Future<$0.PauseCueAudioRequest> $request) async {
+    return pauseCueAudio($call, await $request);
+  }
+
+  $async.Future<$1.Empty> pauseCueAudio(
+      $grpc.ServiceCall call, $0.PauseCueAudioRequest request);
+
+  $async.Future<$1.Empty> resumeCueAudio_Pre($grpc.ServiceCall $call,
+      $async.Future<$0.ResumeCueAudioRequest> $request) async {
+    return resumeCueAudio($call, await $request);
+  }
+
+  $async.Future<$1.Empty> resumeCueAudio(
+      $grpc.ServiceCall call, $0.ResumeCueAudioRequest request);
+
+  $async.Future<$1.Empty> stopCueAudio_Pre($grpc.ServiceCall $call,
+      $async.Future<$0.StopCueAudioRequest> $request) async {
+    return stopCueAudio($call, await $request);
+  }
+
+  $async.Future<$1.Empty> stopCueAudio(
+      $grpc.ServiceCall call, $0.StopCueAudioRequest request);
+
   $async.Stream<$0.ShowDefinitionEvent> watchShowDefinition_Pre(
       $grpc.ServiceCall $call,
       $async.Future<$0.WatchShowDefinitionRequest> $request) async* {
@@ -421,4 +528,13 @@ abstract class ShowControlServiceBase extends $grpc.Service {
 
   $async.Stream<$0.MediaSyncEvent> watchMediaSync(
       $grpc.ServiceCall call, $0.WatchMediaSyncRequest request);
+
+  $async.Future<$0.GetAssetSilenceInfoResponse> getAssetSilenceInfo_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.GetAssetSilenceInfoRequest> $request) async {
+    return getAssetSilenceInfo($call, await $request);
+  }
+
+  $async.Future<$0.GetAssetSilenceInfoResponse> getAssetSilenceInfo(
+      $grpc.ServiceCall call, $0.GetAssetSilenceInfoRequest request);
 }

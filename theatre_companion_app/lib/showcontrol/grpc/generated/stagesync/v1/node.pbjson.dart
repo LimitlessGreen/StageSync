@@ -482,6 +482,24 @@ const NodeCommandRequest$json = {
       '9': 0,
       '10': 'audioTalkbackCtrl'
     },
+    {
+      '1': 'midi_send',
+      '3': 16,
+      '4': 1,
+      '5': 11,
+      '6': '.stagesync.v1.MidiSendCommand',
+      '9': 0,
+      '10': 'midiSend'
+    },
+    {
+      '1': 'led_feedback',
+      '3': 17,
+      '4': 1,
+      '5': 11,
+      '6': '.stagesync.v1.LedFeedbackCommand',
+      '9': 0,
+      '10': 'ledFeedback'
+    },
   ],
   '8': [
     {'1': 'command'},
@@ -507,7 +525,66 @@ final $typed_data.Uint8List nodeCommandRequestDescriptor = $convert.base64Decode
     'ElAKDmF1ZGlvX3RhbGtiYWNrGA4gASgLMicuc3RhZ2VzeW5jLnYxLkF1ZGlvVGFsa2JhY2tDaH'
     'Vua0NvbW1hbmRIAFINYXVkaW9UYWxrYmFjaxJbChNhdWRpb190YWxrYmFja19jdHJsGA8gASgL'
     'Mikuc3RhZ2VzeW5jLnYxLkF1ZGlvVGFsa2JhY2tDb250cm9sQ29tbWFuZEgAUhFhdWRpb1RhbG'
-    'tiYWNrQ3RybEIJCgdjb21tYW5k');
+    'tiYWNrQ3RybBI8CgltaWRpX3NlbmQYECABKAsyHS5zdGFnZXN5bmMudjEuTWlkaVNlbmRDb21t'
+    'YW5kSABSCG1pZGlTZW5kEkUKDGxlZF9mZWVkYmFjaxgRIAEoCzIgLnN0YWdlc3luYy52MS5MZW'
+    'RGZWVkYmFja0NvbW1hbmRIAFILbGVkRmVlZGJhY2tCCQoHY29tbWFuZA==');
+
+@$core.Deprecated('Use midiSendCommandDescriptor instead')
+const MidiSendCommand$json = {
+  '1': 'MidiSendCommand',
+  '2': [
+    {'1': 'channel', '3': 1, '4': 1, '5': 5, '10': 'channel'},
+    {'1': 'command', '3': 2, '4': 1, '5': 5, '10': 'command'},
+    {'1': 'data1', '3': 3, '4': 1, '5': 5, '10': 'data1'},
+    {'1': 'data2', '3': 4, '4': 1, '5': 5, '10': 'data2'},
+  ],
+};
+
+/// Descriptor for `MidiSendCommand`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List midiSendCommandDescriptor = $convert.base64Decode(
+    'Cg9NaWRpU2VuZENvbW1hbmQSGAoHY2hhbm5lbBgBIAEoBVIHY2hhbm5lbBIYCgdjb21tYW5kGA'
+    'IgASgFUgdjb21tYW5kEhQKBWRhdGExGAMgASgFUgVkYXRhMRIUCgVkYXRhMhgEIAEoBVIFZGF0'
+    'YTI=');
+
+@$core.Deprecated('Use ledFeedbackCommandDescriptor instead')
+const LedFeedbackCommand$json = {
+  '1': 'LedFeedbackCommand',
+  '2': [
+    {'1': 'track_index', '3': 1, '4': 1, '5': 5, '10': 'trackIndex'},
+    {'1': 'scene_index', '3': 2, '4': 1, '5': 5, '10': 'sceneIndex'},
+    {
+      '1': 'color',
+      '3': 3,
+      '4': 1,
+      '5': 14,
+      '6': '.stagesync.v1.LedFeedbackCommand.Color',
+      '10': 'color'
+    },
+  ],
+  '4': [LedFeedbackCommand_Color$json],
+};
+
+@$core.Deprecated('Use ledFeedbackCommandDescriptor instead')
+const LedFeedbackCommand_Color$json = {
+  '1': 'Color',
+  '2': [
+    {'1': 'LED_OFF', '2': 0},
+    {'1': 'LED_GREEN', '2': 1},
+    {'1': 'LED_GREEN_BLINK', '2': 2},
+    {'1': 'LED_RED', '2': 3},
+    {'1': 'LED_RED_BLINK', '2': 4},
+    {'1': 'LED_YELLOW', '2': 5},
+    {'1': 'LED_YELLOW_BLINK', '2': 6},
+  ],
+};
+
+/// Descriptor for `LedFeedbackCommand`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List ledFeedbackCommandDescriptor = $convert.base64Decode(
+    'ChJMZWRGZWVkYmFja0NvbW1hbmQSHwoLdHJhY2tfaW5kZXgYASABKAVSCnRyYWNrSW5kZXgSHw'
+    'oLc2NlbmVfaW5kZXgYAiABKAVSCnNjZW5lSW5kZXgSPAoFY29sb3IYAyABKA4yJi5zdGFnZXN5'
+    'bmMudjEuTGVkRmVlZGJhY2tDb21tYW5kLkNvbG9yUgVjb2xvciJ+CgVDb2xvchILCgdMRURfT0'
+    'ZGEAASDQoJTEVEX0dSRUVOEAESEwoPTEVEX0dSRUVOX0JMSU5LEAISCwoHTEVEX1JFRBADEhEK'
+    'DUxFRF9SRURfQkxJTksQBBIOCgpMRURfWUVMTE9XEAUSFAoQTEVEX1lFTExPV19CTElOSxAG');
 
 @$core.Deprecated('Use nodeConfigCommandDescriptor instead')
 const NodeConfigCommand$json = {

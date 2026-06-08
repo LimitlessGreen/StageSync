@@ -90,6 +90,10 @@ class NodeTask extends $pb.ProtobufEnum {
       NodeTask._(4, _omitEnumNames ? '' : 'NODE_TASK_VIEWER');
   static const NodeTask NODE_TASK_MA_OSC =
       NodeTask._(5, _omitEnumNames ? '' : 'NODE_TASK_MA_OSC');
+  static const NodeTask NODE_TASK_MIDI_IN =
+      NodeTask._(6, _omitEnumNames ? '' : 'NODE_TASK_MIDI_IN');
+  static const NodeTask NODE_TASK_MIDI_OUT =
+      NodeTask._(7, _omitEnumNames ? '' : 'NODE_TASK_MIDI_OUT');
 
   static const $core.List<NodeTask> values = <NodeTask>[
     NODE_TASK_UNSPECIFIED,
@@ -98,10 +102,12 @@ class NodeTask extends $pb.ProtobufEnum {
     NODE_TASK_EDITOR,
     NODE_TASK_VIEWER,
     NODE_TASK_MA_OSC,
+    NODE_TASK_MIDI_IN,
+    NODE_TASK_MIDI_OUT,
   ];
 
   static final $core.List<NodeTask?> _byValue =
-      $pb.ProtobufEnum.$_initByValueList(values, 5);
+      $pb.ProtobufEnum.$_initByValueList(values, 7);
   static NodeTask? valueOf($core.int value) =>
       value < 0 || value >= _byValue.length ? null : _byValue[value];
 
