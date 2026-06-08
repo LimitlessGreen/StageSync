@@ -1,7 +1,12 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../../../domain/show.dart';
 import '../../../domain/cue_params.dart';
 import '../../../domain/playhead.dart';
+import '../../../providers/waveform_provider.dart';
 import '../../../session/clock_sync.dart';
 import '../sc_colors.dart';
 import '../sc_tick.dart';
@@ -238,7 +243,17 @@ class _CueListRowState extends State<CueListRow> {
   Widget build(BuildContext context) {
     // Note cues render as visual dividers, not as regular rows.
     if (widget.cue.params case NoteParams note) {
-      return _NoteRow(cue: widget.cue, note: note, onTap: widget.onTap);
+      final noteRow = _NoteRow(
+        cue: widget.cue,
+        note: note,
+        onTap: widget.onTap,
+        onDelete: widget.onDelete,
+        showDragHandle: widget.showDragHandle && widget.dragIndex != null,
+      );
+      if (widget.showDragHandle && widget.dragIndex != null) {
+        return ReorderableDragStartListener(index: widget.dragIndex!, child: noteRow);
+      }
+      return noteRow;
     }
 
     final isAlsoRunning = widget._isAlsoRunning(widget.playhead);
@@ -271,6 +286,15 @@ class _CueListRowState extends State<CueListRow> {
                         ? _typeColor.withValues(alpha: 0.03)
                         : Colors.transparent,
           ),
+
+          // ── Waveform ghost (audio cues only) ────────────────────────────
+          if (widget.cue.params case AudioParams p when p.assetId.isNotEmpty)
+            Positioned.fill(
+              child: _AudioGhostWaveform(
+                params: p,
+                typeColor: _typeColor,
+              ),
+            ),
 
           // ── Progress sweep (QLab-style fill from left) ──────────────────
           // Zeigt auch für Hintergrund-Audio-Cues (isAlsoRunning) — gedimmt.
@@ -974,6 +998,112 @@ class _BarPaint extends CustomPainter {
       old.fraction != fraction || old.audioPhase != audioPhase;
 }
 
+// ── Waveform ghost ────────────────────────────────────────────────────────────
+
+/// Lädt die Waveform-Daten (300 Buckets) und zeichnet die Hüllkurve als
+/// dezenten Ghost-Hintergrund hinter dem Cue-Row-Inhalt.
+class _AudioGhostWaveform extends ConsumerWidget {
+  final AudioParams params;
+  final Color typeColor;
+
+  const _AudioGhostWaveform({
+    required this.params,
+    required this.typeColor,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final waveformAsync = ref.watch(waveformGhostProvider(params.assetId));
+    return waveformAsync.maybeWhen(
+      data: (wf) {
+        if (wf.isEmpty) return const SizedBox.shrink();
+
+        final fileDurationMs = wf.durationMs;
+        final startFraction = fileDurationMs > 0
+            ? (params.startTimeMs / fileDurationMs).clamp(0.0, 1.0)
+            : 0.0;
+        final endFraction = fileDurationMs > 0 && params.endTimeMs > params.startTimeMs
+            ? (params.endTimeMs / fileDurationMs).clamp(startFraction, 1.0)
+            : 1.0;
+
+        return IgnorePointer(
+          child: CustomPaint(
+            painter: _GhostWaveformPainter(
+              mins: wf.mins,
+              maxs: wf.maxs,
+              color: typeColor,
+              startFraction: startFraction,
+              endFraction: endFraction,
+            ),
+          ),
+        );
+      },
+      orElse: () => const SizedBox.shrink(),
+    );
+  }
+}
+
+class _GhostWaveformPainter extends CustomPainter {
+  final Float32List mins;
+  final Float32List maxs;
+  final Color color;
+  final double startFraction;
+  final double endFraction;
+
+  const _GhostWaveformPainter({
+    required this.mins,
+    required this.maxs,
+    required this.color,
+    required this.startFraction,
+    required this.endFraction,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final n = mins.length;
+    if (n == 0) return;
+
+    // Cue-Fenster (startFraction..endFraction des Files) auf volle Zeilenbreite mappen.
+    final i0 = (startFraction * n).floor().clamp(0, n - 1);
+    final i1 = (endFraction * n).ceil().clamp(i0 + 1, n);
+    final count = i1 - i0;
+    if (count <= 0) return;
+
+    final w = size.width;
+    final midY = size.height / 2;
+    // Amplitude: 42% der halben Zeilenhöhe — lässt oben/unten etwas Luft.
+    final maxAmp = size.height * 0.42;
+    final norm = count > 1 ? 1.0 / (count - 1) : 1.0;
+
+    // Geschlossene Hüllkurve: erst obere Hälfte (maxs), dann untere rückwärts (mins).
+    final path = Path();
+    for (var i = 0; i < count; i++) {
+      final x = i * norm * w;
+      final y = midY - maxs[i0 + i].abs() * maxAmp;
+      if (i == 0) {
+        path.moveTo(x, y);
+      } else {
+        path.lineTo(x, y);
+      }
+    }
+    for (var i = count - 1; i >= 0; i--) {
+      final x = i * norm * w;
+      final y = midY + mins[i0 + i].abs() * maxAmp;
+      path.lineTo(x, y);
+    }
+    path.close();
+
+    canvas.drawPath(path, Paint()..color = color.withValues(alpha: 0.10));
+  }
+
+  @override
+  bool shouldRepaint(_GhostWaveformPainter old) =>
+      !identical(old.mins, mins) ||
+      old.startFraction != startFraction ||
+      old.endFraction != endFraction ||
+      old.color != color;
+}
+
 // ── Note / Placeholder row ────────────────────────────────────────────────────
 
 /// Renders a NoteParams cue as a visual divider with optional text.
@@ -982,8 +1112,10 @@ class _NoteRow extends StatelessWidget {
   final Cue cue;
   final NoteParams note;
   final VoidCallback? onTap;
+  final VoidCallback? onDelete;
+  final bool showDragHandle;
 
-  const _NoteRow({required this.cue, required this.note, this.onTap});
+  const _NoteRow({required this.cue, required this.note, this.onTap, this.onDelete, this.showDragHandle = false});
 
   @override
   Widget build(BuildContext context) {
@@ -995,6 +1127,7 @@ class _NoteRow extends StatelessWidget {
       child: Container(
         height: 28,
         margin: const EdgeInsets.symmetric(vertical: 2),
+        padding: const EdgeInsets.only(right: 8),
         child: Row(
           children: [
             // Left accent
@@ -1032,7 +1165,16 @@ class _NoteRow extends StatelessWidget {
                 ],
               ),
             ),
-            const SizedBox(width: 8),
+            if (onDelete != null)
+              IconButton(
+                icon: const Icon(Icons.delete_outline, size: 16),
+                onPressed: onDelete,
+                color: ScColors.error,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              ),
+            if (showDragHandle)
+              const Icon(Icons.drag_handle, size: 18, color: ScColors.textDim),
           ],
         ),
       ),

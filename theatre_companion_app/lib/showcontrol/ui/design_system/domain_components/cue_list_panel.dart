@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/show.dart';
 import '../../../domain/cue_params.dart';
@@ -11,6 +12,7 @@ import 'cue_list_row.dart';
 import 'cue_list_header.dart';
 import 'active_cue_control_strip.dart';
 import 'cue_type_picker.dart';
+import 'bulk_add_cues_dialog.dart';
 
 /// Reusable cue list panel: header bar, column headers, scrollable cue rows.
 ///
@@ -22,7 +24,7 @@ import 'cue_type_picker.dart';
 /// - Past-cue dimming
 ///
 /// Used by [DesktopShell] (left panel) and [CueEditorScreen].
-class CueListPanel extends StatelessWidget {
+class CueListPanel extends ConsumerWidget {
   final CueList? cueList;
   final PlayheadState playhead;
   final String? selectedCueId;
@@ -39,7 +41,7 @@ class CueListPanel extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Column(
       children: [
         // ── Header bar ─────────────────────────────────────────────────
@@ -58,6 +60,20 @@ class CueListPanel extends StatelessWidget {
               ),
               Builder(
                 builder: (btnCtx) => IconButton(
+                  icon: const Icon(Icons.playlist_add, size: 18),
+                  color: ScColors.textSecondary,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                  tooltip: 'Mehrere Cues hinzufügen',
+                  onPressed: () => showBulkAddCuesDialog(
+                    btnCtx,
+                    ref,
+                    afterCueId: selectedCueId,
+                  ),
+                ),
+              ),
+              Builder(
+                builder: (btnCtx) => IconButton(
                   icon: const Icon(Icons.add, size: 18),
                   color: ScColors.textSecondary,
                   padding: EdgeInsets.zero,
@@ -65,7 +81,10 @@ class CueListPanel extends StatelessWidget {
                   tooltip: 'Cue hinzufügen',
                   onPressed: () async {
                     final params = await showCueTypePicker(btnCtx);
-                    if (params != null) notifier.addCue(params: params);
+                    if (params != null) {
+                      final cue = await notifier.addCue(params: params);
+                      if (cue != null) onCueSelected(cue.id);
+                    }
                   },
                 ),
               ),
@@ -117,6 +136,17 @@ class _CueListView extends StatefulWidget {
 
 class _CueListViewState extends State<_CueListView> {
   final Set<String> _expandedGroups = {};
+  /// Optimistic ordering applied immediately on drag to prevent revert flicker.
+  List<String>? _pendingTopLevelIds;
+
+  @override
+  void didUpdateWidget(covariant _CueListView old) {
+    super.didUpdateWidget(old);
+    // Clear optimistic order once the server confirms the new state.
+    if (widget.cueList.cues != old.cueList.cues) {
+      _pendingTopLevelIds = null;
+    }
+  }
 
   Set<String> _childIds(List<Cue> cues) {
     final s = <String>{};
@@ -137,22 +167,32 @@ class _CueListViewState extends State<_CueListView> {
   Future<void> _insertCue(BuildContext context, {String? afterId, String? beforeId}) async {
     final params = await showCueTypePicker(context);
     if (params == null) return;
+    String? newId;
     if (beforeId != null) {
       final idx = widget.cueList.cues.indexWhere((c) => c.id == beforeId);
       final prevId = idx > 0 ? widget.cueList.cues[idx - 1].id : null;
-      await widget.notifier.insertDomainCue(params, afterId: prevId);
+      newId = await widget.notifier.insertDomainCue(params, afterId: prevId);
     } else {
-      await widget.notifier.insertDomainCue(params, afterId: afterId);
+      newId = await widget.notifier.insertDomainCue(params, afterId: afterId);
     }
+    if (newId != null) widget.onCueSelected(newId);
   }
 
   @override
   Widget build(BuildContext context) {
     final cues = widget.cueList.cues;
     final childIds = _childIds(cues);
-    final topLevel = cues.where((c) => !childIds.contains(c.id)).toList();
+    final allTopLevel = cues.where((c) => !childIds.contains(c.id)).toList();
+    final topLevel = _pendingTopLevelIds != null
+        ? _pendingTopLevelIds!
+            .map((id) => allTopLevel.firstWhere((c) => c.id == id,
+                orElse: () => allTopLevel.first))
+            .where((c) => allTopLevel.any((t) => t.id == c.id))
+            .toList()
+        : allTopLevel;
 
     return ReorderableListView.builder(
+      buildDefaultDragHandles: false,
       itemCount: topLevel.length,
       onReorder: (oldIndex, newIndex) {
         if (newIndex > oldIndex) newIndex--;
@@ -160,6 +200,7 @@ class _CueListViewState extends State<_CueListView> {
         final moved = tlIds.removeAt(oldIndex);
         tlIds.insert(newIndex, moved);
         final childCues = cues.where((c) => childIds.contains(c.id)).toList();
+        setState(() => _pendingTopLevelIds = tlIds);
         widget.notifier.reorderCue(
             orderedIds: [...tlIds, ...childCues.map((c) => c.id)]);
       },
@@ -239,6 +280,13 @@ class _CueListViewState extends State<_CueListView> {
                 onStop: () => widget.notifier.stopCueAudio(cue.id),
                 onPause: () => widget.notifier.pauseCueAudio(cue.id),
                 onResume: () => widget.notifier.resumeCueAudio(cue.id),
+                onFadeDurationSaved: (ms) {
+                  if (cue.params case AudioParams p) {
+                    widget.notifier.upsertDomainCue(cue.copyWith(
+                      params: p.copyWith(fadeInMs: ms, fadeOutMs: ms),
+                    ));
+                  }
+                },
               ),
           ],
         );

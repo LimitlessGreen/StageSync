@@ -215,22 +215,33 @@ class _ProgressBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fraction = _fraction;
+    final barColor = playhead.isPaused
+        ? ScColors.warn
+        : playhead.isDone
+            ? ScColors.textDim
+            : ScColors.active;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: fraction,
-            backgroundColor: ScColors.divider,
-            valueColor: AlwaysStoppedAnimation(
-              playhead.isPaused
-                  ? ScColors.warn
-                  : playhead.isDone
-                      ? ScColors.textDim
-                      : ScColors.active,
+        DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(4),
+            boxShadow: [
+              BoxShadow(
+                color: barColor.withValues(alpha: playhead.isDone ? 0.0 : 0.35),
+                blurRadius: 8,
+                spreadRadius: 1,
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: fraction,
+              backgroundColor: ScColors.divider,
+              valueColor: AlwaysStoppedAnimation(barColor),
+              minHeight: 6,
             ),
-            minHeight: 6,
           ),
         ),
         const SizedBox(height: 2),

@@ -41,8 +41,49 @@ class ScButton extends StatefulWidget {
   State<ScButton> createState() => _ScButtonState();
 }
 
-class _ScButtonState extends State<ScButton> {
+class _ScButtonState extends State<ScButton> with TickerProviderStateMixin {
   bool _pressed = false;
+  late final AnimationController _bounceCtrl;
+  late final Animation<double> _scaleAnim;
+  late final AnimationController _pulseCtrl;
+  late final Animation<double> _glowAnim;
+
+  @override
+  void initState() {
+    super.initState();
+    _bounceCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+    );
+    _scaleAnim = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(begin: 1.0, end: 0.93).chain(CurveTween(curve: Curves.easeIn)),
+        weight: 25,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 0.93, end: 1.06).chain(CurveTween(curve: Curves.easeOut)),
+        weight: 45,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.06, end: 1.0).chain(CurveTween(curve: Curves.elasticOut)),
+        weight: 30,
+      ),
+    ]).animate(_bounceCtrl);
+
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat(reverse: true);
+    _glowAnim = Tween<double>(begin: 0.0, end: 1.0)
+        .animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
+  }
+
+  @override
+  void dispose() {
+    _bounceCtrl.dispose();
+    _pulseCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -88,28 +129,36 @@ class _ScButtonState extends State<ScButton> {
             ],
           );
 
-    final decoration = BoxDecoration(
-      color: isFilled
-          ? (enabled
-              ? (isFilled ? effectiveColor : null)
-              : ScColors.past)
-          : (_pressed && enabled
-              ? color.withValues(alpha: 0.12)
-              : null),
-      border: isFilled
-          ? null
-          : Border.all(color: effectiveColor.withValues(alpha: enabled ? 0.7 : 0.3)),
-      borderRadius: BorderRadius.circular(widget.size == ScButtonSize.large ? 16 : 8),
-      boxShadow: isFilled && enabled && !_pressed
-          ? [
-              BoxShadow(
-                color: color.withValues(alpha: 0.3),
-                blurRadius: 16,
-                spreadRadius: 1,
-              )
-            ]
-          : null,
-    );
+    // Primary+enabled: pulsing halo via AnimatedBuilder.
+    // Other variants: static shadow or none.
+    final isPrimaryEnabled = isFilled && enabled;
+
+    BoxDecoration buildDeco(double glowT) {
+      final blurRadius = isPrimaryEnabled && !_pressed
+          ? 12.0 + glowT * 14.0  // 12 → 26
+          : 0.0;
+      final glowAlpha = isPrimaryEnabled && !_pressed
+          ? 0.22 + glowT * 0.22  // 0.22 → 0.44
+          : 0.0;
+      return BoxDecoration(
+        color: isFilled
+            ? (enabled ? effectiveColor : ScColors.past)
+            : (_pressed && enabled ? color.withValues(alpha: 0.12) : null),
+        border: isFilled
+            ? null
+            : Border.all(color: effectiveColor.withValues(alpha: enabled ? 0.7 : 0.3)),
+        borderRadius: BorderRadius.circular(widget.size == ScButtonSize.large ? 16 : 8),
+        boxShadow: blurRadius > 0
+            ? [
+                BoxShadow(
+                  color: color.withValues(alpha: glowAlpha),
+                  blurRadius: blurRadius,
+                  spreadRadius: 2,
+                ),
+              ]
+            : null,
+      );
+    }
 
     return Tooltip(
       message: widget.shortcutHint != null
@@ -120,18 +169,34 @@ class _ScButtonState extends State<ScButton> {
         onTapUp: enabled
             ? (_) {
                 setState(() => _pressed = false);
+                _bounceCtrl.forward(from: 0);
                 widget.onPressed?.call();
               }
             : null,
         onTapCancel: enabled ? () => setState(() => _pressed = false) : null,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 80),
-          height: height,
-          decoration: decoration,
-          padding: EdgeInsets.symmetric(
-            horizontal: widget.size == ScButtonSize.compact ? 10 : 16,
-          ),
-          child: Center(child: content),
+        child: ScaleTransition(
+          scale: _scaleAnim,
+          child: isPrimaryEnabled
+              ? AnimatedBuilder(
+                  animation: _glowAnim,
+                  builder: (context, child) => Container(
+                    height: height,
+                    decoration: buildDeco(_glowAnim.value),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: widget.size == ScButtonSize.compact ? 10 : 16,
+                    ),
+                    child: Center(child: content),
+                  ),
+                )
+              : AnimatedContainer(
+                  duration: const Duration(milliseconds: 80),
+                  height: height,
+                  decoration: buildDeco(0),
+                  padding: EdgeInsets.symmetric(
+                    horizontal: widget.size == ScButtonSize.compact ? 10 : 16,
+                  ),
+                  child: Center(child: content),
+                ),
         ),
       ),
     );

@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart' as crypto;
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,6 +19,8 @@ import '../../design_system/primitives/sc_chip.dart';
 import '../../design_system/primitives/sc_floating_panel.dart';
 import '../../../domain/asset.dart';
 
+enum _SortCol { name, format, loudness, size, status, uploaded }
+
 /// Desktop-only media manager.
 /// Lists all server assets with readiness, size, codec and upload/delete actions.
 class MediaManagerScreen extends ConsumerStatefulWidget {
@@ -29,6 +33,10 @@ class MediaManagerScreen extends ConsumerStatefulWidget {
 class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
   String? _auditingAssetId;
   bool _queueVisible = false;
+  String _searchQuery = '';
+  _SortCol _sortBy = _SortCol.name;
+  bool _sortAsc = true;
+  bool _isDragOver = false;
 
   @override
   void initState() {
@@ -45,11 +53,76 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
     });
   }
 
+  List<Asset> _filteredSorted(List<Asset> assets) {
+    var result = assets;
+    if (_searchQuery.isNotEmpty) {
+      final q = _searchQuery.toLowerCase();
+      result = result.where((a) => a.name.toLowerCase().contains(q)).toList();
+    }
+    return List<Asset>.from(result)..sort(_cmp);
+  }
+
+  int _cmp(Asset a, Asset b) {
+    final c = switch (_sortBy) {
+      _SortCol.name     => naturalCompare(a.name, b.name),
+      _SortCol.format   => (a.audio?.codec ?? '').compareTo(b.audio?.codec ?? ''),
+      _SortCol.loudness => (a.audio?.loudnessLufs ?? double.negativeInfinity)
+          .compareTo(b.audio?.loudnessLufs ?? double.negativeInfinity),
+      _SortCol.size     => a.sizeBytes.compareTo(b.sizeBytes),
+      _SortCol.status   => a.readiness.index.compareTo(b.readiness.index),
+      _SortCol.uploaded => a.uploadedAt.compareTo(b.uploadedAt),
+    };
+    return _sortAsc ? c : -c;
+  }
+
+  void _onSort(_SortCol col) => setState(() {
+        if (_sortBy == col) {
+          _sortAsc = !_sortAsc;
+        } else {
+          _sortBy = col;
+          _sortAsc = true;
+        }
+      });
+
   void _closeQueue() {
     setState(() => _queueVisible = false);
     Future.delayed(const Duration(milliseconds: 300), () {
       if (mounted) ref.read(mediaProvider.notifier).clearUploadQueue();
     });
+  }
+
+  /// Handles files dropped onto the media browser.
+  /// Skips files already on the server (SHA-256 dedup check).
+  Future<void> _dropFiles(DropDoneDetails details) async {
+    const allowed = {'wav', 'mp3', 'flac', 'aac', 'ogg', 'm4a', 'aiff'};
+    final existingIds = ref.read(mediaProvider).assets.map((a) => a.id).toSet();
+
+    final files = <({String filename, Uint8List bytes})>[];
+    for (final f in details.files) {
+      final ext = f.name.split('.').last.toLowerCase();
+      if (!allowed.contains(ext)) continue;
+      final bytes = Uint8List.fromList(await f.readAsBytes());
+      final hash = crypto.sha256.convert(bytes).toString();
+      if (existingIds.contains(hash)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('"${f.name}" ist bereits vorhanden'),
+            backgroundColor: ScColors.surface2,
+            duration: const Duration(seconds: 2),
+          ));
+        }
+        continue;
+      }
+      files.add((filename: f.name, bytes: bytes));
+    }
+    if (files.isEmpty) return;
+    setState(() { _queueVisible = true; _isDragOver = false; });
+    await ref.read(mediaProvider.notifier).uploadFiles(files);
+    if (mounted) {
+      Future.delayed(const Duration(seconds: 4), () {
+        if (mounted) _closeQueue();
+      });
+    }
   }
 
   Future<void> _pickAndUpload() async {
@@ -79,12 +152,93 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
     }
   }
 
+  bool get _isAudioConnected {
+    final isLocal = ref.watch(audioNodeProvider).state == AudioNodeState.connected;
+    final hasOnline = ref.watch(nodeStatusListProvider).any((n) => n.isAudio && n.isOnline);
+    return isLocal || hasOnline;
+  }
+
+  void _showUploadQueueSheet(BuildContext context, List<UploadItem> queue) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: ScColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text('UPLOADS', style: ScText.panelTitle),
+                  ),
+                  Text(
+                    '${queue.length} Datei${queue.length == 1 ? "" : "en"}',
+                    style: ScText.label.copyWith(color: ScColors.textDim),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1, color: ScColors.divider),
+            _UploadQueueContent(queue: queue),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state  = ref.watch(mediaProvider);
-    final assets = ref.watch(enrichedAssetsProvider);
+    final assets = _filteredSorted(ref.watch(enrichedAssetsProvider));
     final queue  = state.uploadQueue;
 
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isMobile = constraints.maxWidth < 720;
+        return isMobile
+            ? _buildMobile(context, state, assets, queue)
+            : _buildDesktop(context, state, assets, queue);
+      },
+    );
+  }
+
+  Widget _buildDesktop(BuildContext context, MediaState state, List<Asset> assets, List<UploadItem> queue) {
+    return DropTarget(
+      onDragEntered: (_) => setState(() => _isDragOver = true),
+      onDragExited:  (_) => setState(() => _isDragOver = false),
+      onDragDone:    (d) { setState(() => _isDragOver = false); _dropFiles(d); },
+      child: Stack(
+        children: [
+          _buildDesktopInner(context, state, assets, queue),
+          if (_isDragOver)
+            Container(
+              color: ScColors.active.withValues(alpha: 0.12),
+              child: const Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.upload_file, size: 48, color: ScColors.active),
+                    SizedBox(height: 12),
+                    Text(
+                      'Audio-Datei hier ablegen',
+                      style: TextStyle(color: ScColors.active, fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDesktopInner(BuildContext context, MediaState state, List<Asset> assets, List<UploadItem> queue) {
     return Column(
       children: [
         _Toolbar(
@@ -93,6 +247,8 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
               u.status == UploadStatus.uploading ||
               u.status == UploadStatus.pending ||
               u.status == UploadStatus.analyzing).length,
+          searchQuery: _searchQuery,
+          onSearchChanged: (v) => setState(() => _searchQuery = v),
           onRefresh: () => ref.read(mediaProvider.notifier).refresh(),
           onUpload: _pickAndUpload,
         ),
@@ -106,42 +262,35 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
         Expanded(
           child: Stack(
             children: [
-              // ── Content (nimmt gesamten Platz) ─────────────────────────
               state.isLoading && assets.isEmpty
                   ? const Center(child: CircularProgressIndicator(color: ScColors.active))
                   : assets.isEmpty
                       ? _EmptyState(onUpload: _pickAndUpload)
                       : _AssetTable(
-                      assets: assets,
-                      isAudioConnected: () {
-                        final isLocalAudioConnected =
-                            ref.watch(audioNodeProvider).state ==
-                                AudioNodeState.connected;
-                        final hasOnlineAudioNode = ref
-                            .watch(nodeStatusListProvider)
-                            .any((n) => n.isAudio && n.isOnline);
-                        return isLocalAudioConnected || hasOnlineAudioNode;
-                      }(),
-                      auditingAssetId: _auditingAssetId,
-                      onDelete: (name) =>
-                          ref.read(mediaProvider.notifier).delete(name),
-                      onAudition: (asset) {
-                        final lufs = asset.audio?.loudnessLufs;
-                        final volumeDb = lufs != null
-                            ? (-23.0 - lufs).clamp(-40.0, 20.0)
-                            : 0.0;
-                        setState(() => _auditingAssetId = asset.id);
-                        ref.read(audioNodeProvider.notifier).auditionPlay(
-                          assetId: asset.id,
-                          volumeDb: volumeDb,
-                        );
-                      },
-                      onAuditionStop: () {
-                        setState(() => _auditingAssetId = null);
-                        ref.read(audioNodeProvider.notifier).auditionStop();
-                      },
-                    ),
-              // ── Upload-Queue: floating unten rechts ────────────────────
+                          assets: assets,
+                          sortBy: _sortBy,
+                          sortAsc: _sortAsc,
+                          onSort: _onSort,
+                          isAudioConnected: _isAudioConnected,
+                          auditingAssetId: _auditingAssetId,
+                          onDelete: (name) =>
+                              ref.read(mediaProvider.notifier).delete(name),
+                          onAudition: (asset) {
+                            final lufs = asset.audio?.loudnessLufs;
+                            final volumeDb = lufs != null
+                                ? (-23.0 - lufs).clamp(-40.0, 20.0)
+                                : 0.0;
+                            setState(() => _auditingAssetId = asset.id);
+                            ref.read(audioNodeProvider.notifier).auditionPlay(
+                              assetId: asset.id,
+                              volumeDb: volumeDb,
+                            );
+                          },
+                          onAuditionStop: () {
+                            setState(() => _auditingAssetId = null);
+                            ref.read(audioNodeProvider.notifier).auditionStop();
+                          },
+                        ),
               Positioned(
                 right: 12,
                 bottom: 12,
@@ -169,22 +318,159 @@ class _MediaManagerScreenState extends ConsumerState<MediaManagerScreen> {
       ],
     );
   }
+
+  Widget _buildMobile(BuildContext context, MediaState state, List<Asset> assets, List<UploadItem> queue) {
+    final activeUploads = queue.where((u) =>
+        u.status == UploadStatus.uploading ||
+        u.status == UploadStatus.pending ||
+        u.status == UploadStatus.analyzing).length;
+
+    return Scaffold(
+      backgroundColor: ScColors.bg,
+      body: Column(
+        children: [
+          // ── Mobile toolbar ─────────────────────────────────────────────
+          Container(
+            height: 44,
+            color: ScColors.surface,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    style: ScText.label,
+                    decoration: InputDecoration(
+                      hintText: 'Suchen…',
+                      hintStyle: ScText.label.copyWith(color: ScColors.textDim),
+                      prefixIcon: const Icon(Icons.search, size: 16, color: ScColors.textDim),
+                      prefixIconConstraints: const BoxConstraints(minWidth: 32),
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        borderSide: const BorderSide(color: ScColors.divider),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        borderSide: const BorderSide(color: ScColors.divider),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(6),
+                        borderSide: const BorderSide(color: ScColors.active),
+                      ),
+                    ),
+                    onChanged: (v) => setState(() => _searchQuery = v),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                if (activeUploads > 0)
+                  IconButton(
+                    icon: const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: ScColors.active),
+                    ),
+                    onPressed: () => _showUploadQueueSheet(context, queue),
+                  )
+                else
+                  IconButton(
+                    icon: const Icon(Icons.refresh, size: 18, color: ScColors.textSecondary),
+                    onPressed: state.isLoading ? null : () => ref.read(mediaProvider.notifier).refresh(),
+                  ),
+              ],
+            ),
+          ),
+          const Divider(height: 1, color: ScColors.divider),
+          if (state.error != null)
+            _ErrorBanner(
+              message: state.error!,
+              type: _BannerType.error,
+              onDismiss: () => ref.read(mediaProvider.notifier).clearError(),
+            ),
+          // ── Asset list ─────────────────────────────────────────────────
+          Expanded(
+            child: state.isLoading && assets.isEmpty
+                ? const Center(child: CircularProgressIndicator(color: ScColors.active))
+                : assets.isEmpty
+                    ? _EmptyState(onUpload: _pickAndUpload)
+                    : _AssetList(
+                        assets: assets,
+                        isAudioConnected: _isAudioConnected,
+                        auditingAssetId: _auditingAssetId,
+                        onDelete: (name) =>
+                            ref.read(mediaProvider.notifier).delete(name),
+                        onAudition: (asset) {
+                          final lufs = asset.audio?.loudnessLufs;
+                          final volumeDb = lufs != null
+                              ? (-23.0 - lufs).clamp(-40.0, 20.0)
+                              : 0.0;
+                          setState(() => _auditingAssetId = asset.id);
+                          ref.read(audioNodeProvider.notifier).auditionPlay(
+                            assetId: asset.id,
+                            volumeDb: volumeDb,
+                          );
+                        },
+                        onAuditionStop: () {
+                          setState(() => _auditingAssetId = null);
+                          ref.read(audioNodeProvider.notifier).auditionStop();
+                        },
+                      ),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: ScColors.active,
+        foregroundColor: Colors.white,
+        onPressed: _pickAndUpload,
+        child: const Icon(Icons.upload_file),
+      ),
+    );
+  }
 }
 
 // ── Toolbar ────────────────────────────────────────────────────────────────────
 
-class _Toolbar extends StatelessWidget {
+class _Toolbar extends StatefulWidget {
   final bool isLoading;
   final int activeUploads;
+  final String searchQuery;
+  final ValueChanged<String> onSearchChanged;
   final VoidCallback onRefresh;
   final VoidCallback onUpload;
 
   const _Toolbar({
     required this.isLoading,
     required this.activeUploads,
+    required this.searchQuery,
+    required this.onSearchChanged,
     required this.onRefresh,
     required this.onUpload,
   });
+
+  @override
+  State<_Toolbar> createState() => _ToolbarState();
+}
+
+class _ToolbarState extends State<_Toolbar> {
+  late final TextEditingController _searchCtrl =
+      TextEditingController(text: widget.searchQuery);
+
+  @override
+  void didUpdateWidget(_Toolbar old) {
+    super.didUpdateWidget(old);
+    if (widget.searchQuery != _searchCtrl.text) {
+      _searchCtrl.value = TextEditingValue(
+        text: widget.searchQuery,
+        selection: TextSelection.collapsed(offset: widget.searchQuery.length),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -195,8 +481,47 @@ class _Toolbar extends StatelessWidget {
       child: Row(
         children: [
           Text('MEDIA', style: ScText.panelTitle),
+          const SizedBox(width: 16),
+          SizedBox(
+            width: 220,
+            height: 28,
+            child: TextField(
+              controller: _searchCtrl,
+              style: ScText.label,
+              decoration: InputDecoration(
+                hintText: 'Suchen…',
+                hintStyle: ScText.label.copyWith(color: ScColors.textDim),
+                prefixIcon: const Icon(Icons.search, size: 14, color: ScColors.textDim),
+                prefixIconConstraints: const BoxConstraints(minWidth: 28),
+                suffixIcon: widget.searchQuery.isNotEmpty
+                    ? GestureDetector(
+                        onTap: () {
+                          _searchCtrl.clear();
+                          widget.onSearchChanged('');
+                        },
+                        child: const Icon(Icons.close, size: 13, color: ScColors.textDim),
+                      )
+                    : null,
+                isDense: true,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(5),
+                  borderSide: const BorderSide(color: ScColors.divider),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(5),
+                  borderSide: const BorderSide(color: ScColors.divider),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(5),
+                  borderSide: const BorderSide(color: ScColors.active),
+                ),
+              ),
+              onChanged: widget.onSearchChanged,
+            ),
+          ),
           const Spacer(),
-          if (activeUploads > 0) ...[
+          if (widget.activeUploads > 0) ...[
             const SizedBox(
               width: 14,
               height: 14,
@@ -205,9 +530,9 @@ class _Toolbar extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Text(
-              activeUploads == 1
+              widget.activeUploads == 1
                   ? '1 Upload läuft…'
-                  : '$activeUploads Uploads laufen…',
+                  : '${widget.activeUploads} Uploads laufen…',
               style: ScText.label,
             ),
             const SizedBox(width: 16),
@@ -217,7 +542,7 @@ class _Toolbar extends StatelessWidget {
             icon: Icons.refresh,
             variant: ScButtonVariant.ghost,
             size: ScButtonSize.compact,
-            onPressed: isLoading ? null : onRefresh,
+            onPressed: widget.isLoading ? null : widget.onRefresh,
           ),
           const SizedBox(width: 8),
           ScButton(
@@ -225,7 +550,7 @@ class _Toolbar extends StatelessWidget {
             icon: Icons.upload_file,
             variant: ScButtonVariant.secondary,
             size: ScButtonSize.compact,
-            onPressed: onUpload,
+            onPressed: widget.onUpload,
           ),
         ],
       ),
@@ -350,12 +675,137 @@ class _UploadRow extends StatelessWidget {
   }
 }
 
+// ── Asset List (Mobile) ────────────────────────────────────────────────────────
+
+class _AssetList extends StatelessWidget {
+  final List<Asset> assets;
+  final bool isAudioConnected;
+  final String? auditingAssetId;
+  final ValueChanged<String> onDelete;
+  final ValueChanged<Asset> onAudition;
+  final VoidCallback onAuditionStop;
+
+  const _AssetList({
+    required this.assets,
+    required this.isAudioConnected,
+    required this.auditingAssetId,
+    required this.onDelete,
+    required this.onAudition,
+    required this.onAuditionStop,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      itemCount: assets.length,
+      separatorBuilder: (_, __) => const Divider(height: 1, color: ScColors.divider),
+      itemBuilder: (_, i) {
+        final a = i < assets.length ? assets[i] : null;
+        if (a == null) return const SizedBox.shrink();
+        final isAuditing = auditingAssetId == a.id;
+        final lufs = a.audio?.loudnessLufs;
+        final info = [
+          if (a.audio?.codec != null) a.audio!.codec.toUpperCase(),
+          if (a.audio != null) a.audio!.channelLabel,
+          if (lufs != null) '${lufs.toStringAsFixed(1)} LUFS',
+          _formatBytes(a.sizeBytes),
+        ].join(' · ');
+
+        return Dismissible(
+          key: ValueKey(a.id),
+          direction: DismissDirection.endToStart,
+          background: Container(
+            color: ScColors.error,
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.only(right: 16),
+            child: const Icon(Icons.delete_outline, color: Colors.white, size: 20),
+          ),
+          confirmDismiss: (_) async {
+            return await showDialog<bool>(
+              context: context,
+              builder: (_) => AlertDialog(
+                backgroundColor: ScColors.surface,
+                title: Text(
+                  '${a.name} löschen?',
+                  style: ScText.label.copyWith(color: ScColors.textPrimary),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(false),
+                    child: Text('Abbrechen', style: ScText.label.copyWith(color: ScColors.textSecondary)),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(true),
+                    child: Text('Löschen', style: ScText.label.copyWith(color: ScColors.error)),
+                  ),
+                ],
+              ),
+            ) ?? false;
+          },
+          onDismissed: (_) => onDelete(a.name),
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            leading: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: ScColors.surface2,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Icon(
+                Icons.audio_file,
+                size: 18,
+                color: _readinessColor(a.readiness),
+              ),
+            ),
+            title: Text(
+              a.name,
+              style: ScText.label.copyWith(color: ScColors.textPrimary),
+              overflow: TextOverflow.ellipsis,
+            ),
+            subtitle: info.isNotEmpty
+                ? Text(
+                    info,
+                    style: ScText.label.copyWith(color: ScColors.textDim, fontSize: 10),
+                  )
+                : null,
+            trailing: isAudioConnected && a.audio != null
+                ? IconButton(
+                    icon: Icon(
+                      isAuditing ? Icons.stop_circle_outlined : Icons.play_circle_outline,
+                      size: 22,
+                      color: isAuditing ? ScColors.active : ScColors.textSecondary,
+                    ),
+                    onPressed: isAuditing ? onAuditionStop : () => onAudition(a),
+                  )
+                : null,
+          ),
+        );
+      },
+    );
+  }
+
+  static Color _readinessColor(AssetReadiness r) {
+    if (r == AssetReadiness.patched) return ScColors.active;
+    return ScColors.textSecondary;
+  }
+
+  static String _formatBytes(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(0)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+}
+
 // ── Asset Table ────────────────────────────────────────────────────────────────
 
 class _AssetTable extends StatelessWidget {
   final List<Asset> assets;
   final bool isAudioConnected;
   final String? auditingAssetId;
+  final _SortCol sortBy;
+  final bool sortAsc;
+  final ValueChanged<_SortCol> onSort;
   final ValueChanged<String> onDelete;
   final ValueChanged<Asset> onAudition;
   final VoidCallback onAuditionStop;
@@ -364,6 +814,9 @@ class _AssetTable extends StatelessWidget {
     required this.assets,
     required this.isAudioConnected,
     required this.auditingAssetId,
+    required this.sortBy,
+    required this.sortAsc,
+    required this.onSort,
     required this.onDelete,
     required this.onAudition,
     required this.onAuditionStop,
@@ -377,15 +830,15 @@ class _AssetTable extends StatelessWidget {
           height: 32,
           color: ScColors.surface,
           padding: const EdgeInsets.symmetric(horizontal: ScSpacing.panelPad),
-          child: const Row(
+          child: Row(
             children: [
-              _HeaderCell('NAME', flex: 4),
-              _HeaderCell('FORMAT', flex: 1),
-              _HeaderCell('LAUTHEIT', flex: 1),
-              _HeaderCell('GRÖßE', flex: 1),
-              _HeaderCell('STATUS', flex: 1),
-              _HeaderCell('HOCHGELADEN', flex: 2),
-              SizedBox(width: 80),
+              _HeaderCell('NAME',       col: _SortCol.name,     flex: 4, sortBy: sortBy, sortAsc: sortAsc, onSort: onSort),
+              _HeaderCell('FORMAT',     col: _SortCol.format,   flex: 1, sortBy: sortBy, sortAsc: sortAsc, onSort: onSort),
+              _HeaderCell('LAUTHEIT',   col: _SortCol.loudness, flex: 1, sortBy: sortBy, sortAsc: sortAsc, onSort: onSort),
+              _HeaderCell('GRÖßE',      col: _SortCol.size,     flex: 1, sortBy: sortBy, sortAsc: sortAsc, onSort: onSort),
+              _HeaderCell('STATUS',     col: _SortCol.status,   flex: 1, sortBy: sortBy, sortAsc: sortAsc, onSort: onSort),
+              _HeaderCell('HOCHGELADEN',col: _SortCol.uploaded, flex: 2, sortBy: sortBy, sortAsc: sortAsc, onSort: onSort),
+              const SizedBox(width: 80),
             ],
           ),
         ),
@@ -447,14 +900,51 @@ class _AssetTable extends StatelessWidget {
 
 class _HeaderCell extends StatelessWidget {
   final String label;
+  final _SortCol col;
   final int flex;
-  const _HeaderCell(this.label, {required this.flex});
+  final _SortCol sortBy;
+  final bool sortAsc;
+  final ValueChanged<_SortCol> onSort;
+
+  const _HeaderCell(this.label, {
+    required this.col,
+    required this.flex,
+    required this.sortBy,
+    required this.sortAsc,
+    required this.onSort,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final active = sortBy == col;
     return Expanded(
       flex: flex,
-      child: Text(label, style: ScText.panelTitle),
+      child: InkWell(
+        onTap: () => onSort(col),
+        borderRadius: BorderRadius.circular(3),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: ScText.panelTitle.copyWith(
+                  color: active ? ScColors.active : null,
+                ),
+              ),
+              const SizedBox(width: 2),
+              Icon(
+                active
+                    ? (sortAsc ? Icons.arrow_upward : Icons.arrow_downward)
+                    : Icons.unfold_more,
+                size: 11,
+                color: active ? ScColors.active : ScColors.textDim,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

@@ -38,6 +38,8 @@ class _ScInlineFieldState extends State<ScInlineField> {
   late FocusNode _focus;
   bool _editing = false;
 
+  bool get _isEditable => !widget.readOnly && widget.onChanged != null;
+
   @override
   void initState() {
     super.initState();
@@ -79,17 +81,41 @@ class _ScInlineFieldState extends State<ScInlineField> {
     widget.onChanged?.call(_ctrl.text);
   }
 
+  void _beginEditing() {
+    if (!_isEditable) return;
+    if (_editing) {
+      _focus.requestFocus();
+      return;
+    }
+    setState(() => _editing = true);
+    // TextField exists only in edit mode, so focus must be requested next frame.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _focus.requestFocus();
+      _ctrl.selection =
+          TextSelection(baseOffset: 0, extentOffset: _ctrl.text.length);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final field = GestureDetector(
-      onTap: widget.readOnly ? null : () => _focus.requestFocus(),
+      behavior: HitTestBehavior.opaque,
+      onTap: _isEditable ? _beginEditing : null,
       child: Container(
         height: 28,
         padding: const EdgeInsets.symmetric(horizontal: 6),
         decoration: BoxDecoration(
+          color: _editing
+              ? ScColors.active.withValues(alpha: 0.07)
+              : _isEditable
+                  ? ScColors.surface2.withValues(alpha: 0.5)
+                  : Colors.transparent,
           border: _editing
               ? Border.all(color: ScColors.active.withValues(alpha: 0.6))
-              : Border.all(color: Colors.transparent),
+              : _isEditable
+                  ? Border.all(color: ScColors.divider)
+                  : null,
           borderRadius: BorderRadius.circular(4),
         ),
         child: Row(
@@ -101,16 +127,19 @@ class _ScInlineFieldState extends State<ScInlineField> {
                       focusNode: _focus,
                       style: ScText.number.copyWith(fontSize: 13),
                       keyboardType: widget.keyboardType,
-                      textInputAction: TextInputAction.next,
+                      textInputAction: TextInputAction.done,
                       decoration: const InputDecoration(
                         isDense: true,
                         border: InputBorder.none,
                         contentPadding: EdgeInsets.zero,
                       ),
+                      onEditingComplete: () {
+                        _commit();
+                        _focus.unfocus();
+                      },
                       onSubmitted: (_) {
                         _commit();
-                        // Move focus to next field
-                        FocusScope.of(context).nextFocus();
+                        _focus.unfocus();
                       },
                     )
                   : Text(

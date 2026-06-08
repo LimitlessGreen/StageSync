@@ -18,6 +18,9 @@ class ActiveCueControlStrip extends StatefulWidget {
   final VoidCallback? onStop;
   final VoidCallback? onPause;
   final VoidCallback? onResume;
+  /// Called when the user commits a new fade duration (drag end / preset select).
+  /// Parent should persist this to both fadeInMs and fadeOutMs of the cue.
+  final ValueChanged<double>? onFadeDurationSaved;
 
   const ActiveCueControlStrip({
     super.key,
@@ -28,6 +31,7 @@ class ActiveCueControlStrip extends StatefulWidget {
     this.onStop,
     this.onPause,
     this.onResume,
+    this.onFadeDurationSaved,
   });
 
   @override
@@ -49,8 +53,22 @@ class _ActiveCueControlStripState extends State<ActiveCueControlStrip>
     );
     _slideAnim = CurvedAnimation(parent: _slideCtrl, curve: Curves.easeOut);
     _slideCtrl.forward();
-    if (widget.cue.params case AudioParams p when p.fadeOutMs > 0) {
-      _fadeDurationMs = p.fadeOutMs;
+    _syncFadeDuration();
+  }
+
+  @override
+  void didUpdateWidget(ActiveCueControlStrip old) {
+    super.didUpdateWidget(old);
+    // Re-sync fade duration when the cue params change from server (other device edited).
+    if (old.cue.id != widget.cue.id || old.cue.params != widget.cue.params) {
+      _syncFadeDuration();
+    }
+  }
+
+  void _syncFadeDuration() {
+    if (widget.cue.params case AudioParams p) {
+      final ms = p.fadeOutMs > 0 ? p.fadeOutMs : (p.fadeInMs > 0 ? p.fadeInMs : 1000.0);
+      if (ms != _fadeDurationMs) setState(() => _fadeDurationMs = ms);
     }
   }
 
@@ -60,12 +78,22 @@ class _ActiveCueControlStripState extends State<ActiveCueControlStrip>
     super.dispose();
   }
 
-  bool get _isPaused => widget.playhead.isCuePaused(widget.cue.id);
+  bool get _isCuePaused    => widget.playhead.isCuePaused(widget.cue.id);
+  bool get _isGlobalPaused => widget.playhead.isPaused;
 
   @override
   Widget build(BuildContext context) {
     final params = widget.cue.params;
     if (params is! AudioParams) return const SizedBox.shrink();
+
+    // ── State-dependent button availability ──────────────────────────────────
+    // Global pause: Fade Up/Out and per-cue Pause are meaningless — only Stop
+    // and the transport-level Resume (in the main transport bar) make sense.
+    // Per-cue paused: Fade Out is redundant; Pause is replaced by Resume.
+    final canFadeUp  = !_isGlobalPaused && _isCuePaused     && widget.onFadeUp  != null;
+    final canFadeOut = !_isGlobalPaused && !_isCuePaused    && widget.onFadeOut != null;
+    final canPause   = !_isGlobalPaused && !_isCuePaused    && widget.onPause   != null;
+    final canResume  = !_isGlobalPaused && _isCuePaused     && widget.onResume  != null;
 
     return SizeTransition(
       sizeFactor: _slideAnim,
@@ -76,24 +104,26 @@ class _ActiveCueControlStripState extends State<ActiveCueControlStrip>
           return compact
               ? _MobileLayout(
                   params: params,
-                  isPaused: _isPaused,
+                  isPaused: _isCuePaused,
                   fadeDurationMs: _fadeDurationMs,
                   onFadeDurationChanged: (v) => setState(() => _fadeDurationMs = v),
-                  onFadeUp: widget.onFadeUp != null ? () => widget.onFadeUp!(_fadeDurationMs) : null,
-                  onFadeOut: widget.onFadeOut != null ? () => widget.onFadeOut!(_fadeDurationMs) : null,
-                  onPause: widget.onPause,
-                  onResume: widget.onResume,
+                  onFadeDurationSaved: widget.onFadeDurationSaved,
+                  onFadeUp:  canFadeUp  ? () => widget.onFadeUp!(_fadeDurationMs)  : null,
+                  onFadeOut: canFadeOut ? () => widget.onFadeOut!(_fadeDurationMs) : null,
+                  onPause:   canPause   ? widget.onPause   : null,
+                  onResume:  canResume  ? widget.onResume  : null,
                   onStop: widget.onStop,
                 )
               : _DesktopLayout(
                   params: params,
-                  isPaused: _isPaused,
+                  isPaused: _isCuePaused,
                   fadeDurationMs: _fadeDurationMs,
                   onFadeDurationChanged: (v) => setState(() => _fadeDurationMs = v),
-                  onFadeUp: widget.onFadeUp != null ? () => widget.onFadeUp!(_fadeDurationMs) : null,
-                  onFadeOut: widget.onFadeOut != null ? () => widget.onFadeOut!(_fadeDurationMs) : null,
-                  onPause: widget.onPause,
-                  onResume: widget.onResume,
+                  onFadeDurationSaved: widget.onFadeDurationSaved,
+                  onFadeUp:  canFadeUp  ? () => widget.onFadeUp!(_fadeDurationMs)  : null,
+                  onFadeOut: canFadeOut ? () => widget.onFadeOut!(_fadeDurationMs) : null,
+                  onPause:   canPause   ? widget.onPause   : null,
+                  onResume:  canResume  ? widget.onResume  : null,
                   onStop: widget.onStop,
                 );
         },
@@ -109,6 +139,7 @@ class _DesktopLayout extends StatelessWidget {
   final bool isPaused;
   final double fadeDurationMs;
   final ValueChanged<double> onFadeDurationChanged;
+  final ValueChanged<double>? onFadeDurationSaved;
   final VoidCallback? onFadeUp;
   final VoidCallback? onFadeOut;
   final VoidCallback? onPause;
@@ -120,6 +151,7 @@ class _DesktopLayout extends StatelessWidget {
     required this.isPaused,
     required this.fadeDurationMs,
     required this.onFadeDurationChanged,
+    this.onFadeDurationSaved,
     this.onFadeUp,
     this.onFadeOut,
     this.onPause,
@@ -134,7 +166,7 @@ class _DesktopLayout extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Row(
         children: [
-          _FadeDurationPicker(value: fadeDurationMs, onChanged: onFadeDurationChanged),
+          _FadeDurationPicker(value: fadeDurationMs, onChanged: onFadeDurationChanged, onSaved: onFadeDurationSaved),
           const SizedBox(width: 8),
           _divider(),
           const SizedBox(width: 8),
@@ -169,6 +201,7 @@ class _MobileLayout extends StatelessWidget {
   final bool isPaused;
   final double fadeDurationMs;
   final ValueChanged<double> onFadeDurationChanged;
+  final ValueChanged<double>? onFadeDurationSaved;
   final VoidCallback? onFadeUp;
   final VoidCallback? onFadeOut;
   final VoidCallback? onPause;
@@ -180,6 +213,7 @@ class _MobileLayout extends StatelessWidget {
     required this.isPaused,
     required this.fadeDurationMs,
     required this.onFadeDurationChanged,
+    this.onFadeDurationSaved,
     this.onFadeUp,
     this.onFadeOut,
     this.onPause,
@@ -246,6 +280,7 @@ class _MobileLayout extends StatelessWidget {
               _FadeDurationPicker(
                 value: fadeDurationMs,
                 onChanged: onFadeDurationChanged,
+                onSaved: onFadeDurationSaved,
                 mobilePresets: true,
               ),
               const Spacer(),
@@ -369,11 +404,14 @@ class _StripButton extends StatelessWidget {
 class _FadeDurationPicker extends StatefulWidget {
   final double value;
   final ValueChanged<double> onChanged;
+  /// Called when user commits a value (drag end or preset picked).
+  final ValueChanged<double>? onSaved;
   final bool mobilePresets;
 
   const _FadeDurationPicker({
     required this.value,
     required this.onChanged,
+    this.onSaved,
     this.mobilePresets = false,
   });
 
@@ -409,7 +447,12 @@ class _FadeDurationPickerState extends State<_FadeDurationPicker> {
         height: 36,
         child: Text(_fmt(p), style: ScText.label),
       )).toList(),
-    ).then((v) { if (v != null) widget.onChanged(v); });
+    ).then((v) {
+      if (v != null) {
+        widget.onChanged(v);
+        widget.onSaved?.call(v);
+      }
+    });
   }
 
   @override
@@ -456,7 +499,11 @@ class _FadeDurationPickerState extends State<_FadeDurationPicker> {
         final delta = d.globalPosition.dx - _dragStart;
         widget.onChanged((_startValue + delta * 20).clamp(100.0, 30000.0));
       },
-      onDoubleTap: () => widget.onChanged(1000.0),
+      onHorizontalDragEnd: (_) => widget.onSaved?.call(widget.value),
+      onDoubleTap: () {
+        widget.onChanged(1000.0);
+        widget.onSaved?.call(1000.0);
+      },
       onLongPress: () => _showPresetsMenu(context),
       child: Tooltip(
         message: 'Fade-Dauer — Drag, Doppelklick = 1s, Gedrückt halten = Presets',

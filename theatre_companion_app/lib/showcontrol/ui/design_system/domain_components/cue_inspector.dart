@@ -1,5 +1,10 @@
 import 'dart:async';
+import 'dart:io';
+import 'dart:math' as math;
+import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart' as crypto;
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -18,7 +23,9 @@ import '../primitives/sc_panel.dart';
 import '../primitives/sc_button.dart';
 import '../primitives/sc_inline_field.dart';
 import '../primitives/sc_drag_field.dart';
-import '../primitives/sc_timing_ruler.dart';
+import '../primitives/sc_waveform.dart';
+import '../../../providers/waveform_provider.dart';
+import '../../../providers/asset_silence_provider.dart';
 import 'audio_cue_minibar.dart';
 
 /// Full cue inspector — edit label, timing, and type-specific params.
@@ -29,8 +36,20 @@ import 'audio_cue_minibar.dart';
 class CueInspector extends StatefulWidget {
   final Cue cue;
   final ShowControlNotifier notifier;
+  /// Optional scroll controller — pass the DraggableScrollableSheet controller
+  /// when embedding inside a bottom sheet so drag-to-resize works correctly.
+  final ScrollController? scrollController;
+  /// Whether to show the ScPanel title bar. Set to false when the parent
+  /// already provides a header (e.g. inside a bottom sheet).
+  final bool showHeader;
 
-  const CueInspector({super.key, required this.cue, required this.notifier});
+  const CueInspector({
+    super.key,
+    required this.cue,
+    required this.notifier,
+    this.scrollController,
+    this.showHeader = true,
+  });
 
   @override
   State<CueInspector> createState() => _CueInspectorState();
@@ -75,13 +94,30 @@ class _CueInspectorState extends State<CueInspector> {
     _debounce = Timer(const Duration(milliseconds: 350), _flush);
   }
 
+  String? _pendingAssetName;
+
+  void _onAssetPicked(String assetName) {
+    _pendingAssetName = assetName;
+  }
+
   void _onParamsChanged(CueParams newParams) {
     if (newParams.runtimeType != _draft.params.runtimeType) {
       _paramsCache[_draft.params.runtimeType] = _draft.params;
       final restored = _paramsCache[newParams.runtimeType];
       _update(_draft.copyWith(params: restored ?? newParams));
     } else {
-      _update(_draft.copyWith(params: newParams));
+      var updated = _draft.copyWith(params: newParams);
+      // Neu gewähltes Audio-Asset + Cue hat noch generisches Label → automatisch umbenennen.
+      final name = _pendingAssetName;
+      if (name != null &&
+          newParams is AudioParams &&
+          newParams.assetId.isNotEmpty &&
+          (_draft.label == 'Neue Cue' || _draft.label.isEmpty)) {
+        final baseName = name.contains('.') ? name.substring(0, name.lastIndexOf('.')) : name;
+        updated = updated.copyWith(label: baseName);
+        _pendingAssetName = null;
+      }
+      _update(updated);
     }
   }
 
@@ -96,7 +132,7 @@ class _CueInspectorState extends State<CueInspector> {
   @override
   Widget build(BuildContext context) {
     return ScPanel(
-      title: '${_draft.number} · ${_draft.label}',
+      title: widget.showHeader ? '${_draft.number} · ${_draft.label}' : null,
       trailing: _saving
           ? const SizedBox(
               width: 12, height: 12,
@@ -104,6 +140,7 @@ class _CueInspectorState extends State<CueInspector> {
             )
           : null,
       child: SingleChildScrollView(
+        controller: widget.scrollController,
         padding: const EdgeInsets.all(ScSpacing.panelPad),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -159,7 +196,7 @@ class _CueInspectorState extends State<CueInspector> {
               ),
             ]),
             const SizedBox(height: 12),
-            _ParamsSection(params: _draft.params, onChanged: _onParamsChanged),
+            _ParamsSection(params: _draft.params, onChanged: _onParamsChanged, onAssetPicked: _onAssetPicked),
           ],
         ),
       ),
@@ -278,8 +315,9 @@ class _EnumField<T> extends StatelessWidget {
 class _ParamsSection extends StatelessWidget {
   final CueParams params;
   final ValueChanged<CueParams> onChanged;
+  final ValueChanged<String>? onAssetPicked;
 
-  const _ParamsSection({required this.params, required this.onChanged});
+  const _ParamsSection({required this.params, required this.onChanged, this.onAssetPicked});
 
   @override
   Widget build(BuildContext context) {
@@ -289,7 +327,7 @@ class _ParamsSection extends StatelessWidget {
         _CueTypeSwitcher(current: params, onSwitch: onChanged),
         const SizedBox(height: 12),
         switch (params) {
-          AudioParams p => _AudioParamsEditor(params: p, onChanged: onChanged),
+          AudioParams p => _AudioParamsEditor(params: p, onChanged: onChanged, onAssetPicked: onAssetPicked),
           WaitParams  p => _WaitParamsEditor(params: p, onChanged: onChanged),
           MaOscParams p => _MaOscParamsEditor(params: p, onChanged: onChanged),
           GotoParams  p => _GotoParamsEditor(params: p, onChanged: onChanged),
@@ -388,16 +426,29 @@ class _CueTypeSwitcher extends StatelessWidget {
 
 const _kTargetLufs = -23.0;
 
-class _AudioParamsEditor extends ConsumerWidget {
+class _AudioParamsEditor extends ConsumerStatefulWidget {
   final AudioParams params;
   final ValueChanged<CueParams> onChanged;
+  final ValueChanged<String>? onAssetPicked;
 
-  const _AudioParamsEditor({required this.params, required this.onChanged});
+  const _AudioParamsEditor({required this.params, required this.onChanged, this.onAssetPicked});
+
+  @override
+  ConsumerState<_AudioParamsEditor> createState() => _AudioParamsEditorState();
+}
+
+class _AudioParamsEditorState extends ConsumerState<_AudioParamsEditor> {
+  bool _isDragOver = false;
 
   static double _autoVolume(double lufs) => (_kTargetLufs - lufs).clamp(-40.0, 20.0);
 
+  AudioParams get params => widget.params;
+  ValueChanged<CueParams> get onChanged => widget.onChanged;
+  ValueChanged<String>? get onAssetPicked => widget.onAssetPicked;
+
   void _pickAsset(Asset asset, AudioParams current) {
     final lufs = asset.audio?.loudnessLufs;
+    onAssetPicked?.call(asset.name);
     onChanged(current.copyWith(
       assetId: asset.id,
       volumeDb: lufs != null ? _autoVolume(lufs) : current.volumeDb,
@@ -405,20 +456,65 @@ class _AudioParamsEditor extends ConsumerWidget {
     ));
   }
 
+  static const _audioExtensions = {'wav', 'mp3', 'flac', 'aac', 'ogg', 'm4a', 'aiff'};
+
+  Future<void> _onDrop(DropDoneDetails details) async {
+    setState(() => _isDragOver = false);
+    final files = details.files
+        .where((f) => _audioExtensions.contains(f.name.split('.').last.toLowerCase()))
+        .toList();
+    if (files.isEmpty) return;
+    final f = files.first;
+
+    // Duplicate detection: check SHA-256 against known assets.
+    final bytes = Uint8List.fromList(await File(f.path).readAsBytes());
+    final hash = crypto.sha256.convert(bytes).toString();
+    final existing = ref.read(mediaProvider).assetById(hash);
+    if (existing != null) {
+      _pickAsset(existing, params);
+      return;
+    }
+
+    // Upload the file and wait for it to appear in the manifest.
+    final notifier = ref.read(mediaProvider.notifier);
+    await notifier.uploadFiles([(filename: f.name, bytes: bytes)]);
+
+    // Poll until the asset appears (server confirms after analysis).
+    for (var i = 0; i < 30; i++) {
+      await Future.delayed(const Duration(milliseconds: 200));
+      final uploaded = ref.read(mediaProvider).assetById(hash);
+      if (uploaded != null) {
+        _pickAsset(uploaded, params);
+        return;
+      }
+    }
+  }
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final audioNotifier    = ref.read(audioNodeProvider.notifier);
     final isAudioConnected = ref.watch(audioNodeProvider).state == AudioNodeState.connected;
-    final asset    = ref.watch(assetWithReadinessProvider(params.assetId));
+    final asset     = ref.watch(assetWithReadinessProvider(params.assetId));
     final allAssets = ref.watch(enrichedAssetsProvider)
         .where((a) => a.mimeType.startsWith('audio/'))
         .toList();
+    final waveformAsync = ref.watch(waveformProvider(params.assetId));
 
-    final lufs = asset?.audio?.loudnessLufs;
+    final lufs      = asset?.audio?.loudnessLufs;
     final autoVolDb = lufs != null ? _autoVolume(lufs) : null;
     final isAutoVol = autoVolDb != null && (params.volumeDb - autoVolDb).abs() < 0.05;
 
-    return _Section(title: 'AUDIO', children: [
+    // Duration for dynamic max values — prefer live waveform data, fall back
+    // to declared duration stored in params, then a generous default.
+    final wfDurMs   = waveformAsync.valueOrNull?.durationMs;
+    final durMs     = (wfDurMs != null && wfDurMs > 0)
+        ? wfDurMs
+        : (params.declaredDurationMs ?? 120000.0);
+    final fadeMax       = durMs;
+    final seekMax       = durMs;
+    final pauseFadeMax  = (durMs / 4).clamp(500.0, 10000.0);
+
+    final audioSection = _Section(title: 'AUDIO', children: [
       if (asset != null) _AssetReadinessBadge(asset: asset),
       if (asset != null) const SizedBox(height: 6),
       _AssetPicker(
@@ -485,16 +581,30 @@ class _AudioParamsEditor extends ConsumerWidget {
         ],
       ),
       const SizedBox(height: 6),
-      ScDragField(label: 'Fade In', value: params.fadeInMs, min: 0, max: 60000, step: 10, suffix: 'ms', decimalPlaces: 0, onChanged: (v) => onChanged(params.copyWith(fadeInMs: v))),
+      ScDragField(label: 'Fade In',  value: params.fadeInMs,  min: 0, max: fadeMax, step: 10, suffix: 'ms', decimalPlaces: 0, onChanged: (v) => onChanged(params.copyWith(fadeInMs: v))),
       const SizedBox(height: 6),
-      ScDragField(label: 'Fade Out', value: params.fadeOutMs, min: 0, max: 60000, step: 10, suffix: 'ms', decimalPlaces: 0, onChanged: (v) => onChanged(params.copyWith(fadeOutMs: v))),
+      ScDragField(label: 'Fade Out', value: params.fadeOutMs, min: 0, max: fadeMax, step: 10, suffix: 'ms', decimalPlaces: 0, onChanged: (v) => onChanged(params.copyWith(fadeOutMs: v))),
       const SizedBox(height: 6),
-      ScDragField(label: 'Start', value: params.startTimeMs, min: 0, max: 3600000, step: 10, suffix: 'ms', decimalPlaces: 0, onChanged: (v) => onChanged(params.copyWith(startTimeMs: v))),
+      _SilenceSkipField(
+        startTimeMs: params.startTimeMs,
+        assetId: params.assetId,
+        maxMs: seekMax,
+        onChanged: (v) => onChanged(params.copyWith(startTimeMs: v)),
+      ),
       const SizedBox(height: 6),
-      ScDragField(label: 'End', value: params.endTimeMs, min: 0, max: 3600000, step: 10, suffix: 'ms', decimalPlaces: 0, onChanged: (v) => onChanged(params.copyWith(endTimeMs: v))),
+      ScDragField(label: 'End', value: params.endTimeMs, min: 0, max: seekMax, step: 10, suffix: 'ms', decimalPlaces: 0, onChanged: (v) => onChanged(params.copyWith(endTimeMs: v))),
       const SizedBox(height: 6),
       _BoolField(label: 'Loop', value: params.loop, onChanged: (v) => onChanged(params.copyWith(loop: v))),
       const SizedBox(height: 12),
+      // ── Waveform ─────────────────────────────────────────────────────────
+      if (params.assetId.isNotEmpty)
+        _WaveformSection(
+          params: params,
+          durMs: durMs,
+          waveformAsync: waveformAsync,
+          onChanged: onChanged,
+        ),
+      const SizedBox(height: 8),
       _Section(title: 'PAUSE / RESUME', children: [
         _EnumField<PauseBehavior>(
           label: 'Bei Pause',
@@ -504,7 +614,7 @@ class _AudioParamsEditor extends ConsumerWidget {
         ),
         if (params.pauseBehavior == PauseBehavior.fadeOut) ...[
           const SizedBox(height: 6),
-          ScDragField(label: 'Pause-Fade', value: params.pauseFadeMs, min: 0, max: 10000, step: 50, suffix: 'ms', decimalPlaces: 0, onChanged: (v) => onChanged(params.copyWith(pauseFadeMs: v))),
+          ScDragField(label: 'Pause-Fade', value: params.pauseFadeMs, min: 0, max: pauseFadeMax, step: 50, suffix: 'ms', decimalPlaces: 0, onChanged: (v) => onChanged(params.copyWith(pauseFadeMs: v))),
         ],
         const SizedBox(height: 6),
         _EnumField<ResumeBehavior>(
@@ -519,21 +629,9 @@ class _AudioParamsEditor extends ConsumerWidget {
         ),
         if (params.resumeBehavior == ResumeBehavior.fadeIn) ...[
           const SizedBox(height: 6),
-          ScDragField(label: 'Resume-Fade', value: params.resumeFadeMs, min: 0, max: 10000, step: 50, suffix: 'ms', decimalPlaces: 0, onChanged: (v) => onChanged(params.copyWith(resumeFadeMs: v))),
+          ScDragField(label: 'Resume-Fade', value: params.resumeFadeMs, min: 0, max: pauseFadeMax, step: 50, suffix: 'ms', decimalPlaces: 0, onChanged: (v) => onChanged(params.copyWith(resumeFadeMs: v))),
         ],
       ]),
-      const SizedBox(height: 12),
-      ScTimingRuler(
-        totalDurationMs: asset?.audio?.declaredDurationMs.toDouble(),
-        startMs: params.startTimeMs,
-        endMs: params.endTimeMs,
-        fadeInMs: params.fadeInMs,
-        fadeOutMs: params.fadeOutMs,
-        onStartChanged: (v) => onChanged(params.copyWith(startTimeMs: v)),
-        onEndChanged: (v) => onChanged(params.copyWith(endTimeMs: v)),
-        onFadeInChanged: (v) => onChanged(params.copyWith(fadeInMs: v)),
-        onFadeOutChanged: (v) => onChanged(params.copyWith(fadeOutMs: v)),
-      ),
       const SizedBox(height: 8),
       AudioCueMinibar(params: params, asset: asset),
       const SizedBox(height: 8),
@@ -564,6 +662,40 @@ class _AudioParamsEditor extends ConsumerWidget {
         ],
       ),
     ]);
+
+    return DropTarget(
+      onDragEntered: (_) => setState(() => _isDragOver = true),
+      onDragExited:  (_) => setState(() => _isDragOver = false),
+      onDragDone:    _onDrop,
+      child: Stack(
+        children: [
+          audioSection,
+          if (_isDragOver)
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: ScColors.active.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: ScColors.active, width: 1.5),
+                ),
+                child: const Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.audio_file, size: 28, color: ScColors.active),
+                      SizedBox(height: 6),
+                      Text(
+                        'Audio-Datei ablegen',
+                        style: TextStyle(color: ScColors.active, fontSize: 12, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }
 
@@ -582,59 +714,47 @@ class _AssetPicker extends StatelessWidget {
     required this.onClear,
   });
 
+  void _open(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => _AssetSearchDialog(
+        allAssets: allAssets,
+        current: current,
+        onPick: (a) {
+          Navigator.of(ctx).pop();
+          onPick(a);
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
         Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              border: Border.all(color: ScColors.divider),
-              borderRadius: BorderRadius.circular(6),
-              color: ScColors.surface,
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                isExpanded: true,
-                value: current != null && allAssets.any((a) => a.id == current!.id) ? current!.id : null,
-                hint: Text(
-                  current != null ? current!.name : 'Asset auswählen…',
-                  style: ScText.label.copyWith(color: current != null ? ScColors.textPrimary : ScColors.textDim),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                dropdownColor: ScColors.surface,
-                icon: const Icon(Icons.unfold_more, size: 16, color: ScColors.textDim),
-                items: allAssets.fold<Map<String, Asset>>({}, (map, a) {
-                  map.putIfAbsent(a.id, () => a);
-                  return map;
-                }).values.map((a) {
-                  final lufs = a.audio?.loudnessLufs;
-                  final info = [
-                    if (a.audio != null) a.audio!.channelLabel,
-                    if (a.audio?.sampleRateHz != null) '${a.audio!.sampleRateHz} Hz',
-                    if (lufs != null) '${lufs.toStringAsFixed(1)} LUFS',
-                  ].join(' · ');
-                  return DropdownMenuItem<String>(
-                    value: a.id,
-                    child: Tooltip(
-                      message: '${a.id.substring(0, 12)}…  ${_formatSize(a.sizeBytes)}',
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(a.name, style: ScText.label.copyWith(color: ScColors.textPrimary), overflow: TextOverflow.ellipsis),
-                          if (info.isNotEmpty)
-                            Text(info, style: ScText.label.copyWith(color: ScColors.textDim, fontSize: 10)),
-                        ],
+          child: GestureDetector(
+            onTap: () => _open(context),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+              decoration: BoxDecoration(
+                border: Border.all(color: ScColors.divider),
+                borderRadius: BorderRadius.circular(6),
+                color: ScColors.surface,
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      current?.name ?? 'Asset auswählen…',
+                      style: ScText.label.copyWith(
+                        color: current != null ? ScColors.textPrimary : ScColors.textDim,
                       ),
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  );
-                }).toList(),
-                onChanged: (id) {
-                  if (id == null) return;
-                  onPick(allAssets.firstWhere((a) => a.id == id));
-                },
+                  ),
+                  const Icon(Icons.unfold_more, size: 16, color: ScColors.textDim),
+                ],
               ),
             ),
           ),
@@ -647,6 +767,132 @@ class _AssetPicker extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+class _AssetSearchDialog extends StatefulWidget {
+  final List<Asset> allAssets;
+  final Asset? current;
+  final ValueChanged<Asset> onPick;
+
+  const _AssetSearchDialog({
+    required this.allAssets,
+    required this.current,
+    required this.onPick,
+  });
+
+  @override
+  State<_AssetSearchDialog> createState() => _AssetSearchDialogState();
+}
+
+class _AssetSearchDialogState extends State<_AssetSearchDialog> {
+  String _query = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _query.isEmpty
+        ? widget.allAssets
+        : widget.allAssets
+            .where((a) => a.name.toLowerCase().contains(_query.toLowerCase()))
+            .toList();
+
+    return Dialog(
+      backgroundColor: ScColors.surface,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 480, maxHeight: 500),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: TextField(
+                autofocus: true,
+                style: ScText.label,
+                decoration: InputDecoration(
+                  hintText: 'Suchen…',
+                  hintStyle: ScText.label.copyWith(color: ScColors.textDim),
+                  prefixIcon: const Icon(Icons.search, size: 16, color: ScColors.textDim),
+                  prefixIconConstraints: const BoxConstraints(minWidth: 32),
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(6),
+                    borderSide: const BorderSide(color: ScColors.divider),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(6),
+                    borderSide: const BorderSide(color: ScColors.divider),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(6),
+                    borderSide: const BorderSide(color: ScColors.active),
+                  ),
+                ),
+                onChanged: (v) => setState(() => _query = v),
+              ),
+            ),
+            const Divider(height: 1, color: ScColors.divider),
+            if (filtered.isEmpty)
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Center(
+                  child: Text(
+                    'Keine Ergebnisse',
+                    style: ScText.label.copyWith(color: ScColors.textDim),
+                  ),
+                ),
+              )
+            else
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: filtered.length,
+                  itemBuilder: (_, i) {
+                    final a = filtered[i];
+                    final isCurrent = widget.current?.id == a.id;
+                    final lufs = a.audio?.loudnessLufs;
+                    final info = [
+                      if (a.audio != null) a.audio!.channelLabel,
+                      if (a.audio?.sampleRateHz != null) '${a.audio!.sampleRateHz} Hz',
+                      if (lufs != null) '${lufs.toStringAsFixed(1)} LUFS',
+                    ].join(' · ');
+                    return ListTile(
+                      dense: true,
+                      selected: isCurrent,
+                      selectedColor: ScColors.active,
+                      selectedTileColor: ScColors.active.withValues(alpha: 0.08),
+                      leading: Icon(
+                        Icons.audio_file,
+                        size: 16,
+                        color: isCurrent ? ScColors.active : ScColors.textDim,
+                      ),
+                      title: Text(
+                        a.name,
+                        style: ScText.label.copyWith(
+                          color: isCurrent ? ScColors.active : ScColors.textPrimary,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: info.isNotEmpty
+                          ? Text(
+                              info,
+                              style: ScText.label.copyWith(
+                                color: ScColors.textDim,
+                                fontSize: 10,
+                              ),
+                            )
+                          : null,
+                      onTap: () => widget.onPick(a),
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -753,6 +999,29 @@ class _NoteParamsEditorState extends State<_NoteParamsEditor> {
   Widget build(BuildContext context) {
     return _Section(title: 'NOTE', children: [
       ScInlineField(label: 'Text', value: widget.params.text, onChanged: (v) => widget.onChanged(widget.params.copyWith(text: v))),
+      const SizedBox(height: 8),
+      Row(
+        children: [
+          SizedBox(width: ScSpacing.inspectorLabelWidth, child: Text('GO-Verhalten', style: ScText.label)),
+          const SizedBox(width: 6),
+          Expanded(
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<bool>(
+                value: widget.params.landable,
+                isDense: true,
+                isExpanded: true,
+                dropdownColor: ScColors.surface,
+                style: ScText.label.copyWith(color: ScColors.textPrimary),
+                items: const [
+                  DropdownMenuItem(value: false, child: Text('Überspringen')),
+                  DropdownMenuItem(value: true,  child: Text('Landen')),
+                ],
+                onChanged: (v) { if (v != null) widget.onChanged(widget.params.copyWith(landable: v)); },
+              ),
+            ),
+          ),
+        ],
+      ),
       const SizedBox(height: 8),
       Row(
         children: [
@@ -866,10 +1135,308 @@ class _FadeParamsEditor extends ConsumerWidget {
   }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Waveform Section ──────────────────────────────────────────────────────────
 
-String _formatSize(int bytes) {
-  if (bytes < 1024) return '$bytes B';
-  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
-  return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+class _WaveformSection extends ConsumerWidget {
+  final AudioParams params;
+  final double durMs;
+  final AsyncValue<WaveformData> waveformAsync;
+  final ValueChanged<CueParams> onChanged;
+
+  const _WaveformSection({
+    required this.params,
+    required this.durMs,
+    required this.waveformAsync,
+    required this.onChanged,
+  });
+
+  bool get _autoSilenceActive => params.startTimeMs == 0 && params.assetId.isNotEmpty;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Wenn Auto-Silence aktiv: Server-seitig erkannten Offset abfragen.
+    final detectedSilenceMs = _autoSilenceActive
+        ? ref.watch(assetSilenceProvider(params.assetId)).valueOrNull
+        : null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('WAVEFORM', style: ScText.panelTitle),
+        const SizedBox(height: 6),
+        waveformAsync.when(
+          loading: () => const SizedBox(
+            height: 80,
+            child: Center(
+              child: SizedBox(
+                width: 16, height: 16,
+                child: CircularProgressIndicator(strokeWidth: 1.5, color: ScColors.textDim),
+              ),
+            ),
+          ),
+          error: (_, __) => const SizedBox.shrink(),
+          data: (wf) {
+            if (wf.isEmpty) return const SizedBox.shrink();
+            final dur = wf.durationMs > 0 ? wf.durationMs : durMs;
+
+            // Effektiver Startpunkt: bei Auto-Mode den detektierten Offset nutzen,
+            // sonst den manuell gesetzten Wert.
+            final effectiveStartMs = _autoSilenceActive
+                ? (detectedSilenceMs ?? 0.0)
+                : params.startTimeMs;
+
+            final endFraction = params.endTimeMs > 0
+                ? (params.endTimeMs / dur).clamp(0.0, 1.0)
+                : 1.0;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Hinweis wenn Auto-Silence-Offset erkannt wurde
+                if (_autoSilenceActive && detectedSilenceMs != null && detectedSilenceMs > 0) ...[
+                  Row(
+                    children: [
+                      const Icon(Icons.skip_next, size: 12, color: ScColors.active),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Stille erkannt: ${_fmtMs(detectedSilenceMs)}',
+                        style: ScText.statusSmall.copyWith(color: ScColors.active),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                ],
+                SizedBox(
+                  height: 90,
+                  child: ScWaveform(
+                    data: wf,
+                    startFraction: (effectiveStartMs / dur).clamp(0.0, 1.0),
+                    endFraction: endFraction,
+                    fadeInFraction: (params.fadeInMs / dur).clamp(0.0, 1.0),
+                    fadeOutFraction: (params.fadeOutMs / dur).clamp(0.0, 1.0),
+                    // Im Auto-Mode: kein manuelles Ziehen des In-Markers
+                    onSeekStart: _autoSilenceActive
+                        ? null
+                        : (f) => onChanged(params.copyWith(startTimeMs: f * dur)),
+                    onSeekEnd: (f) => onChanged(params.copyWith(
+                      endTimeMs: f >= 0.999 ? 0.0 : f * dur,
+                    )),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 4),
+      ],
+    );
+  }
+
+  static String _fmtMs(double ms) {
+    if (ms < 1000) return '${ms.toInt()} ms';
+    return '${(ms / 1000).toStringAsFixed(2)} s';
+  }
 }
+
+// ── Silence-Skip Field ────────────────────────────────────────────────────────
+//
+// startTimeMs == 0      → Auto-Silence-Skip aktiv (Server erkennt Stille automatisch).
+// startTimeMs == 0.001  → Sentinel: kein Auto-Skip, Ton startet von vorne.
+// startTimeMs > 0.001   → Manueller Start-Offset.
+
+class _SilenceSkipField extends ConsumerStatefulWidget {
+  final double startTimeMs;
+  final String assetId;
+  final double maxMs;
+  final ValueChanged<double> onChanged;
+
+  const _SilenceSkipField({
+    required this.startTimeMs,
+    required this.assetId,
+    required this.onChanged,
+    this.maxMs = 3600000,
+  });
+
+  @override
+  ConsumerState<_SilenceSkipField> createState() => _SilenceSkipFieldState();
+}
+
+class _SilenceSkipFieldState extends ConsumerState<_SilenceSkipField> {
+  double _thresholdDb = -60.0;
+
+  bool get _autoActive => widget.startTimeMs == 0;
+
+  /// Erster Bucket-Index, dessen absoluter Pegel den linearen Schwellwert überschreitet.
+  double? _estimateFromWaveform(WaveformData wf) {
+    if (wf.isEmpty || wf.durationMs <= 0) return null;
+    final threshold = math.pow(10.0, _thresholdDb / 20.0).toDouble();
+    for (var i = 0; i < wf.buckets; i++) {
+      if (wf.maxs[i].abs() > threshold) {
+        return (i / wf.buckets) * wf.durationMs;
+      }
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final waveformAsync = _autoActive && widget.assetId.isNotEmpty
+        ? ref.watch(waveformProvider(widget.assetId))
+        : null;
+    final wf = waveformAsync?.valueOrNull;
+    final estimated = wf != null ? _estimateFromWaveform(wf) : null;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Auto/Manuell Toggle ──────────────────────────────────────────────
+        Row(
+          children: [
+            SizedBox(
+              width: ScSpacing.inspectorLabelWidth,
+              child: Text('Start', style: ScText.label),
+            ),
+            Expanded(
+              child: Row(
+                children: [
+                  Switch(
+                    value: _autoActive,
+                    onChanged: (on) => widget.onChanged(on ? 0 : 0.001),
+                    activeThumbColor: ScColors.active,
+                    activeTrackColor: ScColors.active.withValues(alpha: 0.3),
+                    inactiveThumbColor: ScColors.textDim,
+                    inactiveTrackColor: ScColors.surface2,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  const SizedBox(width: 6),
+                  if (_autoActive)
+                    Tooltip(
+                      message: 'Server erkennt und überspringt führende Stille automatisch beim Preload.',
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: ScColors.active.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'AUTO',
+                          style: ScText.label.copyWith(
+                            color: ScColors.active, fontSize: 9, fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    Text(
+                      widget.startTimeMs > 0.001
+                          ? _fmtMs(widget.startTimeMs)
+                          : 'Von vorne',
+                      style: ScText.label.copyWith(color: ScColors.textDim),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+
+        // ── Auto-Modus: Schwellwert-Slider + Vorschau ────────────────────────
+        if (_autoActive) ...[
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              SizedBox(
+                width: ScSpacing.inspectorLabelWidth,
+                child: Text('Schwelle', style: ScText.label),
+              ),
+              Expanded(
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: SliderTheme(
+                        data: SliderTheme.of(context).copyWith(
+                          trackHeight: 2,
+                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                          overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+                          activeTrackColor: ScColors.active,
+                          inactiveTrackColor: ScColors.surface2,
+                          thumbColor: ScColors.active,
+                          overlayColor: ScColors.active.withValues(alpha: 0.15),
+                        ),
+                        child: Slider(
+                          value: _thresholdDb,
+                          min: -80, max: -20,
+                          divisions: 60,
+                          onChanged: (v) => setState(() => _thresholdDb = v),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    SizedBox(
+                      width: 52,
+                      child: Text(
+                        '${_thresholdDb.toStringAsFixed(0)} dBFS',
+                        style: ScText.label.copyWith(color: ScColors.textDim),
+                        textAlign: TextAlign.end,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (estimated != null) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                SizedBox(width: ScSpacing.inspectorLabelWidth),
+                Expanded(
+                  child: Row(
+                    children: [
+                      Text(
+                        'Ton ab ${_fmtMs(estimated)}',
+                        style: ScText.label.copyWith(color: ScColors.textDim, fontSize: 10),
+                      ),
+                      const SizedBox(width: 8),
+                      GestureDetector(
+                        onTap: () => widget.onChanged(estimated > 0 ? estimated : 0.001),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: ScColors.textDim),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            'Anwenden',
+                            style: ScText.label.copyWith(color: ScColors.textDim, fontSize: 9),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+
+        // ── Manueller Modus: Startzeit-Slider ────────────────────────────────
+        if (!_autoActive) ...[
+          const SizedBox(height: 6),
+          ScDragField(
+            label: 'Startzeit',
+            value: widget.startTimeMs > 0.001 ? widget.startTimeMs : 0,
+            min: 0, max: widget.maxMs, step: 10,
+            suffix: 'ms', decimalPlaces: 0,
+            onChanged: (v) => widget.onChanged(v > 0 ? v : 0.001),
+          ),
+        ],
+      ],
+    );
+  }
+
+  static String _fmtMs(double ms) {
+    if (ms < 1000) return '${ms.toInt()} ms';
+    return '${(ms / 1000).toStringAsFixed(1)} s';
+  }
+}
+
