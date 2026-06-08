@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:theatre_companion_app/showcontrol/domain/cue_params.dart';
 import 'package:theatre_companion_app/showcontrol/domain/playhead.dart';
@@ -11,9 +12,11 @@ const _audioCue = Cue(
   params: AudioParams(assetId: 'abc'),
 );
 
-Widget _wrap(Widget child) => MaterialApp(
-      theme: ThemeData.dark(useMaterial3: true),
-      home: Scaffold(body: SizedBox(width: 400, child: child)),
+Widget _wrap(Widget child) => ProviderScope(
+      child: MaterialApp(
+        theme: ThemeData.dark(useMaterial3: true),
+        home: Scaffold(body: SizedBox(width: 400, child: child)),
+      ),
     );
 
 void main() {

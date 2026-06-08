@@ -6,8 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:theatre_companion_app/showcontrol/providers/audio_node_provider.dart';
 import 'package:theatre_companion_app/showcontrol/providers/session_provider.dart';
 import 'package:theatre_companion_app/showcontrol/session/session_service.dart';
-import 'package:theatre_companion_app/showcontrol/ui/shell/mobile_shell.dart';
 import 'package:theatre_companion_app/showcontrol/ui/shell/sc_adaptive_shell.dart';
+import 'package:theatre_companion_app/showcontrol/ui/shell/sc_shell.dart';
 import 'package:theatre_companion_app/showcontrol/ui/shell/sc_shortcuts.dart';
 
 /// Test-only SessionNotifier — no stored credentials → auto-reconnect exits
@@ -152,7 +152,7 @@ void main() {
   });
 
   group('ScAdaptiveShell — responsive routing', () {
-    testWidgets('uses MobileShell on mobile widths', (tester) async {
+    testWidgets('renders ScShell', (tester) async {
       SharedPreferences.setMockInitialValues({});
       await tester.pumpWidget(
         ProviderScope(
@@ -171,7 +171,7 @@ void main() {
 
       await tester.pump();
 
-      expect(find.byType(MobileShell), findsOneWidget);
+      expect(find.byType(ScShell), findsOneWidget);
     });
   });
 }
