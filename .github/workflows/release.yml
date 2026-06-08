@@ -133,7 +133,7 @@ jobs:
 
       - name: Run NSIS
         shell: pwsh
-        run: makensis installer.nsi
+        run: '& "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi'
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@v7

@@ -8,7 +8,7 @@
 
 #include <bluetooth_low_energy_linux/bluetooth_low_energy_linux_plugin.h>
 #include <desktop_drop/desktop_drop_plugin.h>
-#include <flutter_midi_command_linux/none.h>
+#include <flutter_midi_command_linux/flutter_midi_command_linux_plugin.h>
 #include <record_linux/record_linux_plugin.h>
 
 void fl_register_plugins(FlPluginRegistry* registry) {
@@ -19,8 +19,8 @@ void fl_register_plugins(FlPluginRegistry* registry) {
       fl_plugin_registry_get_registrar_for_plugin(registry, "DesktopDropPlugin");
   desktop_drop_plugin_register_with_registrar(desktop_drop_registrar);
   g_autoptr(FlPluginRegistrar) flutter_midi_command_linux_registrar =
-      fl_plugin_registry_get_registrar_for_plugin(registry, "none");
-  none_register_with_registrar(flutter_midi_command_linux_registrar);
+      fl_plugin_registry_get_registrar_for_plugin(registry, "FlutterMidiCommandLinuxPlugin");
+  flutter_midi_command_linux_plugin_register_with_registrar(flutter_midi_command_linux_registrar);
   g_autoptr(FlPluginRegistrar) record_linux_registrar =
       fl_plugin_registry_get_registrar_for_plugin(registry, "RecordLinuxPlugin");
   record_linux_plugin_register_with_registrar(record_linux_registrar);

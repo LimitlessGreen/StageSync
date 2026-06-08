@@ -24,5 +24,4 @@ flutter:
     implements: flutter_midi_command
     platforms:
       linux:
-        dartPluginClass: FlutterMidiCommandLinux
-        pluginClass: none
+        pluginClass: FlutterMidiCommandLinuxPlugin
