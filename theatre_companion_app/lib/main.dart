@@ -51,7 +51,10 @@ class StageSyncApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF6B3FA0),
           brightness: Brightness.dark,
+          surface: const Color(0xFF141414),
         ),
+        scaffoldBackgroundColor: const Color(0xFF0A0A0A),
+        canvasColor: const Color(0xFF0A0A0A),
         useMaterial3: true,
       ),
       home: const _NetworkBootstrap(),
