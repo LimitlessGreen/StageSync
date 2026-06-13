@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -48,6 +49,14 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
   @override
   void initState() {
     super.initState();
+    if (kIsWeb) {
+      // Im Browser läuft die App vom selben Server, der auch die Sessions
+      // verwaltet — Host/Port ergeben sich aus der aktuellen URL, eine
+      // Server-Auswahl ist nicht nötig.
+      _hostCtrl.text = Uri.base.host;
+      _portCtrl.text = Uri.base.port.toString();
+      _loadSessions();
+    }
     _loadPreferences();
   }
 
@@ -57,8 +66,10 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
     if (!mounted) return;
     setState(() {
       _deviceId = id;
-      _hostCtrl.text = defaults.host;
-      _portCtrl.text = defaults.port.toString();
+      if (!kIsWeb) {
+        _hostCtrl.text = defaults.host;
+        _portCtrl.text = defaults.port.toString();
+      }
       if (defaults.deviceName.isNotEmpty) {
         _deviceNameCtrl.text = defaults.deviceName;
       } else {
@@ -135,27 +146,31 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // ── Eingebetteter Server (Desktop) ───────────────────────────────
-            if (ref.watch(isEmbeddedSupportedProvider))
-              _EmbeddedServerBanner(
-                serverAsync: embeddedAsync,
-                onUseLocal: _useLocalServer,
+            // Im Web läuft die App bereits im Browser des Servers — die
+            // Server-Verbindung ist implizit über die aktuelle URL gegeben.
+            if (!kIsWeb) ...[
+              if (ref.watch(isEmbeddedSupportedProvider))
+                _EmbeddedServerBanner(
+                  serverAsync: embeddedAsync,
+                  onUseLocal: _useLocalServer,
+                ),
+
+              // ── Server-Verbindung ──────────────────────────────────────────
+              _SectionHeader('Server'),
+              _ServerDiscoveryWidget(
+                hostCtrl: _hostCtrl,
+                portCtrl: _portCtrl,
+                scanning: _scanning,
+                discovered: _discovered,
+                onScan: _scanForServers,
+                onSelect: (server) => setState(() {
+                  _hostCtrl.text = server.host;
+                  _portCtrl.text = server.port.toString();
+                }),
               ),
 
-            // ── Server-Verbindung ────────────────────────────────────────────
-            _SectionHeader('Server'),
-            _ServerDiscoveryWidget(
-              hostCtrl: _hostCtrl,
-              portCtrl: _portCtrl,
-              scanning: _scanning,
-              discovered: _discovered,
-              onScan: _scanForServers,
-              onSelect: (server) => setState(() {
-                _hostCtrl.text = server.host;
-                _portCtrl.text = server.port.toString();
-              }),
-            ),
-
-            const SizedBox(height: 24),
+              const SizedBox(height: 24),
+            ],
 
             // ── Modus ────────────────────────────────────────────────────────
             _SectionHeader('Modus'),

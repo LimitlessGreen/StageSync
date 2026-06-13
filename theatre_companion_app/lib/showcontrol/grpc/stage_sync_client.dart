@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:grpc/grpc.dart';
 import 'package:grpc/grpc_or_grpcweb.dart';
 
@@ -55,18 +56,15 @@ class StageSyncClient {
     // On native platforms this opens a plain gRPC (HTTP/2) channel; on the
     // web it transparently uses gRPC-Web (XHR) against the same host/port,
     // which the Go server exposes via the -web-ui flag.
-    _channel = GrpcOrGrpcWebClientChannel.grpc(
-      host,
+    //
+    // Note: GrpcOrGrpcWebClientChannel.grpc(...) would be the natural choice
+    // here, but its web implementation unconditionally throws
+    // UnsupportedError for custom ChannelOptions, so toSingleEndpoint is
+    // used instead (works on both platforms, no custom keep-alive options).
+    _channel = GrpcOrGrpcWebClientChannel.toSingleEndpoint(
+      host: host,
       port: port,
-      options: const ChannelOptions(
-        credentials: ChannelCredentials.insecure(),
-        connectionTimeout: Duration(seconds: 5),
-        idleTimeout: Duration(minutes: 5),
-        keepAlive: ClientKeepAliveOptions(
-          pingInterval: Duration(seconds: 10),
-          timeout: Duration(seconds: 5),
-        ),
-      ),
+      transportSecure: kIsWeb && Uri.base.scheme == 'https',
     );
 
     session = SessionServiceClient(_channel!);
