@@ -1,4 +1,5 @@
 import 'package:grpc/grpc.dart';
+import 'package:grpc/grpc_or_grpcweb.dart';
 
 import 'generated/stagesync/v1/session.pbgrpc.dart';
 import 'generated/stagesync/v1/showcontrol.pbgrpc.dart';
@@ -16,7 +17,7 @@ class StageSyncClient {
   StageSyncClient._();
   static final StageSyncClient instance = StageSyncClient._();
 
-  ClientChannel? _channel;
+  GrpcOrGrpcWebClientChannel? _channel;
   String? _host;
   int? _port;
 
@@ -51,7 +52,10 @@ class StageSyncClient {
 
     await _channel?.shutdown();
 
-    _channel = ClientChannel(
+    // On native platforms this opens a plain gRPC (HTTP/2) channel; on the
+    // web it transparently uses gRPC-Web (XHR) against the same host/port,
+    // which the Go server exposes via the -web-ui flag.
+    _channel = GrpcOrGrpcWebClientChannel.grpc(
       host,
       port: port,
       options: const ChannelOptions(

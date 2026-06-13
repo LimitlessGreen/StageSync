@@ -340,7 +340,7 @@ class _SessionScreenState extends ConsumerState<SessionScreen> {
       _scanning = true;
       _discovered = [];
     });
-    final found = await MdnsDiscovery.discover();
+    final found = await MdnsDiscoveryImpl.discover();
     if (!mounted) return;
     setState(() {
       _scanning = false;
