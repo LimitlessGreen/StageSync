@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/http"
 	"time"
 
 	"google.golang.org/grpc"
@@ -37,6 +38,22 @@ type Config struct {
 	ServiceName string
 	// RamCacheBytes is the RAM budget for the audio PCM cache (0 → 2 GiB).
 	RamCacheBytes int64
+
+	// EnableWebUI starts an additional HTTP server exposing gRPC-Web plus a
+	// static web UI (e.g. a Flutter web build).
+	EnableWebUI bool
+	// WebUIAddr is the listen address for the web UI server (default ":8080").
+	WebUIAddr string
+	// WebUIDir, if set, serves static files from this filesystem path
+	// instead of the embedded placeholder/build.
+	WebUIDir string
+}
+
+func (c *Config) webUIAddr() string {
+	if c.WebUIAddr != "" {
+		return c.WebUIAddr
+	}
+	return ":8080"
 }
 
 func (c *Config) ramCacheBytes() int64 {
@@ -71,6 +88,7 @@ type Server struct {
 	storeWarmer        *media.StoreWarmer
 	sessionMgr         *session.Manager
 	dispatcher         *node.Dispatcher
+	webServer          *http.Server
 }
 
 // ShowControlHandler exposes the inner handler so callers (e.g. cmd/server)
@@ -111,6 +129,7 @@ func (s *Server) Dispatcher() *node.Dispatcher {
 
 // GracefulStop shuts the gRPC server down, waiting up to 5 s.
 func (s *Server) GracefulStop() {
+	s.stopWebUI()
 	done := make(chan struct{})
 	go func() {
 		s.grpc.GracefulStop()
@@ -200,7 +219,7 @@ func Start(ctx context.Context, cfg Config) (*Server, error) {
 		}
 	}()
 
-	return &Server{
+	srv := &Server{
 		grpc:               grpcServer,
 		showControlHandler: showControlHandler,
 		gridHandler:        gridHandler,
@@ -209,7 +228,15 @@ func Start(ctx context.Context, cfg Config) (*Server, error) {
 		storeWarmer:        storeWarmer,
 		sessionMgr:         sessionMgr,
 		dispatcher:         dispatcher,
-	}, nil
+	}
+
+	if cfg.EnableWebUI {
+		if err := srv.startWebUI(cfg.webUIAddr(), cfg.WebUIDir); err != nil {
+			return nil, fmt.Errorf("web UI: %w", err)
+		}
+	}
+
+	return srv, nil
 }
 
 func loggingInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {

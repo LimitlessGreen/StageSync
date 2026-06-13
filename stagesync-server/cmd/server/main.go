@@ -31,6 +31,10 @@ var (
 
 	enableMidiNode = flag.Bool("midi-node", false, "Start an internal MIDI controller node (e.g. Akai APC Mini).")
 	midiPort       = flag.String("midi-port", "APC", "Substring to match the MIDI controller port name.")
+
+	enableWebUI = flag.Bool("web-ui", false, "Serve the gRPC API over gRPC-Web plus a static web UI (e.g. a Flutter web build).")
+	webUIAddr   = flag.String("web-ui-addr", ":8080", "Listen address for the web UI / gRPC-Web server.")
+	webUIDir    = flag.String("web-ui-dir", "", "Directory with static web UI files (default: embedded placeholder).")
 )
 
 func main() {
@@ -49,6 +53,9 @@ func main() {
 		DataDir:       dir,
 		ServiceName:   *serviceName,
 		RamCacheBytes: *ramCacheMB * 1024 * 1024,
+		EnableWebUI:   *enableWebUI,
+		WebUIAddr:     *webUIAddr,
+		WebUIDir:      *webUIDir,
 	})
 	if err != nil {
 		log.Fatalf("coreserver: %v", err)
