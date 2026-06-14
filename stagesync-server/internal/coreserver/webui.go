@@ -17,6 +17,8 @@ import (
 func (s *Server) startWebUI(addr string, dir string) error {
 	wrapped := grpcweb.WrapServer(s.grpc,
 		grpcweb.WithOriginFunc(func(origin string) bool { return true }),
+		grpcweb.WithWebsockets(true),
+		grpcweb.WithWebsocketOriginFunc(func(*http.Request) bool { return true }),
 	)
 
 	var staticHandler http.Handler
