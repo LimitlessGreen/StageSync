@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -87,7 +88,11 @@ class _ScShellState extends ConsumerState<ScShell>
       _handleAutoReconnectNodeStart();
     });
     _lifecycleListener = AppLifecycleListener(
+      // Auf Web löst der Browser onResume bei jedem Fokus-/Visibility-Wechsel
+      // aus (teils alle paar Sekunden), was die Watch-Streams unnötig
+      // kappen und neu aufbauen würde → auf Web nicht erneut initialisieren.
       onResume: () {
+        if (kIsWeb) return;
         if (!mounted) return;
         if (ref.read(sessionProvider).isInSession) {
           ref.read(showControlProvider.notifier).initialize();
