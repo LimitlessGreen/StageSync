@@ -144,6 +144,12 @@ func (n *InternalAudioNode) run(ctx context.Context) {
 	}
 	n.nodeID = nodeID
 
+	// Device frühzeitig starten, damit der erste Testton/Cue nicht durch die
+	// Init-Latenz des Audio-Backends verschluckt wird (mix() läuft dann schon).
+	if err := n.engine.EnsureStarted(); err != nil {
+		log.Printf("[audionode] failed to start audio device: %v", err)
+	}
+
 	// Report audio device list as NodeCapabilities so the Flutter UI can show
 	// and remotely switch the output device without a WatchNodes subscription.
 	n.reportCapabilities(sessID, nodeID, info)
