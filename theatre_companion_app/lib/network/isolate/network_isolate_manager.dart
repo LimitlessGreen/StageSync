@@ -41,10 +41,9 @@ import '../isolate/isolate_messages.dart';
 import '../models/ble_packet.dart';
 import '../models/inventory_item_crdt.dart';
 import '../platform/abstract_ble_service.dart';
-import '../platform/stub_ble_service.dart';
 import '../routing/leader_election_engine.dart';
 import '../routing/peer_registry.dart';
-import '../ble/ble_mesh_service.dart';
+import '../ble/ble_factory.dart';
 import '../ble/gossip_engine.dart';
 import '../server/websocket_service.dart';
 
@@ -131,9 +130,7 @@ class NetworkIsolateManager {
     // bluetooth_low_energy unterstützt Central+Peripheral auf Android, iOS,
     // Windows und macOS mit identischer Dart-API.
     // Auf Web ist BLE nicht verfügbar → StubBleService (WebSocket-only).
-    final AbstractBleService ble = kIsWeb
-        ? StubBleService()
-        : BleMeshService(peers: peers, crypto: crypto);
+    final AbstractBleService ble = createBleService(peers, crypto);
 
     // ── Gossip & Weaver (late: gegenseitige Abhängigkeiten) ────────────────
     late final GossipEngine gossip;
@@ -214,7 +211,7 @@ class NetworkIsolateManager {
     final crypto = await AesGcmService.withProductionKey();
     final peers = PeerRegistry();
 
-    final ble = StubBleService();
+    final ble = createBleService(peers, crypto);
     final queueDao = _WebNoOpQueue();
     final inventoryDao = _WebNoOpInventory();
     final chatDao = _WebNoOpChat();
