@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 
 /// Steuert den Android Foreground Service und die Batterieoptimierung.
@@ -15,7 +16,7 @@ class ForegroundService {
     required String sessionName,
     String role = '',
   }) async {
-    if (!Platform.isAndroid) return;
+    if (kIsWeb || !Platform.isAndroid) return;
     try {
       await _channel.invokeMethod('startService', {
         'sessionName': sessionName,
@@ -26,7 +27,7 @@ class ForegroundService {
 
   /// Stoppt den Foreground Service und entfernt die Notification.
   static Future<void> stop() async {
-    if (!Platform.isAndroid) return;
+    if (kIsWeb || !Platform.isAndroid) return;
     try {
       await _channel.invokeMethod('stopService');
     } on PlatformException catch (_) {}
@@ -34,7 +35,7 @@ class ForegroundService {
 
   /// Gibt zurück ob die App von der Batterieoptimierung ausgenommen ist.
   static Future<bool> isIgnoringBatteryOptimizations() async {
-    if (!Platform.isAndroid) return true;
+    if (kIsWeb || !Platform.isAndroid) return true;
     try {
       return await _channel.invokeMethod('isIgnoringBatteryOptimizations')
           as bool;
@@ -45,7 +46,7 @@ class ForegroundService {
 
   /// Öffnet den Android-Dialog zum Deaktivieren der Batterieoptimierung.
   static Future<void> requestIgnoreBatteryOptimizations() async {
-    if (!Platform.isAndroid) return;
+    if (kIsWeb || !Platform.isAndroid) return;
     try {
       await _channel.invokeMethod('requestIgnoreBatteryOptimizations');
     } on PlatformException catch (_) {}
