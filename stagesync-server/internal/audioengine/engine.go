@@ -270,20 +270,28 @@ func stringSlicesEqual(a, b []string) bool {
 // SetDevice reinitialises the output device. index -1 = system default.
 // Handles that are preloaded but not yet started are preserved.
 func (e *Engine) SetDevice(index int) error {
+	// Stop/Uninit the previous device without holding e.mu: the device's
+	// audio callback (mix) takes e.mu.Lock() too, and Stop() blocks until
+	// the in-flight callback returns — holding e.mu here would deadlock
+	// (Stop waits for mix, mix waits for e.mu).
+	e.mu.Lock()
+	oldDevice := e.device
+	e.device = nil
+	e.mu.Unlock()
+
+	if oldDevice != nil {
+		_ = oldDevice.Stop()
+		oldDevice.Uninit()
+	}
+
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.initDeviceLocked(index)
 }
 
 // initDeviceLocked (re)creates the malgo.Device. Must be called with e.mu held.
+// Assumes e.device is already nil (any previous device stopped/uninitialised).
 func (e *Engine) initDeviceLocked(index int) error {
-	// Stop and release previous device.
-	if e.device != nil {
-		_ = e.device.Stop()
-		e.device.Uninit()
-		e.device = nil
-	}
-
 	cfg := malgo.DefaultDeviceConfig(malgo.Playback)
 	cfg.Playback.Format = malgo.FormatF32
 	cfg.Playback.Channels = e.channels
