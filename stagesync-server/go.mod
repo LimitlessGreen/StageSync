@@ -11,7 +11,7 @@ require (
 	github.com/hajimehoshi/go-mp3 v0.3.4
 	github.com/jfreymuth/oggvorbis v1.0.5
 	github.com/mewkiz/flac v1.0.13
-	github.com/pion/opus v0.0.0-20260530062302-292081249302
+	github.com/pion/opus v0.1.0
 	gitlab.com/gomidi/midi/v2 v2.3.23
 	google.golang.org/grpc v1.81.1
 	google.golang.org/protobuf v1.36.11
