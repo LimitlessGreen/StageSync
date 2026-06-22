@@ -13,9 +13,9 @@ dependencies:
   cupertino_icons: ^1.0.8
 
   # ── Local Database (Drift / SQLite) ───────────────────────────────────────
-  drift: ^2.33.0
+  drift: ^2.34.0
   sqlite3_flutter_libs: ^0.6.0+eol
-  path_provider: ^2.1.4
+  path_provider: ^2.1.6
   path: ^1.9.0
 
   # ── BLE Mesh Layer ───────────────────────────────────────────────────────
@@ -25,7 +25,7 @@ dependencies:
   bluetooth_low_energy: ^6.2.1
 
   # ── State Management ─────────────────────────────────────────────────────
-  flutter_riverpod: ^2.6.1
+  flutter_riverpod: ^3.3.2
 
   # ── MIDI (Grid-Controller: lokaler Pfad für APC Mini auf Desktop) ─────────
   flutter_midi_command: ^0.5.4
@@ -35,12 +35,12 @@ dependencies:
 
   # ── Device Context (Battery, Network, Motion) ─────────────────────────────
   battery_plus: ^7.0.0
-  connectivity_plus: ^6.0.5
+  connectivity_plus: ^7.1.1
   sensors_plus: ^7.0.0
 
   # ── Server Gateway (WebSocket + Socket.IO Cloud Connect) ─────────────────────
   web_socket_channel: ^3.0.1
-  socket_io_client: ^3.1.5
+  socket_io_client: ^3.1.6
   http: ^1.2.0
 
   # ── QR / Barcode Scanner ─────────────────────────────────────────────────
@@ -52,7 +52,7 @@ dependencies:
   permission_handler: ^12.0.3
 
   # ── Device Info (SDK-Version für permission-Logik, z.B. Android API-Level) ─
-  device_info_plus: '>=12.3.0 <12.4.0'
+  device_info_plus: ^12.4.0
 
   # ── Gerätepersistenz (DeviceID, einmal generiert und gespeichert) ─────────
   shared_preferences: ^2.3.2
@@ -61,7 +61,7 @@ dependencies:
   uuid: ^4.5.0
   meta: ^1.16.0
   freezed_annotation: ^3.1.0
-  flutter_soloud: ^4.0.7
+  flutter_soloud: ^4.0.10
   grpc: ^5.1.0
   protobuf: ^6.0.0
   fixnum: ^1.1.0
