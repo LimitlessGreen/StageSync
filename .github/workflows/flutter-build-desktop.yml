@@ -45,7 +45,7 @@ jobs:
             artifact_path: theatre_companion_app/build/linux/x64/release/bundle/
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - uses: subosito/flutter-action@v2
         with:
